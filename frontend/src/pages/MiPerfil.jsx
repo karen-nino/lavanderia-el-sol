@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { ES_DEMO } from '../lib/entorno';
@@ -10,6 +11,12 @@ const MOBILE_INPUT_CLS =
 
 /** Campos de solo lectura: no se tocan, así no aparece el cursor ni el borde azul. */
 const SIN_FOCO = 'pointer-events-none select-none';
+
+const IconoVolver = (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+  </svg>
+);
 
 const IconoOjo = (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -27,8 +34,9 @@ const IconoOjoTachado = (
 );
 
 /**
- * Mi Perfil del empleado: igual al de Ajustes, pero el nombre y el apellido
- * son de solo lectura (los cambia un admin); solo la contraseña se cambia.
+ * Mi Perfil del empleado (Ajustes → Mi Perfil): igual al del admin, pero el
+ * nombre y el apellido son de solo lectura (los cambia un admin); solo la
+ * contraseña se cambia.
  */
 export default function MiPerfil() {
   const { usuario } = useAuth();
@@ -126,9 +134,18 @@ export default function MiPerfil() {
       {/* ── Vista móvil ── */}
       <form onSubmit={handleGuardar} className="md:hidden min-h-full bg-gray-50">
         <div className="bg-white border-b-2 border-gray-200">
-          <div className="max-w-movil mx-auto px-6 pt-10 pb-4">
-            <h1 className="text-xl font-bold text-dark-blue leading-tight">Mi Perfil</h1>
-            <p className="text-sm text-grey">Información de perfil</p>
+          <div className="max-w-movil mx-auto px-6 pt-10 pb-4 flex items-center gap-2">
+            <Link
+              to="/ajustes"
+              aria-label="Volver"
+              className="w-11 h-11 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center flex-shrink-0 transition duration-200 ease-out active:scale-[1.3] active:bg-white active:shadow-md"
+            >
+              {IconoVolver}
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-dark-blue leading-tight">Mi Perfil</h1>
+              <p className="text-sm text-grey">Información de perfil</p>
+            </div>
           </div>
         </div>
 
@@ -182,9 +199,20 @@ export default function MiPerfil() {
       {/* ── Vista escritorio ── */}
       <form onSubmit={handleGuardar} className="hidden md:block min-h-full bg-gray-50">
         <div className="bg-white border-b-2 border-gray-200">
-          <div className="max-w-3xl mx-auto px-8 pt-14 pb-4">
-            <h1 className="text-xl font-bold text-gray-900">Mi Perfil</h1>
-            <p className="text-sm text-gray-500">Tu nombre y tu contraseña</p>
+          <div className="max-w-3xl mx-auto px-8 pt-14 pb-4 flex items-center gap-3">
+            <Link
+              to="/ajustes"
+              aria-label="Volver a Ajustes"
+              className="w-11 h-11 rounded-full border border-gray-300 text-dark-blue flex items-center justify-center flex-shrink-0 hover:bg-gray-50 transition-colors"
+            >
+              {IconoVolver}
+            </Link>
+            <div className="min-w-0">
+              <p className="text-sm text-gray-400">
+                <Link to="/ajustes" className="hover:text-blue">Ajustes</Link>{' / '}Cuenta
+              </p>
+              <h1 className="text-xl font-bold text-gray-900 truncate">Mi Perfil</h1>
+            </div>
           </div>
         </div>
 

@@ -26,7 +26,7 @@ Si no encuentras tu nombre en la lista, avísale al administrador: puede que tu 
         id: 'cambiar-contrasena',
         titulo: 'Cambiar tu contraseña',
         claves: ['mi perfil', 'perfil', 'password', 'clave', 'nombre'],
-        cuerpo: `Si eres EMPLEADO, entra al Menú (☰) → Mi perfil. Escribe la contraseña nueva (mínimo 6 caracteres) y toca Guardar. Con el ojito la ves mientras la escribes.
+        cuerpo: `Si eres EMPLEADO, entra a Ajustes → Mi Perfil. Escribe la contraseña nueva (mínimo 6 caracteres) y toca Guardar. Con el ojito la ves mientras la escribes.
 
 Tu nombre y apellido salen ahí pero NO se pueden cambiar: los corrige un administrador desde Empleados.
 

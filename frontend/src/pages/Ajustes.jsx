@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { api, mensajeDeError } from '../lib/api';
 import InstalarApp from '../components/InstalarApp';
+import MiPerfil from './MiPerfil';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
-import { esAdminMain as esAdminMainFn } from '../lib/roles';
+import { esAdmin, esAdminMain as esAdminMainFn } from '../lib/roles';
 import { ES_DEMO } from '../lib/entorno';
 import { almacenSesion } from '../lib/sesion';
 import { COMODINES_WHATSAPP, armarMensajeWhatsapp } from '../lib/mensajeWhatsapp';
@@ -1087,7 +1088,78 @@ function SucursalesOrden({ sucursales, setSucursales, onMensaje }) {
   );
 }
 
+/** Ajustes según el rol: el empleado solo tiene su cuenta (Mi Perfil). */
 export default function Ajustes() {
+  const { usuario } = useAuth();
+  return esAdmin(usuario?.rol) ? <AjustesAdmin /> : <AjustesEmpleado />;
+}
+
+/** Secciones del empleado: solo Mi Perfil, en el grupo Cuenta. */
+const GRUPOS_EMPLEADO = [{ titulo: 'Cuenta', ids: ['perfil'] }];
+
+/**
+ * Ajustes del empleado: el mismo inicio con tarjetas que el del admin y, al
+ * entrar, su Mi Perfil (solo cambia la contraseña).
+ */
+function AjustesEmpleado() {
+  const { seccion } = useParams();
+  const navigate = useNavigate();
+  if (seccion === 'perfil') return <MiPerfil />;
+  if (seccion) return <Navigate to="/ajustes" replace />;
+  return (
+    <>
+      {/* ── Vista móvil ── */}
+      <div className="md:hidden min-h-full bg-gray-50">
+        <div className="bg-white border-b-2 border-gray-200">
+          <div className="max-w-movil mx-auto px-6 pt-10 pb-4 flex flex-col items-start">
+            <div className='flex flex-row items-center gap-1'>
+              {SectionIcon.gear}
+              <h1 className="text-xl font-bold text-dark-blue leading-tight">Ajustes</h1>
+            </div>
+            <p className="text-sm text-grey">Pantalla de ajustes</p>
+          </div>
+        </div>
+        <div className="max-w-movil mx-auto px-6 py-6">
+          <div className="pt-3 space-y-8">
+            {GRUPOS_EMPLEADO.map((g) => (
+              <div key={g.titulo} className="space-y-3">
+                <p className="px-1 text-sm font-semibold uppercase tracking-wide text-grey">{g.titulo}</p>
+                {g.ids.map(seccionPorId).map((s) => (
+                  <MobileSectionButton key={s.id} label={s.label} icon={s.icon} onClick={() => navigate(`/ajustes/${s.id}`)} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Vista escritorio ── */}
+      <div className="hidden md:block min-h-full bg-gray-50">
+        <div className="bg-white border-b-2 border-gray-200">
+          <div className="max-w-3xl mx-auto px-8 pt-14 pb-4">
+            <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
+            <p className="text-sm text-gray-500">Configuración de tu cuenta</p>
+          </div>
+        </div>
+        <div className="max-w-3xl mx-auto px-8 py-6 space-y-10">
+          {GRUPOS_EMPLEADO.map((g) => (
+            <div key={g.titulo} className="space-y-3">
+              <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                {g.ids.map(seccionPorId).map((sec) => (
+                  <TarjetaSeccion key={sec.id} seccion={sec} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Ajustes del admin: todas las secciones del negocio y su cuenta. */
+function AjustesAdmin() {
   const { usuario, updateUsuario, sucursalActiva } = useAuth();
   const [config,        setConfig]        = useState(null);
   const [loading,       setLoading]       = useState(true);

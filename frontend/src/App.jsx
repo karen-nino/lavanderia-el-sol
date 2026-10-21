@@ -11,7 +11,6 @@ import NuevaNota from './pages/NuevaNota';
 import Clientes from './pages/Clientes';
 import Maquinas from './pages/Maquinas';
 import GestionMaquinas from './pages/GestionMaquinas';
-import MiPerfil from './pages/MiPerfil';
 import MaquinaUso from './pages/MaquinaUso';
 import Inventario from './pages/Inventario';
 import Caja from './pages/Caja';
@@ -57,8 +56,8 @@ export default function App() {
                 </AdminRoute>
               }
             />
-            {/* Perfil del empleado; los admins lo tienen en Ajustes. */}
-            <Route path="mi-perfil" element={<MiPerfil />} />
+            {/* Mi Perfil vive en Ajustes; la dirección vieja lleva ahí. */}
+            <Route path="mi-perfil" element={<Navigate to="/ajustes/perfil" replace />} />
             <Route path="inventario" element={<Inventario />} />
             <Route path="caja" element={<Caja />} />
             <Route
@@ -85,18 +84,10 @@ export default function App() {
                 </AdminRoute>
               }
             />
-            {/* Cada sección de Ajustes con su dirección (/ajustes/maquinas…). */}
-            <Route
-              path="ajustes/:seccion?"
-              element={
-                <AdminRoute>
-                  <Ajustes />
-                </AdminRoute>
-              }
-            />
+            {/* Cada sección de Ajustes con su dirección (/ajustes/maquinas…); el empleado solo ve Mi Perfil. */}
+            <Route path="ajustes/:seccion?" element={<Ajustes />} />
             {/* El manual va en su propia página. Por ahora solo para admins, hasta que
-                la clienta valide el contenido; al abrirlo a empleados necesitará su
-                entrada en el menú (no entran a Ajustes). */}
+                la clienta valide el contenido; al abrirlo a empleados irá en su Ajustes. */}
             <Route
               path="manual"
               element={

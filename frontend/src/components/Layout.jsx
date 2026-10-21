@@ -131,9 +131,7 @@ const buildDesktopNav = (isAdmin) => [
   ...(isAdmin ? [{ to: '/ventas', label: 'Ventas', icon: Icon.ventas }] : []),
   { to: '/caja',             label: 'Caja',                icon: Icon.caja },
   { to: '/gestion-maquinas', label: 'Gestión de máquinas', short: 'Gestión', icon: Icon.maquinas },
-  ...(isAdmin
-    ? [{ to: '/empleados', label: 'Empleados', icon: Icon.empleados }]
-    : [{ to: '/mi-perfil', label: 'Mi perfil', short: 'Perfil', icon: Icon.empleados }]),
+  ...(isAdmin ? [{ to: '/empleados', label: 'Empleados', icon: Icon.empleados }] : []),
 ];
 
 function useClock() {
@@ -230,7 +228,7 @@ function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout 
       /* Alto que queda para los ítems con el pie de 1 o 2 botones. */
       const libre = (botones) => zonaH - PIE_MT - botones * pieH - (botones - 1) * PIE_GAP;
       const caben = (alto) => Math.max(1, Math.floor((alto + GAP) / (itemH + GAP)));
-      /* Sin desborde el pie lleva Ajustes + Salir (admin); con desborde, solo Menú. */
+      /* Sin desborde el pie lleva Ajustes + Salir; con desborde, solo Menú. */
       const todos = caben(libre(conAjustes ? 2 : 1));
       setCapacity(todos >= items.length ? items.length : caben(libre(1)));
     };
@@ -263,7 +261,7 @@ function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout 
           ))}
         </div>
 
-        {/* Pie: Menú si algo no cupo; si no, Ajustes (admin) y Salir. */}
+        {/* Pie: Menú si algo no cupo; si no, Ajustes y Salir. */}
         <div ref={pieRef} className="flex-shrink-0 mt-3 flex flex-col gap-2">
           {overflow.length > 0 ? (
             <SidebarPieBoton icon={Icon.menu} label="Menú" onClick={onMenu} />
@@ -924,7 +922,7 @@ export default function Layout() {
           { label: 'Ventas',    icon: Icon.ventas,    onClick: () => goTo('/ventas') },
           { label: 'Empleados', icon: Icon.empleados, onClick: () => goTo('/empleados') },
         ]
-      : [{ label: 'Mi perfil', icon: Icon.empleados, onClick: () => goTo('/mi-perfil') }]),
+      : []),
   ];
 
   // Accesos que no cupieron en el sidebar → modal Menú.
@@ -941,7 +939,7 @@ export default function Layout() {
         items={desktopNav}
         onMenu={() => setMenuOpen(true)}
         onOverflowChange={setDesktopOverflow}
-        onSettings={isAdmin ? handleSettings : undefined}
+        onSettings={handleSettings}
         onLogout={handleLogout}
       />
 
@@ -968,7 +966,7 @@ export default function Layout() {
         onClose={() => setMenuOpen(false)}
         mobileItems={menuExtraItems}
         desktopItems={desktopMenuItems}
-        onSettings={isAdmin ? handleSettings : undefined}
+        onSettings={handleSettings}
         onLogout={handleLogout}
       />
 
