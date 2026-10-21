@@ -264,7 +264,7 @@ const GRUPOS_AJUSTES = [
   { titulo: 'Cuenta',    ids: ['perfil'] },
   { titulo: 'Negocio',   ids: ['negocio', 'ticket', 'whatsapp'] },
   { titulo: 'Operación', ids: ['maquinas', 'cargas', 'etiquetas', 'inventario'] },
-  { titulo: 'Sistema',   ids: ['alertas', 'manual', 'instalar', 'actualizar'] },
+  { titulo: 'Sistema',   ids: ['alertas', 'manual', 'actualizar', 'instalar'] },
 ];
 
 /**
