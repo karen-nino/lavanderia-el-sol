@@ -71,15 +71,14 @@ function lineasMovimiento(p, porUnidad, bot, gra, textoBot = (n) => textoBotella
 }
 
 /**
- * Medidas con su equivalencia cuando llegan a una botella; primero las
- * botellas: "1 medida", "1 botella = 2 medidas", "1 botella y 1 medida = 3 medidas".
+ * Medidas en botellas cuando llegan a una, sin la equivalencia: "1 medida",
+ * "1 botella", "1 botella y 1 medida".
  */
 export function textoMedidasEquivalencia(medidas, medidasPorBotella) {
   const n = Math.max(0, Math.round(Number(medidas) || 0));
   const mpb = Number(medidasPorBotella) || 0;
-  const enMedidas = plural(n, 'medida', 'medidas');
-  if (mpb <= 1 || n < mpb) return enMedidas;
-  return `${textoBotellas(n, mpb)} = ${enMedidas}`;
+  if (mpb <= 1 || n < mpb) return plural(n, 'medida', 'medidas');
+  return textoBotellas(n, mpb);
 }
 
 /** Lo que entró ese día (Entradas y existencia del alta). */

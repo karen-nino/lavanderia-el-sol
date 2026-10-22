@@ -20,11 +20,11 @@ describe('lineasEntradas (Reporte diario)', () => {
 
 describe('lineasSalidas (Reporte diario)', () => {
   it('suma lo que salió por notas y las salidas manuales', () => {
-    expect(lineasSalidas({ ...granel, vendido_vigente_medidas: 2, salida_botellas_medidas: 2 }, false)).toEqual(['2 botellas = 4 medidas']);
+    expect(lineasSalidas({ ...granel, vendido_vigente_medidas: 2, salida_botellas_medidas: 2 }, false)).toEqual(['2 botellas']);
   });
   it('la salida manual del bidón va aparte', () => {
     expect(lineasSalidas({ ...granel, vendido_vigente_medidas: 2, salida_granel_medidas: 50 }, false))
-      .toEqual(['Rellenadas: 1 botella = 2 medidas', 'A granel: 1 bidón']);
+      .toEqual(['Rellenadas: 1 botella', 'A granel: 1 bidón']);
   });
   it('lo que se devolvió no cuenta: solo lo dice Devuelto', () => {
     // Todo lo vendido se devolvió: Salidas queda sin movimiento.
@@ -40,8 +40,8 @@ describe('lineasSalidas (Reporte diario)', () => {
 describe('textoMedidasEquivalencia', () => {
   it('dice las medidas y, si llegan a una botella, su equivalencia', () => {
     expect(textoMedidasEquivalencia(1, 2)).toBe('1 medida');
-    expect(textoMedidasEquivalencia(2, 2)).toBe('1 botella = 2 medidas');
-    expect(textoMedidasEquivalencia(3, 2)).toBe('1 botella y 1 medida = 3 medidas');
+    expect(textoMedidasEquivalencia(2, 2)).toBe('1 botella');
+    expect(textoMedidasEquivalencia(3, 2)).toBe('1 botella y 1 medida');
   });
   it('sin tamaño de botella, solo medidas', () => {
     expect(textoMedidasEquivalencia(5, null)).toBe('5 medidas');
