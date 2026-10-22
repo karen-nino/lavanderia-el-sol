@@ -47,3 +47,11 @@ describe('textoMedidasEquivalencia', () => {
     expect(textoMedidasEquivalencia(5, null)).toBe('5 medidas');
   });
 });
+
+// Lo apartado en notas ya salió: cuenta en Salidas aunque siga en el estante.
+describe('lineasSalidas con apartados', () => {
+  it('suma lo vendido, lo apartado y lo sacado a mano', () => {
+    const marca = { medidas_por_botella: 1, vendido_vigente_medidas: 2, apartado_medidas: 1, salida_botellas_medidas: 0 };
+    expect(lineasSalidas(marca, true)).toEqual(['3 piezas']);
+  });
+});

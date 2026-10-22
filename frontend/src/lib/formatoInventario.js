@@ -89,11 +89,12 @@ export function lineasEntradas(p, porUnidad) {
 }
 
 /**
- * Lo que salió ese día: lo usado en notas que no se devolvió (en botellas) más
- * las salidas manuales. Lo devuelto va en Devuelto.
+ * Lo que salió ese día: lo usado en notas que no se devolvió y lo apartado en
+ * notas (en botellas), más las salidas manuales. Lo devuelto va en Devuelto.
  */
 export function lineasSalidas(p, porUnidad) {
-  const bot = (Number(p?.vendido_vigente_medidas) || 0) + (Number(p?.salida_botellas_medidas) || 0);
+  const bot = (Number(p?.vendido_vigente_medidas) || 0) + (Number(p?.apartado_medidas) || 0)
+    + (Number(p?.salida_botellas_medidas) || 0);
   return lineasMovimiento(p, porUnidad, Math.max(0, bot), Number(p?.salida_granel_medidas) || 0,
     (n) => textoMedidasEquivalencia(n, p?.medidas_por_botella));
 }

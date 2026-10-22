@@ -670,6 +670,32 @@ const VENTA_DEVUELTA_SQL = `EXISTS (
  * Tipos de movimiento por filtro del Reporte diario. Rellenar va en entradas y
  * salidas: no entra ni sale, pero explica el cambio de cada existencia.
  */
+/**
+ * Renglones de productos en notas no canceladas de la sucursal ($1), con
+ * cuándo salieron de verdad del estante: el primer movimiento 'venta' de esa
+ * nota y producto o, si no hay, `consumido_at` (que el relleno de la mig. 161
+ * fechó el día de la migración). Sin fecha = sigue apartado.
+ */
+const RENGLONES_NOTA_SQL = `
+  SELECT np.id, np.producto_id, np.nota_id, np.cantidad_medidas, np.created_at, n.folio, n.usuario_id,
+         LEAST(np.consumido_at,
+               (SELECT MIN(v.created_at) FROM producto_movimientos v
+                 WHERE v.tipo = 'venta' AND v.nota_id = np.nota_id
+                   AND v.producto_id = np.producto_id)) AS consumido_at
+    FROM nota_productos np
+    JOIN notas n ON n.id = np.nota_id
+   WHERE n.sucursal = $1 AND n.estado <> 'CANCELADA'`;
+
+/**
+ * La venta de un renglón que se apartó un día ANTERIOR: ya contó como salida
+ * ese día (al apartarse), así que no vuelve a contar al descontarse. Usa `m`
+ * (el movimiento), `renglones` y `bounds`.
+ */
+const VENTA_YA_APARTADA_SQL = `EXISTS (
+  SELECT 1 FROM renglones r
+   WHERE r.nota_id = m.nota_id AND r.producto_id = m.producto_id
+     AND r.created_at < bounds.inicio)`;
+
 const TIPOS_MOVIMIENTO = {
   entradas: ['entrada', 'rellenar'],
   salidas:  ['venta', 'salida', 'rellenar'],
@@ -686,12 +712,18 @@ export const getMovimientos = async (req, res) => {
   const tipos = TIPOS_MOVIMIENTO[req.query.tipo] ?? null;
   try {
     const { rows } = await pool.query(
-      `SELECT m.id, m.producto_id, m.sucursal, m.usuario_id, m.tipo, m.destino,
+      `WITH bounds AS (
+         SELECT ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City' AS inicio,
+                ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City' AS cierre
+       ),
+       renglones AS (${RENGLONES_NOTA_SQL.replace('$1', '$2')})
+       SELECT m.id, m.producto_id, m.sucursal, m.usuario_id, m.tipo, m.destino,
               m.cantidad_medidas, m.descripcion, m.nota_id, m.nota, m.created_at,
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               -- El folio vivo o, si la nota se borró, el copiado.
               COALESCE(n.folio, m.nota_folio) AS nota_folio
          FROM producto_movimientos m
+         CROSS JOIN bounds
          LEFT JOIN usuarios u ON u.id = m.usuario_id
          LEFT JOIN notas n    ON n.id = m.nota_id
         WHERE m.producto_id = $1 AND m.sucursal = $2
@@ -701,10 +733,34 @@ export const getMovimientos = async (req, res) => {
           AND ($4::text[] IS NULL OR m.tipo = ANY($4))
           -- En Salidas no aparece la venta devuelta (va en Devuelto).
           AND NOT ($5 AND m.tipo = 'venta' AND ${VENTA_DEVUELTA_SQL})
+          -- Ni la de un apartado de otro día (ya salió ese día).
+          AND NOT ($5 AND $3::date IS NOT NULL AND m.tipo = 'venta' AND ${VENTA_YA_APARTADA_SQL})
         ORDER BY m.created_at DESC, m.id DESC
         LIMIT 200`,
       [id, req.sucursal, fecha, tipos, req.query.tipo === 'salidas']
     );
+    // Salidas de un día: también lo apartado ese día que al cierre seguía sin descontarse.
+    if (req.query.tipo === 'salidas' && fecha) {
+      const { rows: apartados } = await pool.query(
+        `WITH bounds AS (
+           SELECT ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City' AS inicio,
+                  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City' AS cierre
+         ),
+         renglones AS (${RENGLONES_NOTA_SQL})
+         SELECT 'a' || r.id AS id, r.producto_id, r.usuario_id, 'apartado' AS tipo,
+                'botellas' AS destino, r.cantidad_medidas, r.nota_id, r.created_at,
+                TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
+                r.folio AS nota_folio
+           FROM renglones r CROSS JOIN bounds
+           LEFT JOIN usuarios u ON u.id = r.usuario_id
+          WHERE r.producto_id = $2
+            AND r.created_at >= bounds.inicio AND r.created_at < bounds.cierre
+            AND (r.consumido_at IS NULL OR r.consumido_at >= bounds.cierre)`,
+        [req.sucursal, id, fecha]
+      );
+      rows.push(...apartados);
+      rows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
     res.json(rows);
   } catch (err) {
     console.error('getMovimientos error:', err);
@@ -720,6 +776,8 @@ export const getMovimientos = async (req, res) => {
  * - entrada / salida: + / − en su destino (botellas o piezas, o bidón);
  * - rellenar: + botellas y − bidón;
  * - venta: − botellas (o piezas); liberacion (venta anulada): + botellas.
+ * Lo apartado en notas cuenta como salida el día que se apartó (y su venta,
+ * al descontarse otro día, ya no) y no entra en Había ni en Queda.
  * El día es el local (America/Mexico_City).
  */
 export const getReporteDiario = async (req, res) => {
@@ -732,7 +790,8 @@ export const getReporteDiario = async (req, res) => {
       `WITH bounds AS (
          SELECT ($2::date)::timestamp        AT TIME ZONE 'America/Mexico_City' AS inicio,
                 (($2::date + 1))::timestamp   AT TIME ZONE 'America/Mexico_City' AS cierre
-       )
+       ),
+       renglones AS (${RENGLONES_NOTA_SQL})
        SELECT
          p.id, p.nombre, p.marca, p.tipo_liquido, p.forma, p.se_vende_por_unidad,
          p.clase, p.tamano_bolsa,
@@ -785,7 +844,26 @@ export const getReporteDiario = async (req, res) => {
             WHERE m.producto_id = p.id AND m.tipo = 'venta'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
               AND NOT ${VENTA_DEVUELTA_SQL}
+              AND NOT ${VENTA_YA_APARTADA_SQL}
          ), 0) AS vendido_vigente_medidas,
+         -- Apartado ese día en notas y aún sin descontar al cierre: ya salió (tiene dueño).
+         COALESCE((
+           SELECT SUM(r.cantidad_medidas) FROM renglones r, bounds
+            WHERE r.producto_id = p.id
+              AND r.created_at >= bounds.inicio AND r.created_at < bounds.cierre
+              AND (r.consumido_at IS NULL OR r.consumido_at >= bounds.cierre)
+         ), 0) AS apartado_medidas,
+         -- Lo apartado sin descontar al inicio y al cierre del día (no está en el estante libre).
+         COALESCE((
+           SELECT SUM(r.cantidad_medidas) FROM renglones r, bounds
+            WHERE r.producto_id = p.id AND r.created_at < bounds.inicio
+              AND (r.consumido_at IS NULL OR r.consumido_at >= bounds.inicio)
+         ), 0) AS apartado_inicio_medidas,
+         COALESCE((
+           SELECT SUM(r.cantidad_medidas) FROM renglones r, bounds
+            WHERE r.producto_id = p.id AND r.created_at < bounds.cierre
+              AND (r.consumido_at IS NULL OR r.consumido_at >= bounds.cierre)
+         ), 0) AS apartado_fin_medidas,
          -- Devuelto ese día (ventas anuladas).
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
@@ -862,15 +940,17 @@ export const getReporteDiario = async (req, res) => {
         vendido_medidas:     int(r.vendido_medidas),
         devuelto_medidas:    int(r.devuelto_medidas),
         vendido_vigente_medidas: int(r.vendido_vigente_medidas),
+        apartado_medidas:        int(r.apartado_medidas),
         entrada_botellas_medidas: int(r.entrada_botellas_medidas),
         entrada_granel_medidas:   int(r.entrada_granel_medidas),
         salida_botellas_medidas:  int(r.salida_botellas_medidas),
         salida_granel_medidas:    int(r.salida_granel_medidas),
         rellenado_medidas:        int(r.rellenado_medidas),
         // Nunca negativa.
-        inicio_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_desde_inicio)),
+        // Sin lo apartado: eso ya salió, aunque siga en el estante.
+        inicio_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_desde_inicio) - int(r.apartado_inicio_medidas)),
         inicio_granel_medidas:   Math.max(0, int(r.stock_granel_medidas) - int(r.efecto_granel_desde_inicio)),
-        fin_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
+        fin_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post) - int(r.apartado_fin_medidas)),
         fin_granel_medidas:   Math.max(0, int(r.stock_granel_medidas) - int(r.efecto_granel_post)),
       })),
     });

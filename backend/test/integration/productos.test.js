@@ -3,7 +3,7 @@ import request from 'supertest';
 import app from '../../app.js';
 import {
   pool, limpiarBase, seedSucursal, seedUsuario, seedProducto, seedMaquina,
-  seedCliente, seedEtiquetas, auth,
+  seedCliente, seedEtiquetas, seedAjustes, auth,
 } from '../helpers.js';
 
 let admin;
@@ -578,5 +578,64 @@ describe('editar los tamaños de un producto con existencia', () => {
     const res = await request(app).put(`/api/productos/${id}`).set(auth(admin.token)).send(datos({ medida_ml: 100 }));
     expect(res.status).toBe(200);
     expect(Number(res.body.medida_ml)).toBe(100);
+  });
+});
+
+// Lo apartado en una nota ya salió: cuenta en Salidas el día que se apartó y
+// no queda en "Queda al final"; al descontarse otro día no vuelve a contar.
+describe('GET /api/productos/reporte-diario — apartados', () => {
+  const crearMarca = () => seedProducto({
+    nombre: 'Suavizante', tipo_liquido: 'marca', botella_ml: 1, medida_ml: 1,
+    precio_unitario: null, precio_botella: 30, stock_actual: 5,
+  });
+  /** Venta de mostrador (se descuenta al momento) o, sin pagar, Por Encargo (queda apartado). */
+  const vender = async (id, cantidad, estado_pago) => {
+    if (estado_pago === 'PAGADO') {
+      return request(app).post('/api/notas').set(auth(admin.token)).send({
+        tipo_servicio: 'PRODUCTOS', estado_pago, forma_pago: 'EFECTIVO',
+        productos: [{ producto_id: id, cantidad }],
+      });
+    }
+    await seedAjustes({ tope_carga_grande: 100 });
+    return request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: await seedCliente(), tipo_prenda: 'ROPA', estado_pago,
+      cargas: [{ tamano: 'grande', lavadora_tipo: 'mediana', productos: [{ producto_id: id, cantidad }] }],
+    });
+  };
+
+  it('5 piezas, se venden 2 y 1 se aparta: salieron 3 y quedan 2', async () => {
+    const id = await crearMarca();
+    expect((await vender(id, 2, 'PAGADO')).status).toBe(201);
+    expect((await vender(id, 1, 'PENDIENTE')).status).toBe(201);
+
+    const res = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
+    const p = res.body.productos.find((x) => x.id === id);
+    expect(p.vendido_vigente_medidas).toBe(2);
+    expect(p.apartado_medidas).toBe(1);
+    expect(p.fin_botellas_medidas).toBe(2);
+
+    // El detalle de Salidas trae la venta y el apartado.
+    const hoy = res.body.fecha;
+    const movs = await request(app).get(`/api/productos/${id}/movimientos?fecha=${hoy}&tipo=salidas`).set(auth(admin.token));
+    expect(movs.body.map((m) => m.tipo).sort()).toEqual(['apartado', 'venta']);
+  });
+
+  it('lo apartado ayer y cobrado hoy salió ayer, no hoy', async () => {
+    const id = await crearMarca();
+    const nota = (await vender(id, 1, 'PENDIENTE')).body;
+    await pool.query("UPDATE nota_productos SET created_at = now() - interval '1 day' WHERE nota_id = $1", [nota.id]);
+    await request(app).patch(`/api/notas/${nota.id}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+
+    const hoy = (await request(app).get('/api/productos/reporte-diario').set(auth(admin.token))).body;
+    const p = hoy.productos.find((x) => x.id === id);
+    expect(p.vendido_vigente_medidas).toBe(0);
+    expect(p.apartado_medidas).toBe(0);
+    expect(p.inicio_botellas_medidas).toBe(4); // ya no estaba libre al empezar el día
+    expect(p.fin_botellas_medidas).toBe(4);
+
+    const ayer = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+    const r = (await request(app).get(`/api/productos/reporte-diario?fecha=${ayer}`).set(auth(admin.token))).body;
+    expect(r.productos.find((x) => x.id === id).apartado_medidas).toBe(1);
   });
 });

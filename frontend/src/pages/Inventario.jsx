@@ -1490,7 +1490,7 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
             // Título: quién y a qué hora; si vino de una nota, la nota (y lo otro baja a
             // subtítulo). Una salida manual con motivo tiene su botón "Nota".
             const abierta = notaAbierta === m.id;
-            const deNota = m.tipo === 'venta' || m.tipo === 'liberacion';
+            const deNota = m.tipo === 'venta' || m.tipo === 'liberacion' || m.tipo === 'apartado';
             const irANota = m.nota_id && m.nota_folio ? () => { onClose(); navigate(`/notas/${m.nota_id}`); } : null;
             const quienHora = `${m.usuario_nombre || 'Usuario eliminado'} · ${formatHora12(m.created_at)}`;
             // Lo devuelto dice qué nota se anuló: si se canceló, lleva a ella; si se borró,
@@ -1500,7 +1500,7 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
                   ? `Nota ${m.nota_folio} anulada${irANota ? '' : ' (se eliminó)'}`
                   : 'Nota anulada')
               : (m.nota_folio
-                  ? `Nota ${m.nota_folio}${irANota ? '' : ' (se eliminó)'}`
+                  ? `Nota ${m.nota_folio}${m.tipo === 'apartado' ? ' · apartado' : ''}${irANota ? '' : ' (se eliminó)'}`
                   : 'Venta en nota');
             return (
               <div key={m.id} className="px-5 py-2.5 border-b border-gray-50 last:border-0">
