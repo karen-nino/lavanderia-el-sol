@@ -1284,9 +1284,14 @@ export const otraFicha = async (req, res) => {
     }
     const maq = rows[0];
     const porFicha = Number(maq.minutos_por_ficha);
-    if (!(porFicha > 0) || maq.solo_fichas || !maq.cronometro) {
+    if (!(porFicha > 0) || maq.solo_fichas) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `${maq.nombre} no es de fichas: no se le puede meter otra.` });
+    }
+    // Con temporizador (MAQUINAS_CRONOMETRO=off) el tiempo no se mueve: no aplica.
+    if (!maq.cronometro) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `${maq.nombre} trabaja con temporizador: otra ficha solo funciona con cronómetro.` });
     }
     if (maq.estado !== 'en_uso' || !maq.en_uso_desde || !(Number(maq.ciclo_elegido_minutos) > 0)) {
       await client.query('ROLLBACK');
