@@ -1348,7 +1348,7 @@ export default function Salidas() {
                       )}
                   </p>
                   {puedeTocarProductos && !cabeOtraDe(p) && (
-                    <p className="text-sm text-amber-700">Ya no cabe otra en el servicio</p>
+                    <p className="text-sm text-amber-700">Tope superado · {fmtMonto(nota.tope_nota.usado)}</p>
                   )}
                 </div>
 

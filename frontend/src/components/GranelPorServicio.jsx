@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import Selector from './Selector';
+import ConfirmacionModal from './ConfirmacionModal';
 
 /**
  * Granel de cada servicio Por Encargo, en Salidas. El servicio sabe cuánto
@@ -29,6 +30,9 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
   const [tipos, setTipos]       = useState([]);
   const [ocupado, setOcupado]   = useState(null); // `${cargaId}-${tipoId}` en proceso
   const [error, setError]       = useState('');
+  // Medida que no se pudo servir: { r, etiqueta, falta?, error? }. Va en modal porque
+  // desde el renglón no se ve el aviso de arriba.
+  const [aviso, setAviso]       = useState(null);
 
   // El catálogo se vuelve a pedir al cambiar la nota (elegir cambia lo que queda).
   useEffect(() => {
@@ -107,7 +111,25 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
     />
   );
 
-  const guardar = async (c, tipoId, productoId, cantidad, delCliente = false) => {
+  /**
+   * ¿Cabe otra medida del renglón? Cuenta contra el precio del servicio y contra lo
+   * que se cobra por toda la nota (como el servidor).
+   *
+   * @returns {null|{que: string, tope: number, usado: number, precio: number}} null si cabe.
+   */
+  const faltaPara = (c, r) => {
+    const topes = nota?.tope_nota;
+    const precio = Number(r.producto?.precio_unitario) || 0;
+    if (!topes || precio <= 0) return null;
+    const sv = (topes.servicios ?? []).find(x => String(x.carga_id) === String(c.id));
+    if (sv && sv.usado + precio > sv.tope + 1e-9) return { que: 'servicio', tope: sv.tope, usado: sv.usado, precio };
+    if (topes.usado + precio > topes.presupuesto + 1e-9) {
+      return { que: 'nota', tope: topes.presupuesto, usado: topes.usado, precio };
+    }
+    return null;
+  };
+
+  const guardar = async (c, tipoId, productoId, cantidad, delCliente = false, alFallar = setError) => {
     if (cantidad < 1) return;
     setOcupado(`${c.id}-${tipoId}`);
     setError('');
@@ -117,11 +139,16 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
       });
       await onCambio?.();
     } catch (err) {
-      setError(err.message);
+      alFallar(err.message);
     } finally {
       setOcupado(null);
     }
   };
+
+  /** − y + de las medidas: si el servidor lo rechaza, el motivo sale en el modal. */
+  const cambiarMedidas = (c, r, etiqueta, elegido, cantidad) => guardar(
+    c, r.tipoId, elegido, cantidad, false, (msg) => setAviso({ r, etiqueta, error: msg }),
+  );
 
   return (
     <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
@@ -149,6 +176,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
               const resuelto = r.producto || r.delCliente;
               // Sin contar lo que este servicio ya tiene apartado.
               const quedanDe = (p) => disponible(p) + (elegido === p.id ? r.cantidad : 0);
+              const falta = r.producto && puedeEditar ? faltaPara(c, r) : null;
               return (
                 <div key={r.tipoId} className="flex items-center justify-between gap-3">
                   {/* Sin producto: "Elegir" a la derecha. Elegido: el nombre y "Cambiar"
@@ -177,6 +205,11 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                           </button>
                         </p>
                       ))}
+                    {falta && (
+                      <p className="text-sm text-amber-700 mt-0.5">
+                        Tope superado · ${falta.usado.toFixed(2)}
+                      </p>
+                    )}
                   </div>
 
                   {/* El producto del cliente no lleva medidas: no sale del inventario. */}
@@ -198,7 +231,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <button
                         type="button"
-                        onClick={() => guardar(c, r.tipoId, elegido, r.cantidad - 1)}
+                        onClick={() => cambiarMedidas(c, r, etiqueta, elegido, r.cantidad - 1)}
                         disabled={bloqueado || r.cantidad <= 1}
                         aria-label={`Menos medidas de ${nombreTipo(r.tipoId)}`}
                         className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
@@ -208,13 +241,22 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                       <span className="w-6 text-center text-sm font-semibold text-gray-900 tabular-nums">{r.cantidad}</span>
                       <button
                         type="button"
-                        onClick={() => guardar(c, r.tipoId, elegido, r.cantidad + 1)}
+                        onClick={() => (falta
+                          ? setAviso({ r, etiqueta, falta })
+                          : cambiarMedidas(c, r, etiqueta, elegido, r.cantidad + 1))}
                         disabled={bloqueado}
                         aria-label={`Más medidas de ${nombreTipo(r.tipoId)}`}
                         className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         +
                       </button>
+                      {/* Llegó al tope: el + sigue activo y explica por qué no sirve otra. */}
+                      {falta && (
+                        <svg className="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      )}
                     </div>
                   )}
                 </div>
@@ -224,6 +266,29 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
           </div>
         ))}
       </div>
+
+      {aviso && (() => {
+        const tipo = nombreTipo(aviso.r.tipoId);
+        const f = aviso.falta;
+        const fmt = (n) => `$${Number(n).toFixed(2)}`;
+        return (
+          <ConfirmacionModal
+            tono="aviso"
+            titulo={f ? `Ya no cabe otra medida de ${tipo.toLowerCase()}` : `No se pudo cambiar ${tipo.toLowerCase()}`}
+            mensaje={!f ? aviso.error
+              : f.que === 'servicio'
+                ? `El servicio ${aviso.etiqueta} ya llega a su precio. Para servir otra, quita algo del servicio o sube su precio en Ajustes.`
+                : 'Lo servido en la nota ya llega a lo que se cobra por los servicios. '
+                  + 'Para servir otra, quita algún producto o sube el precio del servicio en Ajustes.'}
+            detalle={f ? [
+              { etiqueta: f.que === 'servicio' ? `Precio de ${aviso.etiqueta}` : 'Se cobra por los servicios', valor: fmt(f.tope) },
+              { etiqueta: f.que === 'servicio' ? 'Ya usado (máquinas y material)' : 'Ya servido', valor: fmt(f.usado) },
+              { etiqueta: 'Otra medida', valor: fmt(f.precio) },
+            ] : []}
+            onClose={() => setAviso(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

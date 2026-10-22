@@ -751,7 +751,7 @@ async function secadoraPorDefinir(client, notaId) {
  */
 async function topesDeNota(client, notaId) {
   const { rows } = await client.query(
-    `SELECT nc.orden, nc.tamano, nc.tipo_prenda,
+    `SELECT nc.id AS carga_id, nc.orden, nc.tamano, nc.tipo_prenda,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.tamano_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
@@ -1988,8 +1988,15 @@ export const getNotaById = async (req, res) => {
       abonos,
       abonado,
       lavadora_terminada: await algunaLavadoraTermino(pool, id),
-      // Por Encargo: tope de la nota y lo usado, para avisar si ya no cabe otra bolsa.
-      tope_nota: (await topesDeNota(pool, id)).nota,
+      // Por Encargo: tope y lo usado de la nota y de cada servicio, para avisar
+      // si ya no cabe otra bolsa o medida.
+      tope_nota: await (async () => {
+        const { servicios, nota } = await topesDeNota(pool, id);
+        return nota && {
+          ...nota,
+          servicios: servicios.map(r => ({ carga_id: r.carga_id, tope: Number(r.tope), usado: r.total })),
+        };
+      })(),
       saldo: rows[0].estado_pago === 'PAGADO'
         ? 0
         : Math.max(0, Number(rows[0].precio_total) - abonado),

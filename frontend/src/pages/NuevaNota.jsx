@@ -1340,7 +1340,7 @@ export default function NuevaNota() {
                     )}
                   </p>
                   {!cabeOtraDe(prod) && (
-                    <p className="text-sm text-amber-700">Ya no cabe otra en el servicio</p>
+                    <p className="text-sm text-amber-700">Tope superado · ${materialUsado.toFixed(2)}</p>
                   )}
                 </div>
 
@@ -1746,8 +1746,9 @@ export default function NuevaNota() {
                 <Separador />
                 {bloqueProductos()}
 
-                {/* Un servicio cuyo material cuesta más de lo que se cobra. */}
-                {encargoCargas.map((c, idx) => {
+                {/* Un servicio cuyo material cuesta más de lo que se cobra. Si la nota
+                    completa ya se pasó, solo queda el aviso de la nota. */}
+                {excesoDeLaNota <= 0 && encargoCargas.map((c, idx) => {
                   const exceso = excesoDeCarga(c);
                   if (!(exceso > 0)) return null;
                   const nombre = SERVICIO_POR_V[c.servicio]?.label ?? `Carga ${idx + 1}`;
