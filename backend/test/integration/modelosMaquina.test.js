@@ -567,4 +567,18 @@ describe('casilla "Trabaja con fichas: con Sonoff y con tiempos"', () => {
       .set(auth(admin.token)).send({ solo_fichas: true }).expect(200);
     expect([otro.solo_fichas, otro.fichas_sonoff, otro.pregunta_tiempo]).toEqual([true, false, false]);
   });
+
+  it('una lavadora no puede ser de fichas con Sonoff', async () => {
+    const sq = await seedMarca('Speed Queen');
+    const { body: lav } = await crearModelo(admin.token, {
+      marca_id: sq, nombre: 'L1', tipo: 'lavadora', tamano: 'mediana', fichas_sonoff: true,
+    }).expect(201);
+    expect(lav.fichas_sonoff).toBe(false);
+    const { body: sec } = await crearModelo(admin.token, {
+      marca_id: sq, nombre: 'S1', tipo: 'secadora', tamano: 'mediana', fichas_sonoff: true,
+    }).expect(201);
+    const { body: cambiada } = await request(app).put(`/api/etiquetas/modelos-maquina/${sec.id}`)
+      .set(auth(admin.token)).send({ tipo: 'lavadora' }).expect(200);
+    expect(cambiada.fichas_sonoff).toBe(false);
+  });
 });

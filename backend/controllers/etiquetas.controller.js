@@ -329,7 +329,7 @@ export const crearModeloMaquina = async (req, res) => {
       // El de fichas sin Sonoff no tiene programas ni fichas con Sonoff.
       [marcaId, nombre, tipo, tamano, minutos.valor,
        Boolean(pregunta_tiempo) && !solo_fichas, Boolean(dos_ciclos), Boolean(solo_fichas),
-       Boolean(fichas_sonoff) && !solo_fichas]
+       Boolean(fichas_sonoff) && !solo_fichas && tipo === 'secadora']
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -393,10 +393,12 @@ export const actualizarModeloMaquina = async (req, res) => {
     updates.push(`solo_fichas = $${i++}`);
     values.push(Boolean(solo_fichas));
   }
-  // "Trabaja con fichas: con Sonoff y con tiempos"; la de sin Sonoff la apaga.
-  if (fichas_sonoff !== undefined || solo_fichas) {
+  // "Trabaja con fichas: con Sonoff y con tiempos", solo de secadoras; la de
+  // sin Sonoff la apaga.
+  const dejaDeSerSecadora = tipo !== undefined && tipo !== 'secadora';
+  if (fichas_sonoff !== undefined || solo_fichas || dejaDeSerSecadora) {
     updates.push(`fichas_sonoff = $${i++}`);
-    values.push(Boolean(fichas_sonoff) && !solo_fichas);
+    values.push(Boolean(fichas_sonoff) && !solo_fichas && !dejaDeSerSecadora);
   }
   // Si el modelo corre dos ciclos por carga.
   if (dos_ciclos !== undefined) {
