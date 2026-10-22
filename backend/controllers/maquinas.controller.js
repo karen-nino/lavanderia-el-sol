@@ -1286,6 +1286,11 @@ export const otraFicha = async (req, res) => {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
     }
     const maq = rows[0];
+    // Las fichas de más se cobran con el secado: en una lavadora no aplica.
+    if (maq.tipo !== 'secadora') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `${maq.nombre} es lavadora: "Más fichas" es solo de secadoras.` });
+    }
     const porFicha = Number(maq.minutos_por_ficha);
     if (!(porFicha > 0) || maq.solo_fichas) {
       await client.query('ROLLBACK');

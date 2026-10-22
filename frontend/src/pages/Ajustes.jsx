@@ -576,18 +576,12 @@ function CatalogoEtiquetas({
   const porDefecto = () => Object.fromEntries(extraCampos.map(c => [c.name, c.defecto]));
   const [nuevoExtra, setNuevoExtra] = useState(porDefecto);
   const [editExtra,  setEditExtra]  = useState({});
-  // Una casilla apaga las que excluye; cambiar el tipo apaga las que no le tocan.
+  // Una casilla apaga las que excluye (una o varias).
   const conCambio = (prev, campo, v) => ({
     ...prev, [campo.name]: v,
     ...(campo.excluye && v
       ? Object.fromEntries([campo.excluye].flat().map(n => [n, false])) : {}),
-    ...Object.fromEntries(extraCampos
-      .filter(c => campo.name === 'tipo' && c.soloTipo && c.soloTipo !== v)
-      .map(c => [c.name, false])),
   });
-  /** Campos que le tocan a lo capturado (p. ej. una casilla solo de secadoras). */
-  const camposPara = (valores) => extraCampos.filter(c =>
-    !c.soloTipo || (valores.tipo ?? extraCampos.find(x => x.name === 'tipo')?.defecto) === c.soloTipo);
 
   // En el subtítulo, una casilla se resume con su `chip`.
   const etiquetaDe = (campo, valor) => (
@@ -750,7 +744,7 @@ function CatalogoEtiquetas({
             className={inputCls}
           />
         </div>
-        {camposPara(nuevoExtra).map(campo => campoExtra(
+        {extraCampos.map(campo => campoExtra(
           campo,
           nuevoExtra[campo.name] ?? campo.defecto,
           (v) => setNuevoExtra(prev => conCambio(prev, campo, v)),
@@ -788,7 +782,7 @@ function CatalogoEtiquetas({
                       autoFocus
                     />
                   </div>
-                  {camposPara(editExtra).map(campo => campoExtra(
+                  {extraCampos.map(campo => campoExtra(
                     campo,
                     editExtra[campo.name] ?? campo.defecto,
                     (v) => setEditExtra(prev => conCambio(prev, campo, v)),
@@ -914,9 +908,9 @@ const CAMPOS_MODELO = [
   // Modelos con varios programas: se declara aquí para no cargar a los demás.
   { name: 'pregunta_tiempo', defecto: false, tipo: 'check', excluye: 'solo_fichas',
     label: 'Varios programas: se elige cuál al iniciar', chip: 'varios programas' },
-  // Secadora de fichas con Sonoff (Sec49): solo con ella salen "Cada ficha" y
-  // "Costo ficha" en los tiempos. Va con varios programas.
-  { name: 'fichas_sonoff', defecto: false, tipo: 'check', excluye: 'solo_fichas', soloTipo: 'secadora',
+  // De fichas con Sonoff (la Sec49), lavadora o secadora: solo con ella salen
+  // "Cada ficha" y "Costo ficha" en los tiempos. Va con varios programas.
+  { name: 'fichas_sonoff', defecto: false, tipo: 'check', excluye: 'solo_fichas',
     label: 'Trabaja con fichas: con Sonoff y con tiempos', chip: 'fichas con Sonoff' },
   // Solo fichas: sin Sonoff ni tiempos; no va con varios programas.
   { name: 'solo_fichas', defecto: false, tipo: 'check', excluye: ['pregunta_tiempo', 'fichas_sonoff'],
@@ -932,7 +926,7 @@ const CAMPOS_MODELO = [
  * Secadora. El desplegable incluye marcas desactivadas (sus máquinas siguen).
  * `movil` cambia solo el estilo.
  */
-function MarcasYModelos({ movil = false, onMensaje, soloConsulta = false }) {
+function MarcasYModelos({ movil = false, onMensaje, soloConsulta = false, onModelos }) {
   const Campo      = movil ? MobileField : Field;
   const inputCls   = movil ? MOBILE_INPUT_CLS : INPUT_CLS;
   const divisorCls = movil
@@ -997,6 +991,7 @@ function MarcasYModelos({ movil = false, onMensaje, soloConsulta = false }) {
                   extra={{ marca_id: marcaId }}
                   extraCampos={CAMPOS_MODELO}
                   vacioTexto="Esta marca todavía no tiene modelos."
+                  onCambio={onModelos}
                   inputCls={inputCls}
                   onMensaje={onMensaje}
                   soloConsulta={soloConsulta}
@@ -1334,6 +1329,17 @@ function AjustesAdmin() {
       .finally(() => setCatalogosListos(n => n + 1));
   }, []);
 
+  // Al marcar una casilla de un modelo (varios programas, fichas), su bloque de
+  // tiempos se entera sin recargar ni perder lo que se está editando.
+  const recibirModelos = useCallback((lista) => {
+    const casillas = (t) => {
+      const mo = lista.find(x => String(x.id) === String(t.modelo_id));
+      return mo ? { ...t, pregunta_tiempo: mo.pregunta_tiempo, fichas_sonoff: mo.fichas_sonoff } : t;
+    };
+    setTiemposMarca(prev => prev.map(casillas));
+    tiemposOrigRef.current = tiemposOrigRef.current.map(casillas);
+  }, []);
+
   useEffect(() => {
     // ?todas=1 incluye las inactivas, para reactivarlas.
     api.get('/sucursales?todas=1')
@@ -1483,18 +1489,18 @@ function AjustesAdmin() {
     }
     if (!esDeFichas(t)) return base;
     const deQue = t?.pregunta_tiempo ? 'del programa elegido' : (conTemporizador ? 'del tiempo de carga' : 'del tope');
-    return `${base} Cada ficha: al iniciarla, el Sonoff le mete una ficha por cada tantos minutos ${deQue}. Costo ficha: lo que se cobra en Autoservicio por cada ficha de "Más fichas" cuando el tiempo elegido no tiene precio. Vacío = sin costo.`;
+    return `${base} Cada ficha: al iniciarla, el Sonoff le mete una ficha por cada tantos minutos ${deQue}.${t?.tipo === 'secadora' ? ' Costo ficha: lo que se cobra en Autoservicio por cada ficha de "Más fichas" cuando el tiempo elegido no tiene precio. Vacío = sin costo.' : ''}`;
   };
 
   // Los tres programas solo salen en los modelos marcados con varios programas.
   const tieneVariosTiempos = (t) => Boolean(t.pregunta_tiempo);
 
-  /** Secadora marcada "Trabaja con fichas: con Sonoff y con tiempos" en su modelo. */
-  const esDeFichas = (t) => t?.tipo === 'secadora' && Boolean(t.fichas_sonoff);
+  /** Modelo marcado "Trabaja con fichas: con Sonoff y con tiempos". */
+  const esDeFichas = (t) => Boolean(t?.fichas_sonoff);
 
-  // Secadoras de fichas: al iniciarla se mete una ficha por cada tantos minutos
+  // Máquinas de fichas: al iniciarla se mete una ficha por cada tantos minutos
   // del programa (o del tope). Las demás (Samsung: se encienden y se aprieta
-  // Start, como las lavadoras) no llevan estos campos.
+  // Start) no llevan estos campos.
   const campoFicha = (t, inputCls, unidadCls) => {
     if (!esDeFichas(t)) return null;
     const clave = claveTiempo(t);
@@ -1510,7 +1516,9 @@ function AjustesAdmin() {
         />
         <span className={`${unidadCls} flex-shrink-0`}>min</span>
       </div>
-      {/* Lo que se cobra por ficha en "Más fichas" si el tiempo no tiene precio (Autoservicio). */}
+      {/* Lo que se cobra por ficha en "Más fichas" si el tiempo no tiene precio
+          (Autoservicio). "Más fichas" es solo de secadoras. */}
+      {t.tipo === 'secadora' && (
       <div className="mt-3 flex items-center gap-2">
         <span className={`${unidadCls} flex-shrink-0 w-24`}>Costo ficha</span>
         {/* Como el precio por carga: $ antes y MXN después. */}
@@ -1523,6 +1531,7 @@ function AjustesAdmin() {
         />
         <span className={`${unidadCls} flex-shrink-0`}>MXN</span>
       </div>
+      )}
       </>
     );
   };
@@ -1639,10 +1648,11 @@ function AjustesAdmin() {
       minutos_2: aNumero(t.minutos_2),
       minutos_3: aNumero(t.minutos_3),
       minutos_4: aNumero(t.minutos_4),
-      // Solo en secadoras.
+      // Fichas: lavadoras y secadoras. Costo y precios: solo secadoras.
+      minutos_por_ficha: aNumero(t.minutos_por_ficha),
       ...(t.tipo === 'secadora'
         ? {
-            minutos_por_ficha: aNumero(t.minutos_por_ficha), precio_por_ficha: aNumero(t.precio_por_ficha),
+            precio_por_ficha: aNumero(t.precio_por_ficha),
             precio_programa_2: aNumero(t.precio_programa_2), precio_programa_3: aNumero(t.precio_programa_3),
             precio_programa_4: aNumero(t.precio_programa_4),
           }
@@ -2134,7 +2144,7 @@ function AjustesAdmin() {
 
     {/* El catálogo va al final: se toca solo cuando entra una máquina nueva. */}
     <Section titulo="Marcas y modelos">
-      <MarcasYModelos onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
+      <MarcasYModelos onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} onModelos={recibirModelos} />
     </Section>
     </>
   );
@@ -2900,7 +2910,7 @@ function AjustesAdmin() {
       <div className="border-t border-light-blue/60 pt-8 space-y-6">
         <TituloGrupoMobile>Marcas y modelos</TituloGrupoMobile>
         <TarjetaMobile>
-          <MarcasYModelos movil onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
+          <MarcasYModelos movil onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} onModelos={recibirModelos} />
         </TarjetaMobile>
       </div>
     </div>

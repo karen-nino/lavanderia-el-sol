@@ -776,6 +776,8 @@ export default function Salidas() {
   // suma el tiempo elegido al fin, sin tope.
   const minutosPorFicha = (m) => Number(deFichas(m)?.minutos_por_ficha) || 0;
   const puedeOtraFicha = (m) => {
+    // Las fichas de más se cobran con el secado: solo secadoras.
+    if (m.tipo !== 'secadora') return false;
     if (!m.actual || m.estado !== 'en_uso' || m.esperandoArranque || m.tomadaPor) return false;
     if (!m.cronometro || !m.en_uso_desde || !(Number(m.ciclo_elegido_minutos) > 0)) return false;
     const fisica = deFichas(m);
