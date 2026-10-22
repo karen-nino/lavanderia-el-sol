@@ -261,3 +261,52 @@ describe('PATCH /maquinas/:id/otra-ficha', () => {
     expect((await otraFicha(id)).status).toBe(400);
   });
 });
+
+// Costo de cada ficha (mig. 164): se cobra en Autoservicio, no en Por Encargo.
+describe('otra ficha — costo', () => {
+  const conCosto = async (id, precio) => pool.query(
+    "UPDATE modelos_maquina SET precio_por_ficha = $1 WHERE nombre = 'Sec49'", [precio]);
+  const carga = async (cargaId) =>
+    (await pool.query('SELECT fichas_extra, precio_fichas_extra FROM nota_cargas WHERE id = $1', [cargaId])).rows[0];
+  const nota = async (notaId) =>
+    (await pool.query('SELECT precio_total, estado_pago FROM notas WHERE id = $1', [notaId])).rows[0];
+
+  it('en Autoservicio suma su costo a la nota (y la deja por cobrar)', async () => {
+    const id = await sec49();
+    await conCosto(id, 12.5);
+    const { notaId, cargaId } = await arrancadaConCarga(id, 30);
+    const antes = Number((await nota(notaId)).precio_total);
+
+    const res = await otraFicha(id);
+    expect(res.status).toBe(200);
+    expect(res.body.precio).toBe(12.5);
+    expect(await carga(cargaId)).toEqual({ fichas_extra: 1, precio_fichas_extra: '12.50' });
+    const despues = await nota(notaId);
+    expect(Number(despues.precio_total)).toBe(antes + 12.5);
+    expect(despues.estado_pago).toBe('PENDIENTE');
+  });
+
+  it('en Por Encargo la cuenta pero no la cobra', async () => {
+    const id = await sec49();
+    await conCosto(id, 10);
+    const { notaId, cargaId } = await arrancadaConCarga(id, 30);
+    await pool.query("UPDATE notas SET tipo_servicio = 'POR_ENCARGO' WHERE id = $1", [notaId]);
+    const antes = Number((await nota(notaId)).precio_total);
+
+    await otraFicha(id).expect(200);
+    expect(await carga(cargaId)).toEqual({ fichas_extra: 1, precio_fichas_extra: '0.00' });
+    expect(Number((await nota(notaId)).precio_total)).toBe(antes);
+  });
+
+  it('se guarda desde Ajustes', async () => {
+    await sec49();
+    const { rows } = await pool.query("SELECT id FROM modelos_maquina WHERE nombre = 'Sec49'");
+    const res = await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
+      .send({ modelo_id: rows[0].id, precio_por_ficha: 15 });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.precio_por_ficha)).toBe(15);
+    const mal = await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
+      .send({ modelo_id: rows[0].id, precio_por_ficha: -3 });
+    expect(mal.status).toBe(400);
+  });
+});

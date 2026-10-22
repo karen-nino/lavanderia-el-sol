@@ -323,7 +323,7 @@ class TotalNegativoError extends Error {
  * Responde los errores de `recalcularPrecioTotal` como reglas de negocio (400 o
  * 409 con su motivo) en vez de un 500. Devuelve true si ya respondió.
  */
-function respondioCorteCerrado(res, err) {
+export function respondioCorteCerrado(res, err) {
   if (err instanceof TotalNegativoError) {
     res.status(400).json({ message: err.message });
     return true;
@@ -348,7 +348,7 @@ function respondioCorteCerrado(res, err) {
  * @throws {TotalBajoAbonosError} si queda por debajo de lo abonado.
  * @throws {CorteCerradoError} si el cobro ya está en un corte cerrado.
  */
-async function recalcularPrecioTotal(client, notaId, opciones = {}) {
+export async function recalcularPrecioTotal(client, notaId, opciones = {}) {
   const { desmarcarPagoSiCambia = false, usuarioId = null, sucursal = null } = opciones;
   const { rows: previas } = desmarcarPagoSiCambia
     ? await client.query(
@@ -381,7 +381,8 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
             FROM (
               -- El tope congelado en la carga: cambiar Ajustes no re-tarifa notas.
               SELECT nc.ajuste, nc.precio_tope AS tope,
-                     nc.precio_lavadora + nc.precio_secadora AS maquinas,
+                     -- Con las fichas de más de la secadora de fichas (Autoservicio).
+                     nc.precio_lavadora + nc.precio_secadora + nc.precio_fichas_extra AS maquinas,
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                                  FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos,
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
@@ -1401,6 +1402,8 @@ async function cargasDeNota(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.id, nc.orden, nc.lavadora_id, nc.secadora_id,
             nc.precio_lavadora, nc.precio_secadora, nc.es_adicional,
+            -- Fichas de más de la secadora de fichas y lo que suman.
+            nc.fichas_extra, nc.precio_fichas_extra,
             nc.tipo_prenda, nc.tipo_tela, nc.tamano_edredon, nc.tamano, nc.ajuste,
             -- Una carga que ya arrancó no se puede quitar.
             nc.lavadora_iniciada_at, nc.secadora_iniciada_at,

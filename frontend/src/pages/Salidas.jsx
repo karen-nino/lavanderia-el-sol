@@ -717,7 +717,7 @@ export default function Salidas() {
       return Number(c.tope_carga) + marca + Number(c?.ajuste || 0);
     }
     return Number(c?.precio_lavadora || 0) + Number(c?.precio_secadora || 0)
-      + Number(c?.ajuste || 0) + prods;
+      + Number(c?.precio_fichas_extra || 0) + Number(c?.ajuste || 0) + prods;
   };
 
   // Cargas a las que se puede sumar una máquina (p. ej. agregar la secadora).
@@ -1522,6 +1522,8 @@ export default function Salidas() {
         const m = confirmOtraFicha;
         const porFicha = minutosPorFicha(m);
         const quedan = minutosRestantes(m);
+        // Se cobra solo en Autoservicio (en Por Encargo el secado va en el servicio).
+        const costo = nota?.tipo_servicio === 'AUTOSERVICIO' ? Number(deFichas(m)?.precio_por_ficha) || 0 : 0;
         return (
           <ConfirmacionModal
             tono="aviso"
@@ -1530,6 +1532,10 @@ export default function Salidas() {
             detalle={[
               { etiqueta: 'Le quedan', valor: `${quedan} min` },
               { etiqueta: 'Quedará con', valor: `${quedan + porFicha} min` },
+              ...(costo > 0 ? [
+                { etiqueta: 'Se cobra en la nota', valor: fmtMonto(costo) },
+                { etiqueta: 'Nuevo total de la nota', valor: fmtMonto(Number(nota?.precio_total || 0) + costo) },
+              ] : []),
             ]}
             textoConfirmar={loadingMaquina ? 'Metiendo…' : 'Meter otra ficha'}
             procesando={loadingMaquina}

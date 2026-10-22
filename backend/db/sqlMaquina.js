@@ -109,6 +109,15 @@ export const MINUTOS_POR_FICHA = `(
      AND mo.nombre = m.modelo
 )`;
 
+/** Costo de cada ficha de la secadora de fichas (su modelo), o NULL. */
+export const PRECIO_POR_FICHA = `(
+  SELECT mo.precio_por_ficha
+    FROM marcas_maquina mm
+    JOIN modelos_maquina mo ON mo.marca_id = mm.id
+   WHERE mm.nombre = m.marca
+     AND mo.nombre = m.modelo
+)`;
+
 /** Opciones del modelo de la máquina: `dos_ciclos` (sin modelo, FALSE). */
 export const OPCIONES_DE_MARCA = `(
   SELECT json_build_object(

@@ -247,10 +247,10 @@ const SECCION_ACTUALIZAR = {
 };
 
 const aNumero = (v) => (v === '' || v == null ? null : Number(v));
-/** Tope, programas y ficha de un modelo, para compararlo con lo guardado. */
+/** Tope, programas, ficha y su costo de un modelo, para compararlo con lo guardado. */
 const fotoTiempo = (t) => [
   aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
-  aNumero(t.minutos_por_ficha),
+  aNumero(t.minutos_por_ficha), aNumero(t.precio_por_ficha),
 ].join('|');
 /** Lo editable de una sucursal, para compararla con lo guardado. */
 const huellaSucursal = (s) => JSON.stringify([s.nombre ?? '', s.direccion ?? '', s.telefono ?? '', s.horario_semana ?? null]);
@@ -1467,7 +1467,7 @@ function AjustesAdmin() {
     }
     if (!esDeFichas(t)) return base;
     const deQue = t?.pregunta_tiempo ? 'del programa elegido' : (conTemporizador ? 'del tiempo de carga' : 'del tope');
-    return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${deQue}. Vacío = no es de fichas.`;
+    return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${deQue}. Vacío = no es de fichas. Costo ficha: lo que se cobra en Autoservicio por cada "Otra ficha". Vacío = sin costo.`;
   };
 
   // Los tres programas solo salen en los modelos marcados con varios programas.
@@ -1495,6 +1495,7 @@ function AjustesAdmin() {
       );
     }
     return (
+      <>
       <div className="mt-3 flex items-center gap-2">
         <span className={`${unidadCls} flex-shrink-0 w-24`}>Cada ficha</span>
         <input
@@ -1509,6 +1510,18 @@ function AjustesAdmin() {
         />
         <span className={`${unidadCls} flex-shrink-0`}>min</span>
       </div>
+      {/* Lo que se cobra por cada "Otra ficha" (Autoservicio). */}
+      <div className="mt-3 flex items-center gap-2">
+        <span className={`${unidadCls} flex-shrink-0 w-24`}>Costo ficha</span>
+        <input
+          type="number" inputMode="decimal" min="0" step="0.5" placeholder="—"
+          value={t.precio_por_ficha ?? ''}
+          onChange={e => setMinutosMarca(clave, e.target.value, 'precio_por_ficha')}
+          className={`${inputCls} text-center`}
+        />
+        <span className={`${unidadCls} flex-shrink-0`}>pesos</span>
+      </div>
+      </>
     );
   };
 
@@ -1607,12 +1620,15 @@ function AjustesAdmin() {
       minutos_3: aNumero(t.minutos_3),
       minutos_4: aNumero(t.minutos_4),
       // Solo en secadoras.
-      ...(t.tipo === 'secadora' ? { minutos_por_ficha: aNumero(t.minutos_por_ficha) } : {}),
+      ...(t.tipo === 'secadora'
+        ? { minutos_por_ficha: aNumero(t.minutos_por_ficha), precio_por_ficha: aNumero(t.precio_por_ficha) }
+        : {}),
     })));
     tiemposOrigRef.current = tiemposMarca.map(t => ({
       ...t,
       minutos: aNumero(t.minutos), minutos_2: aNumero(t.minutos_2), minutos_3: aNumero(t.minutos_3),
       minutos_4: aNumero(t.minutos_4), minutos_por_ficha: aNumero(t.minutos_por_ficha),
+      precio_por_ficha: aNumero(t.precio_por_ficha),
     }));
   };
 

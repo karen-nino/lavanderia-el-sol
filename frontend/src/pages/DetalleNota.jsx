@@ -1377,7 +1377,7 @@ export default function DetalleNota() {
                   const totalCarga = cg.tope_carga != null
                     ? Number(cg.tope_carga) + marcaProds + Number(cg.ajuste ?? 0)
                     : Number(cg.precio_lavadora) + Number(cg.precio_secadora)
-                      + Number(cg.ajuste ?? 0) + totalProds;
+                      + Number(cg.precio_fichas_extra ?? 0) + Number(cg.ajuste ?? 0) + totalProds;
                   // En Por Encargo, el renglón con precio es un servicio; sin él, una máquina de Salidas.
                   const esServicioEncargo = esEncargoNota && cg.tope_carga != null;
                   // La máquina de Por Encargo no lleva importe (lo cobrado es el servicio); en
@@ -1453,6 +1453,15 @@ export default function DetalleNota() {
                             : <>{etiquetaProducto(p)} · {p.cantidad} {unidadProdTxt(p)} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
                         </p>
                       ))}
+                      {/* Fichas de más de la secadora de fichas (en Por Encargo no se cobran). */}
+                      {Number(cg.fichas_extra) > 0 && (
+                        <p className="text-sm text-gray-500">
+                          {Number(cg.fichas_extra) === 1 ? 'Otra ficha' : `Otras ${cg.fichas_extra} fichas`}
+                          {Number(cg.precio_fichas_extra) > 0
+                            ? `: ${fmtMonto(cg.precio_fichas_extra)}`
+                            : <> · <span className="text-green-700 font-medium">Incluido</span></>}
+                        </p>
+                      )}
                       {Number(cg.ajuste) !== 0 && (
                         <p className="text-sm text-gray-500">
                           Ajuste: {Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}

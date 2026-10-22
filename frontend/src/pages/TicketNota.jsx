@@ -35,11 +35,11 @@ function tamanoCargaTxt(cg) {
 const etiquetaCarga = (cg, tipoServicio) =>
   `${tipoServicio === 'AUTOSERVICIO' ? 'Máquina' : 'Carga'} ${cg.orden}`;
 
-/** Costo real de la carga: máquinas + productos + ajuste. */
+/** Costo real de la carga: máquinas (con fichas de más) + productos + ajuste. */
 function costoDeCarga(cg) {
   const prods = (cg.productos ?? []).reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
   return Number(cg.precio_lavadora) + Number(cg.precio_secadora)
-    + Number(cg.ajuste ?? 0) + prods;
+    + Number(cg.precio_fichas_extra ?? 0) + Number(cg.ajuste ?? 0) + prods;
 }
 
 /**
@@ -178,7 +178,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
     if (conEncabezado) L.push(`${etiquetaCarga(cg, nota.tipo_servicio)}:`);
     const vineta = conEncabezado ? '  • ' : '';
     maquinasDeCarga(cg, nota.tipo_servicio).forEach(m => {
-      L.push(`${vineta}1 x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
+      L.push(`${vineta}${m.cantidad ?? 1} x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
     });
     // Las medidas son internas: no salen en el ticket.
     (cg.productos ?? []).filter(p => p.unidad !== 'medida')
@@ -468,9 +468,9 @@ export default function TicketNota() {
         )}
         {maquinas.map((m, i) => (
           <div key={i} className="flex items-baseline justify-between gap-2">
-            {/* Cada carga usa a lo más una lavadora y una secadora: de ahí el 1. */}
+            {/* Cada carga usa a lo más una lavadora y una secadora: de ahí el 1 (las fichas extra llevan las suyas). */}
             <span className="flex-1">
-              <span className="inline-block w-9">1</span>
+              <span className="inline-block w-9">{m.cantidad ?? 1}</span>
               {m.nombre.toUpperCase()}{m.tipo && ` ${m.tipo.toUpperCase()}`}
             </span>
             <span className="whitespace-nowrap font-bold">{fmtMonto(m.precio)}</span>

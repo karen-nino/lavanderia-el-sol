@@ -481,7 +481,7 @@ export const getTiemposMarca = async (req, res) => {
               mo.id AS modelo_id, mo.nombre AS modelo,
               mo.tipo, mo.tamano,
               mo.minutos, mo.minutos_2, mo.minutos_3, mo.minutos_4, mo.pregunta_tiempo, mo.dos_ciclos,
-              mo.minutos_por_ficha
+              mo.minutos_por_ficha, mo.precio_por_ficha
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
         -- El de fichas no pide tiempos.
@@ -527,6 +527,16 @@ export const guardarTiempoMarca = async (req, res) => {
       updates.push(`${campo} = $${i++}`);
       values.push(leido.valor);
     }
+    // Costo de cada ficha (pesos, vacío = sin costo).
+    if (req.body.precio_por_ficha !== undefined) {
+      const crudo = req.body.precio_por_ficha;
+      const precio = crudo === null || crudo === '' ? null : Number(crudo);
+      if (precio !== null && (!Number.isFinite(precio) || precio < 0 || precio > 100000)) {
+        return res.status(400).json({ message: 'El costo por ficha debe ser un número de 0 en adelante.' });
+      }
+      updates.push(`precio_por_ficha = $${i++}`);
+      values.push(precio === null ? null : Math.round(precio * 100) / 100);
+    }
     if (updates.length === 0) {
       return res.status(400).json({ message: 'No hay cambios que guardar.' });
     }
@@ -537,7 +547,7 @@ export const guardarTiempoMarca = async (req, res) => {
         `UPDATE modelos_maquina SET ${updates.join(', ')}
           WHERE id = $${i}
           RETURNING id AS modelo_id, marca_id, nombre AS modelo, tipo, tamano,
-                    minutos, minutos_2, minutos_3, minutos_4, pregunta_tiempo, minutos_por_ficha`,
+                    minutos, minutos_2, minutos_3, minutos_4, pregunta_tiempo, minutos_por_ficha, precio_por_ficha`,
         values
       );
       if (rows.length === 0) {

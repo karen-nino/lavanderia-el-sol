@@ -3,7 +3,7 @@ import { sellarPasadasVivas } from '../db/pasadas.js';
 import { TZ_NEGOCIO, esFechaISO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, PRECIO_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -17,6 +17,7 @@ import {
   meterFichasExtra,
 } from '../services/sincronizarSonoff.js';
 import { esAdmin } from '../middleware/roles.js';
+import { recalcularPrecioTotal, respondioCorteCerrado } from './notas.controller.js';
 
 const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
 const TIPOS_VALIDOS   = ['lavadora_mediana', 'lavadora_jumbo', 'secadora'];
@@ -152,6 +153,8 @@ export const getMaquinas = async (req, res) => {
               ${conIniciarSql('m')} AS con_iniciar,
               -- Secadora de fichas: su "Otro ciclo" suma programas.
               ${MINUTOS_POR_FICHA} AS minutos_por_ficha,
+              -- Costo de cada "Otra ficha" (se cobra en Autoservicio).
+              ${PRECIO_POR_FICHA} AS precio_por_ficha,
               -- Alias para tablets con una versión anterior de la app.
               ${MINUTOS_POR_FICHA} AS minutos_por_moneda,
               -- Solo fichas: sin Sonoff ni tope.
@@ -260,7 +263,9 @@ export const getReporteDiarioMaquinas = async (req, res) => {
                          ncm.asignada_at) AS inicio_at,
                 ROW_NUMBER() OVER (PARTITION BY ncm.carga_id, ncm.slot
                                    ORDER BY ncm.asignada_at, ncm.id) AS n_vuelta,
-                CASE WHEN ncm.slot = 'lavadora' THEN nc.precio_lavadora ELSE nc.precio_secadora END AS cobrado,
+                -- La secadora, con sus fichas de más.
+                CASE WHEN ncm.slot = 'lavadora' THEN nc.precio_lavadora
+                     ELSE nc.precio_secadora + nc.precio_fichas_extra END AS cobrado,
                 CASE WHEN ncm.slot = 'lavadora' THEN nc.lavadora_id ELSE nc.secadora_id END AS puesta_id
            FROM nota_carga_maquinas ncm
            JOIN nota_cargas nc ON nc.id = ncm.carga_id
@@ -1267,6 +1272,7 @@ export const otraFicha = async (req, res) => {
     // Fila bloqueada: dos clics seguidos suman dos fichas, no una encimada.
     const { rows } = await client.query(
       `SELECT m.*, ${MINUTOS_POR_FICHA} AS minutos_por_ficha,
+              ${PRECIO_POR_FICHA} AS precio_por_ficha,
               ${esCronometroSql('m')} AS cronometro,
               ${soloFichasSql('m')} AS solo_fichas
          FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
@@ -1300,13 +1306,46 @@ export const otraFicha = async (req, res) => {
                     + make_interval(mins => ciclo_elegido_minutos) - NOW())) / 60))::int AS minutos_restantes`,
       [maq.id, porFicha]
     );
+
+    // La carga que la tiene puesta cuenta la ficha; en Autoservicio también la
+    // cobra (en Por Encargo el secado va en el servicio).
+    const { rows: cargas } = await client.query(
+      `SELECT nc.id, nc.nota_id, n.tipo_servicio
+         FROM nota_cargas nc JOIN notas n ON n.id = nc.nota_id
+        WHERE nc.secadora_id = $1 AND n.estado NOT IN ('CANCELADA', 'FINALIZADA')
+        ORDER BY nc.id DESC LIMIT 1`,
+      [maq.id]
+    );
+    const carga = cargas[0];
+    const precio = carga && carga.tipo_servicio === 'AUTOSERVICIO' ? Number(maq.precio_por_ficha) || 0 : 0;
+    if (carga) {
+      await client.query(
+        `UPDATE nota_cargas
+            SET fichas_extra = fichas_extra + 1, precio_fichas_extra = precio_fichas_extra + $2
+          WHERE id = $1`,
+        [carga.id, precio]
+      );
+      if (precio > 0) {
+        try {
+          await recalcularPrecioTotal(client, carga.nota_id, {
+            desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+          });
+        } catch (e) {
+          await client.query('ROLLBACK');
+          if (respondioCorteCerrado(res, e)) return;
+          throw e;
+        }
+      }
+    }
     await client.query('COMMIT');
 
     // Fuera de la transacción: el pulso tarda.
     await meterFichasExtra(maq.id, porFicha);
 
     res.json({
-      message: `${maq.nombre}: +${porFicha} min con otra ficha. Le quedan ${upd[0].minutos_restantes} min.`,
+      message: `${maq.nombre}: +${porFicha} min con otra ficha. Le quedan ${upd[0].minutos_restantes} min.`
+        + (precio > 0 ? ` Se cobran $${precio.toFixed(2)} en la nota.` : ''),
+      precio,
       ciclo_elegido_minutos: upd[0].ciclo_elegido_minutos,
       minutos_pagados: upd[0].minutos_pagados,
       minutos_restantes: upd[0].minutos_restantes,

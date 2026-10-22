@@ -30,7 +30,13 @@ export function maquinasDeCarga(cg, tipoServicio) {
     ? { nombre: 'Secadora', tipo: '', precio: Number(cg.precio_secadora) }
     : null;
 
-  return [lavadora, secadora].filter(Boolean);
+  // Las fichas de más que se cobraron (secadora de fichas en Autoservicio).
+  const fichas = Number(cg.precio_fichas_extra ?? 0) > 0
+    ? { nombre: Number(cg.fichas_extra) === 1 ? 'Ficha extra' : 'Fichas extra',
+        tipo: '', cantidad: Number(cg.fichas_extra) || 1, precio: Number(cg.precio_fichas_extra) }
+    : null;
+
+  return [lavadora, secadora, fichas].filter(Boolean);
 }
 
 /**
@@ -44,6 +50,7 @@ export function cargaVisibleEnTicket(cg, tipoServicio) {
   const cobraAlgo      = Number(cg.tope_carga ?? cg.precio_tope ?? 0) > 0
     || Number(cg.precio_lavadora ?? 0) > 0
     || Number(cg.precio_secadora ?? 0) > 0
+    || Number(cg.precio_fichas_extra ?? 0) > 0
     || Number(cg.ajuste ?? 0) !== 0;
   if (tipoServicio === 'POR_ENCARGO') return tieneProductos || cobraAlgo;
   const tieneMaquinas  = maquinasDeCarga(cg, tipoServicio).length > 0;
