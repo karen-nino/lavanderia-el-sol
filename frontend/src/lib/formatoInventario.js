@@ -81,6 +81,15 @@ export function textoMedidasEquivalencia(medidas, medidasPorBotella) {
   return textoBotellas(n, mpb);
 }
 
+/** Ventas del día: lo puesto en notas, "3 piezas"; sin ventas, un guion. */
+export function textoVentas(p, porUnidad) {
+  const n = Number(p?.ventas_medidas) || 0;
+  if (n <= 0) return '—';
+  return porUnidad
+    ? textoBotellas(n, p?.medidas_por_botella, { marca: true })
+    : textoMedidasEquivalencia(n, p?.medidas_por_botella);
+}
+
 /** Lo que entró ese día (Entradas y existencia del alta). */
 export function lineasEntradas(p, porUnidad) {
   return lineasMovimiento(p, porUnidad,

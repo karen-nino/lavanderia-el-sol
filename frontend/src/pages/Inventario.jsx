@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
-import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas, lineasDevuelto, tituloProducto } from '../lib/formatoInventario';
+import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas, lineasDevuelto, textoVentas, tituloProducto } from '../lib/formatoInventario';
 import { imprimirReporte, descargarReporteExcel } from '../lib/exportReporteInventario';
 import { fechaLarga } from '../lib/exportUtils';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
@@ -1681,6 +1681,7 @@ function ReporteDiario() {
             <thead className="bg-gray-50 text-sm text-gray-500 uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-3 text-left">Producto</th>
+                <th className="px-4 py-3 text-left">Ventas</th>
                 <th className="px-4 py-3 text-left">Entradas</th>
                 <th className="px-4 py-3 text-left">Salidas</th>
                 {hayDevuelto && <th className="px-4 py-3 text-left">Devuelto</th>}
@@ -1701,6 +1702,12 @@ function ReporteDiario() {
                       {p.clase === 'bolsa'
                         ? <p className="text-sm text-gray-400">Bolsa</p>
                         : esMarca && p.marca && <p className="text-sm text-gray-400">{p.nombre}</p>}
+                    </td>
+                    {/* Lo puesto en notas ese día. */}
+                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                      {textoVentas(p, esMarca) === '—'
+                        ? <span className="text-gray-400">—</span>
+                        : textoVentas(p, esMarca)}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       <CeldaMovimiento lineas={lineasEntradas(p, esMarca)} hayAlgo={p.rellenado_medidas > 0}

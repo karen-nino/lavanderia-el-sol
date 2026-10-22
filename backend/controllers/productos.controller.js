@@ -900,6 +900,20 @@ export const getReporteDiario = async (req, res) => {
             WHERE r.producto_id = p.id AND r.created_at < bounds.cierre
               AND (r.consumido_at IS NULL OR r.consumido_at >= bounds.cierre)
          ), 0) AS apartado_fin_medidas,
+         -- Ventas: lo puesto ese día en notas no canceladas, en medidas y en dinero
+         -- (al precio del renglón).
+         COALESCE((
+           SELECT SUM(np.cantidad_medidas)
+             FROM nota_productos np JOIN notas n ON n.id = np.nota_id, bounds
+            WHERE np.producto_id = p.id AND n.sucursal = $1 AND n.estado <> 'CANCELADA'
+              AND np.created_at >= bounds.inicio AND np.created_at < bounds.cierre
+         ), 0) AS ventas_medidas,
+         COALESCE((
+           SELECT SUM(np.cantidad * np.precio_unitario)
+             FROM nota_productos np JOIN notas n ON n.id = np.nota_id, bounds
+            WHERE np.producto_id = p.id AND n.sucursal = $1 AND n.estado <> 'CANCELADA'
+              AND np.created_at >= bounds.inicio AND np.created_at < bounds.cierre
+         ), 0) AS ventas_importe,
          -- Devuelto ese día (ventas anuladas).
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
@@ -977,6 +991,8 @@ export const getReporteDiario = async (req, res) => {
         devuelto_medidas:    int(r.devuelto_medidas),
         vendido_vigente_medidas: int(r.vendido_vigente_medidas),
         apartado_medidas:        int(r.apartado_medidas),
+        ventas_medidas:          int(r.ventas_medidas),
+        ventas_importe:          Number(r.ventas_importe) || 0,
         entrada_botellas_medidas: int(r.entrada_botellas_medidas),
         entrada_granel_medidas:   int(r.entrada_granel_medidas),
         salida_botellas_medidas:  int(r.salida_botellas_medidas),

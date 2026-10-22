@@ -6,7 +6,9 @@
 
 import { slug, esc, imprimirDocumento, fechaLarga } from './exportUtils';
 import { descargarExcel } from './exportExcel';
-import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas, lineasSalidas, lineasDevuelto, tituloProducto } from './formatoInventario';
+import {
+  textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas, lineasSalidas, lineasDevuelto, textoVentas, tituloProducto,
+} from './formatoInventario';
 
 // 'YYYY-MM-DD' → Date local (sin corrimiento por zona horaria).
 const fechaLocal = (iso) => {
@@ -50,6 +52,7 @@ export function hojasReporte(data) {
         { titulo: 'Producto', ancho: 30 },
       ] },
       { titulo: 'Movimientos del día', color: 'verde', columnas: [
+        { titulo: 'Ventas', tipo: 'notas', ancho: 26 },
         { titulo: 'Entradas', tipo: 'notas', ancho: 30 },
         { titulo: 'Salidas', tipo: 'notas', ancho: 30 },
         ...(conDevuelto ? [{ titulo: 'Devuelto', tipo: 'notas', ancho: 26 }] : []),
@@ -67,6 +70,7 @@ export function hojasReporte(data) {
       esBolsa(p) ? 'Bolsa' : esPolvo(p) ? 'Polvo' : esMarca(p) ? 'Marca' : 'Granel',
       p.marca ?? '',
       esBolsa(p) ? tituloProducto(p) : (p.nombre ?? ''),
+      textoVentas(p, esMarca(p)) === '—' ? '' : textoVentas(p, esMarca(p)),
       enRenglones(entradasLineas(p)),
       enRenglones(salidasLineas(p)),
       ...(conDevuelto ? [enRenglones(lineasDevuelto(p, esMarca(p)))] : []),
@@ -97,6 +101,7 @@ const seccion = (titulo, productos, conDevuelto) => {
   const filas = productos.map((p) => `
     <tr>
       <td>${esc(nombreProd(p))}</td>
+      <td>${esc(textoVentas(p, esMarca(p)))}</td>
       <td>${entradasLineas(p).map(esc).join('<br>')}</td>
       <td>${salidasLineas(p).map(esc).join('<br>')}</td>
       ${conDevuelto ? `<td>${esc(devueltoTexto(p))}</td>` : ''}
@@ -107,7 +112,7 @@ const seccion = (titulo, productos, conDevuelto) => {
     <div class="seccion">${esc(titulo)}</div>
     <table class="resumen">
       <thead>
-        <tr><th>Producto</th><th>Entradas</th><th>Salidas</th>${conDevuelto ? '<th>Devuelto</th>' : ''}<th>Había al inicio</th><th>Queda al final</th></tr>
+        <tr><th>Producto</th><th>Ventas</th><th>Entradas</th><th>Salidas</th>${conDevuelto ? '<th>Devuelto</th>' : ''}<th>Había al inicio</th><th>Queda al final</th></tr>
       </thead>
       <tbody>${filas}</tbody>
     </table>`;
