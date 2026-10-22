@@ -1513,13 +1513,15 @@ function AjustesAdmin() {
       {/* Lo que se cobra por cada "Otra ficha" (Autoservicio). */}
       <div className="mt-3 flex items-center gap-2">
         <span className={`${unidadCls} flex-shrink-0 w-24`}>Costo ficha</span>
+        {/* Como el precio por carga: $ antes y MXN después. */}
+        <span className={`${unidadCls} flex-shrink-0`}>$</span>
         <input
-          type="number" inputMode="decimal" min="0" step="0.01" placeholder="—"
+          type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00"
           value={t.precio_por_ficha ?? ''}
           onChange={e => setMinutosMarca(clave, e.target.value, 'precio_por_ficha')}
           className={`${inputCls} text-center`}
         />
-        <span className={`${unidadCls} flex-shrink-0`}>pesos</span>
+        <span className={`${unidadCls} flex-shrink-0`}>MXN</span>
       </div>
       </>
     );
