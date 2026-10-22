@@ -675,7 +675,7 @@ const VENTA_DEVUELTA_SQL = `EXISTS (
  * cuándo salieron de verdad del estante. `consumido_at` NULL = sigue apartado.
  * Si no, el primer movimiento 'venta' de esa nota y producto; sin venta (notas
  * de antes del historial, que la mig. 161 fechó el día de la migración), el día
- * en que se puso.
+ * en que se puso. Necesita la CTE `bounds` (inicio y cierre del día).
  */
 const RENGLONES_NOTA_SQL = `
   SELECT np.id, np.producto_id, np.nota_id, np.cantidad_medidas, np.created_at, n.folio, n.usuario_id,
@@ -687,7 +687,11 @@ const RENGLONES_NOTA_SQL = `
          END AS consumido_at
     FROM nota_productos np
     JOIN notas n ON n.id = np.nota_id
-   WHERE n.sucursal = $1 AND n.estado <> 'CANCELADA'`;
+   WHERE n.sucursal = $1 AND n.estado <> 'CANCELADA'
+     -- Solo los que pueden contar ese día: puestos antes del cierre y sin
+     -- descontar antes del inicio (los demás ya no cambian nada).
+     AND np.created_at < (SELECT cierre FROM bounds)
+     AND (np.consumido_at IS NULL OR np.consumido_at >= (SELECT inicio FROM bounds))`;
 
 /**
  * La venta de un renglón que se apartó un día ANTERIOR: ya contó como salida
