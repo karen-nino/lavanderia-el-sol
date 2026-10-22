@@ -1435,8 +1435,10 @@ function ApartadosModal({ producto, onClose }) {
                   Nota {n.folio ?? `#${n.nota_id}`}
                 </button>
                 <p className="text-sm text-gray-400 truncate">
-                  {[SERVICIO_TXT[n.tipo_servicio], n.cliente || n.referencia, formatFechaHora12(n.created_at)].filter(Boolean).join(' · ')}
+                  {[SERVICIO_TXT[n.tipo_servicio], n.cliente || n.referencia].filter(Boolean).join(' · ')}
                 </p>
+                {/* La fecha en su renglón: así nunca se corta. */}
+                <p className="text-sm text-gray-400">{formatFechaHora12(n.created_at)}</p>
               </div>
               <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
                 {partesExistencia(producto, n.cantidad_medidas).join(' y ')}
