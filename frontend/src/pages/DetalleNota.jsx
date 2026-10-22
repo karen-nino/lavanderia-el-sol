@@ -1555,6 +1555,10 @@ export default function DetalleNota() {
               </div>
             </FilaDetalle>
           )}
+          {/* Por Encargo: lo que cuesta todo lo de Salidas (máquinas y material), contra el tope. */}
+          {nota.tope_nota && (
+            <FilaDetalle label="Salidas">{fmtMonto(nota.tope_nota.usado)}</FilaDetalle>
+          )}
           <FilaDetalle label="Ajuste">
             {nota.ajuste != null ? fmtMonto(nota.ajuste) : '—'}
           </FilaDetalle>
