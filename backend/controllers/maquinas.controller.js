@@ -1253,6 +1253,73 @@ export const masTiempo = async (req, res) => {
   }
 };
 
+/**
+ * "Otra ficha" de la secadora de fichas (Sec49): suma los minutos de una ficha
+ * desde que se le da Iniciar, sin esperar a que acabe el programa y sin tope
+ * (el tope de corte se recorre con el fin: ver TOPE_RELOJ). El fin nuevo sale
+ * del fin anterior o, si ya pasó, de ahora: con 15 min por delante quedan 25.
+ */
+export const otraFicha = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Fila bloqueada: dos clics seguidos suman dos fichas, no una encimada.
+    const { rows } = await client.query(
+      `SELECT m.*, ${MINUTOS_POR_FICHA} AS minutos_por_ficha,
+              ${esCronometroSql('m')} AS cronometro,
+              ${soloFichasSql('m')} AS solo_fichas
+         FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = rows[0];
+    const porFicha = Number(maq.minutos_por_ficha);
+    if (!(porFicha > 0) || maq.solo_fichas || !maq.cronometro) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `${maq.nombre} no es de fichas: no se le puede meter otra.` });
+    }
+    if (maq.estado !== 'en_uso' || !maq.en_uso_desde || !(Number(maq.ciclo_elegido_minutos) > 0)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `${maq.nombre} no está corriendo: dale Iniciar primero.` });
+    }
+    const { rows: upd } = await client.query(
+      `UPDATE maquinas
+          SET minutos_pagados = COALESCE(minutos_pagados, ciclo_elegido_minutos) + $2,
+              -- Nuevo fin: desde el fin anterior o, si ya pasó, desde ahora.
+              ciclo_elegido_minutos = GREATEST(
+                ciclo_elegido_minutos,
+                ROUND(EXTRACT(EPOCH FROM (NOW() - en_uso_desde)) / 60)::int
+              ) + $2
+        WHERE id = $1
+        RETURNING ciclo_elegido_minutos, minutos_pagados,
+                  GREATEST(0, ROUND(EXTRACT(EPOCH FROM (en_uso_desde
+                    + make_interval(mins => ciclo_elegido_minutos) - NOW())) / 60))::int AS minutos_restantes`,
+      [maq.id, porFicha]
+    );
+    await client.query('COMMIT');
+
+    // Fuera de la transacción: el pulso tarda.
+    await meterFichasExtra(maq.id, porFicha);
+
+    res.json({
+      message: `${maq.nombre}: +${porFicha} min con otra ficha. Le quedan ${upd[0].minutos_restantes} min.`,
+      ciclo_elegido_minutos: upd[0].ciclo_elegido_minutos,
+      minutos_pagados: upd[0].minutos_pagados,
+      minutos_restantes: upd[0].minutos_restantes,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('otraFicha error:', err);
+    res.status(500).json({ message: 'No se pudo meter otra ficha. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── POST /maquinas/revisar-sonoff ───────────────────────────
 /**
  * Botón de refrescar de Máquinas: hace ya el paso del barrido sobre las

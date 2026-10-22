@@ -210,3 +210,54 @@ describe('el reloj de la que recibió Otro ciclo (Ventas, Información de uso)',
     expect(Math.round(Number(rows[0].seg))).toBe(30 * 60);
   });
 });
+
+// "Otra ficha" (v1.114.0): desde que corre, cada ficha suma sus minutos al fin
+// que tenga por delante, sin tope.
+const otraFicha = (id) => request(app).patch(`/api/maquinas/${id}/otra-ficha`).set(auth(admin.token)).send({});
+
+const finEnMinutos = async (id) => {
+  const { rows } = await pool.query(
+    `SELECT EXTRACT(EPOCH FROM (en_uso_desde + make_interval(mins => ciclo_elegido_minutos) - NOW())) / 60 AS min
+       FROM maquinas WHERE id = $1`, [id]);
+  return Number(rows[0].min);
+};
+
+describe('PATCH /maquinas/:id/otra-ficha', () => {
+  it('a media corrida: con 15 min por delante quedan 25', async () => {
+    const id = await sec49();
+    await arrancada(id, 30);
+    await llevaSecando(id, 15);
+    const res = await otraFicha(id);
+    expect(res.status).toBe(200);
+    expect(res.body.minutos_restantes).toBe(25);
+    expect(Math.round(await finEnMinutos(id))).toBe(25);
+  });
+
+  it('sin tope: suma aunque pase del tope del modelo', async () => {
+    const id = await sec49();
+    await arrancada(id, 30); // tope 30
+    expect((await otraFicha(id)).status).toBe(200);
+    expect((await otraFicha(id)).status).toBe(200);
+    expect(await elegido(id)).toBe(50);
+    expect(await pagados(id)).toBe(50);
+  });
+
+  it('ya acabado el programa: cuenta desde ahora', async () => {
+    const id = await sec49();
+    await arrancada(id, 10);
+    await llevaSecando(id, 14);
+    await otraFicha(id).expect(200);
+    expect(Math.round(await finEnMinutos(id))).toBe(10);
+  });
+
+  it('una secadora que no es de fichas no la admite', async () => {
+    const id = await sec49({ porFicha: null });
+    await arrancada(id, 10);
+    expect((await otraFicha(id)).status).toBe(400);
+  });
+
+  it('una secadora libre no la admite', async () => {
+    const id = await sec49();
+    expect((await otraFicha(id)).status).toBe(400);
+  });
+});

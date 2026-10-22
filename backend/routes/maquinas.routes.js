@@ -18,6 +18,7 @@ import {
   encenderSonoff,
   otroCiclo,
   masTiempo,
+  otraFicha,
   revisarSonoff,
 } from '../controllers/maquinas.controller.js';
 
@@ -43,6 +44,8 @@ router.patch('/:id/detener-ciclo', detenerCiclo);
 router.patch('/:id/otro-ciclo', conCaja, otroCiclo);
 // "Otro ciclo" de la secadora de fichas que pregunta su programa.
 router.patch('/:id/mas-tiempo', conCaja, masTiempo);
+// Secadora de fichas (Sec49): una ficha más (+sus minutos) desde que corre, sin tope.
+router.patch('/:id/otra-ficha', conCaja, otraFicha);
 router.post('/:id/probar-sonoff', requireAdmin, probarSonoff);
 router.post('/:id/apagar-sonoff', requireAdmin, apagarSonoff);
 router.post('/:id/encender-sonoff', requireAdmin, encenderSonoff);

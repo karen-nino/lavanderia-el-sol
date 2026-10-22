@@ -25,7 +25,7 @@ export function clavesEnTope(maquinas, ahora = Date.now()) {
     .filter(m => !(m.encendida_manual_at && !m.en_uso_nota_id));
   const cumplio = (m, minutos) =>
     new Date(m.en_uso_desde).getTime() + Number(minutos) * 60_000 <= ahora;
-  // El tope del reloj, igual que TOPE_RELOJ del backend: con "Otro ciclo" de
+  // El tope del reloj, igual que TOPE_RELOJ del backend: con "Otra ficha" de
   // la secadora de fichas (minutos_pagados) se recorre al fin elegido.
   const tope = (m) => (m.minutos_pagados
     ? Math.max(Number(m.ciclo_minutos), Number(m.ciclo_elegido_minutos) || 0)
@@ -41,7 +41,7 @@ export function clavesEnTope(maquinas, ahora = Date.now()) {
   const programas = vivas
     .filter(m => m.cronometro && Number(m.ciclo_elegido_minutos) > 0)
     .filter(m => cumplio(m, m.ciclo_elegido_minutos))
-    // Con "Otro ciclo" (Sec49) el fin se mueve: el fin nuevo vuelve a sonar.
+    // Con "Otra ficha" (Sec49) el fin se mueve: el fin nuevo vuelve a sonar.
     .map(m => `${m.id}:${m.en_uso_desde}:programa`
       + (m.minutos_pagados ? `:${m.ciclo_elegido_minutos}` : ''));
   return [...topes, ...programas];

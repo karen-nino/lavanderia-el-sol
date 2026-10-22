@@ -110,8 +110,8 @@ export default function Salidas() {
   const [minutosPorMaquina, setMinutosPorMaquina] = useState({});
   const [encendiendo,      setEncendiendo]      = useState(null); // máquina recibiendo corriente
   const [deteniendo,       setDeteniendo]       = useState(null); // máquina deteniéndose (animación)
-  // "Otro ciclo" de la secadora de fichas: { maquina, opciones } mientras se elige.
-  const [masTiempo,        setMasTiempo]        = useState(null);
+  // "Otra ficha" de la secadora de fichas: la máquina mientras se confirma.
+  const [confirmOtraFicha, setConfirmOtraFicha] = useState(null);
 
   // Máquinas libres para los modales de asignar y cambiar.
   const [maquinasDisp,     setMaquinasDisp]     = useState([]);
@@ -757,28 +757,33 @@ export default function Salidas() {
   const programaCumplido = (m) => Boolean(m.cronometro && m.en_uso_desde && m.ciclo_elegido_minutos)
     && now - new Date(m.en_uso_desde).getTime() >= Number(m.ciclo_elegido_minutos) * 60000;
 
-  // "Otro ciclo" de la secadora de fichas: programas que caben (los calcula el
-  // backend). Solo al acabarse el programa y si la máquina sigue en esta nota.
-  const opcionesMasTiempo = (m) => {
-    if (!m.actual || m.estado !== 'en_uso' || m.esperandoArranque || m.tomadaPor) return [];
-    if (!m.cronometro || !programaCumplido(m)) return [];
+  // "Otra ficha" de la secadora de fichas (Sec49): desde que corre en esta nota,
+  // cada ficha suma sus minutos al fin, sin tope.
+  const minutosPorFicha = (m) => Number(deFichas(m)?.minutos_por_ficha) || 0;
+  const puedeOtraFicha = (m) => {
+    if (!m.actual || m.estado !== 'en_uso' || m.esperandoArranque || m.tomadaPor) return false;
+    if (!m.cronometro || !m.en_uso_desde || !(Number(m.ciclo_elegido_minutos) > 0)) return false;
     const fisica = deFichas(m);
-    if (!fisica || String(fisica.en_uso_nota_id) !== String(nota?.id)) return [];
-    return fisica.opciones_mas_tiempo ?? [];
+    return Boolean(fisica) && !fisica.solo_fichas && String(fisica.en_uso_nota_id) === String(nota?.id);
+  };
+  // Minutos que le quedan a su programa (0 si ya acabó).
+  const minutosRestantes = (m) => {
+    const fin = new Date(m.en_uso_desde).getTime() + Number(m.ciclo_elegido_minutos) * 60000;
+    return Math.max(0, Math.round((fin - now) / 60000));
   };
 
-  const sumarTiempo = async (minutos) => {
-    if (!masTiempo) return;
+  const meterOtraFicha = async () => {
+    if (!confirmOtraFicha) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      const r = await api.patch(`/maquinas/${masTiempo.maquina.id}/mas-tiempo`, { minutos });
+      const r = await api.patch(`/maquinas/${confirmOtraFicha.id}/otra-ficha`, {});
       if (r) {
-        setMasTiempo(null);
+        setConfirmOtraFicha(null);
         await cargarDatos();
       }
     } catch (err) {
-      fallaAccion(err, err.message || 'No se pudo sumar el tiempo.');
+      fallaAccion(err, err.message || 'No se pudo meter otra ficha.');
     } finally {
       setLoadingMaquina(false);
     }
@@ -1067,8 +1072,8 @@ export default function Salidas() {
                         ) : programaCumplido(m) && deFichas(m) ? (
                           // Secadora de fichas: se acabó su tiempo; si le cabe, Otro ciclo.
                           <span className="text-sm font-medium text-amber-600 basis-full">
-                            {opcionesMasTiempo(m).length > 0
-                              ? 'Se le acabó el tiempo. Dale otro ciclo o finalízala.'
+                            {puedeOtraFicha(m)
+                              ? 'Se le acabó el tiempo. Dale otra ficha o finalízala.'
                               : 'Se le acabó el tiempo. Finalízala.'}
                           </span>
                         ) : programaCumplido(m) ? (
@@ -1151,18 +1156,14 @@ export default function Salidas() {
                             >
                               Finalizar Carga
                             </button>
-                            {/* Secadora de fichas, después de Finalizar: sumar otro programa sin pasar del tope. */}
-                            {opcionesMasTiempo(m).length > 0 && (
+                            {/* Secadora de fichas: desde que corre, otra ficha suma sus minutos (sin tope). */}
+                            {puedeOtraFicha(m) && (
                               <button
-                                onClick={() => { setErrorAccion(''); setMasTiempo({
-                                  maquina: m,
-                                  opciones: opcionesMasTiempo(m),
-                                  pagados: deFichas(m)?.minutos_pagados ?? m.ciclo_elegido_minutos,
-                                }); }}
+                                onClick={() => { setErrorAccion(''); setConfirmOtraFicha(m); }}
                                 disabled={loadingMaquina}
                                 className="px-4 py-2 bg-white border border-blue text-blue hover:bg-light-blue disabled:opacity-60 text-sm font-medium rounded-lg transition-colors"
                               >
-                                Otro ciclo
+                                Otra ficha
                               </button>
                             )}
                           </div>
@@ -1517,19 +1518,27 @@ export default function Salidas() {
         />
       )}
 
-      {masTiempo && (
-        <ElegirTiempoModal
-          maquina={masTiempo.maquina}
-          tiempos={masTiempo.opciones}
-          titulo="¿Cuánto tiempo más?"
-          descripcion={`Lleva ${masTiempo.pagados} min metidos y su tope es de ${masTiempo.maquina.ciclo_minutos} min. Se le meten las fichas de los minutos que elijas; después dale START en la máquina.`}
-          etiqueta={(min) => `+${min} min`}
-          guardando={loadingMaquina}
-          error={errorAccion}
-          onElegir={sumarTiempo}
-          onCancelar={() => { setMasTiempo(null); setErrorAccion(''); }}
-        />
-      )}
+      {confirmOtraFicha && (() => {
+        const m = confirmOtraFicha;
+        const porFicha = minutosPorFicha(m);
+        const quedan = minutosRestantes(m);
+        return (
+          <ConfirmacionModal
+            tono="aviso"
+            titulo={`Otra ficha a ${m.nombre}`}
+            mensaje={`Se le suman ${porFicha} min.`}
+            detalle={[
+              { etiqueta: 'Le quedan', valor: `${quedan} min` },
+              { etiqueta: 'Quedará con', valor: `${quedan + porFicha} min` },
+            ]}
+            textoConfirmar={loadingMaquina ? 'Metiendo…' : 'Meter otra ficha'}
+            procesando={loadingMaquina}
+            error={errorAccion}
+            onClose={() => { setConfirmOtraFicha(null); setErrorAccion(''); }}
+            onConfirm={meterOtraFicha}
+          />
+        );
+      })()}
 
       {encendiendo && <MaquinaCicloOverlay modo="encender" tipo={encendiendo.tipo} nombre={encendiendo.nombre} />}
       {iniciando && <MaquinaCicloOverlay modo="iniciar" tipo={iniciando.tipo} nombre={iniciando.nombre} />}

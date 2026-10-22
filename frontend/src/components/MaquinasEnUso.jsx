@@ -326,7 +326,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // cumplirlo se avisa.
     if (m.cronometro && !soloManual) {
       const programaSeg = Math.max(0, Number(m.ciclo_elegido_minutos) || 0) * 60;
-      // Secadora de fichas: nunca se le corta la luz; con "Otro ciclo" el reloj
+      // Secadora de fichas: nunca se le corta la luz; con "Otra ficha" el reloj
       // llega hasta donde se le acaba el tiempo.
       const deFichas = Number(m.minutos_por_ficha) > 0;
       const limiteSeg = deFichas ? Math.max(duracionSeg, programaSeg) : duracionSeg;
