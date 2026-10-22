@@ -1066,7 +1066,11 @@ const MOV_COLOR = {
   reserva: 'text-amber-700 bg-amber-50', liberacion: 'text-gray-600 bg-gray-100',
   ajuste: 'text-gray-600 bg-gray-100',
 };
-function ModalHistorial({ producto, onClose }) {
+/**
+ * @param alto alto en px del modal de Producto desde el que se abrió, para salir
+ *   del mismo tamaño; sin él, crece con su contenido.
+ */
+function ModalHistorial({ producto, alto, onClose }) {
   const [movs, setMovs] = useState(null);
   const [error, setError] = useState('');
 
@@ -1080,7 +1084,8 @@ function ModalHistorial({ producto, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col"
+        style={alto ? { height: alto } : undefined}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Historial de movimientos</h2>
@@ -1845,6 +1850,9 @@ export default function Inventario() {
   const [modalMovimiento, setModalMovimiento] = useState(null);  // { producto, tipo }
   const [modalRellenar,   setModalRellenar]   = useState(null);  // producto
   const [modalHistorial,  setModalHistorial]  = useState(null);  // producto
+  // Alto del modal de Producto al abrir el historial desde él (el historial sale igual).
+  const [altoHistorial,   setAltoHistorial]   = useState(null);
+  const infoProductoRef = useRef(null);
   const [stockOcultoSig,  setStockOcultoSig]  = useState(null);  // firma del aviso de stock bajo descartado
   const [granelOcultoSig, setGranelOcultoSig] = useState(null);  // firma del aviso de granel descartado
   // Recién creados en esta sesión: nacen en cero y no avisan hasta su primera entrada.
@@ -2524,7 +2532,7 @@ export default function Inventario() {
         const es = estadoStock(p);
         return (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 md:hidden">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div ref={infoProductoRef} className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
               <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
                 <h2 className="text-base font-semibold text-gray-900">Producto</h2>
                 <div className="flex items-center gap-2">
@@ -2631,7 +2639,10 @@ export default function Inventario() {
                   )}
                   <button
                     type="button"
-                    onClick={() => { setModalHistorial(p); }}
+                    onClick={() => {
+                      setAltoHistorial(infoProductoRef.current?.offsetHeight ?? null);
+                      setModalHistorial(p);
+                    }}
                     className="w-full flex items-center justify-center gap-2 py-3.5 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-lg text-sm transition-colors"
                   >
                     <IconoHistorial />
@@ -2678,7 +2689,8 @@ export default function Inventario() {
 
       {/* Modal historial */}
       {modalHistorial && (
-        <ModalHistorial producto={modalHistorial} onClose={() => setModalHistorial(null)} />
+        <ModalHistorial producto={modalHistorial} alto={altoHistorial}
+          onClose={() => { setModalHistorial(null); setAltoHistorial(null); }} />
       )}
 
       {/* Modal confirmar eliminar */}
