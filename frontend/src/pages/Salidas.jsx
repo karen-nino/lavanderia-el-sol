@@ -77,6 +77,9 @@ export default function Salidas() {
   const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
   // Producto por quitar, esperando confirmación (solo admin).
   const [confirmQuitarProd, setConfirmQuitarProd] = useState(null);
+  // Producto al que no se le pudo servir más: { producto, error? }. Va en modal
+  // porque desde la tarjeta no se ve el aviso de arriba.
+  const [avisoProd,        setAvisoProd]        = useState(null);
   // Agregar un producto desde Salidas: el cliente lo pide ya frente a la máquina.
   const [agregarProdOpen, setAgregarProdOpen] = useState(false);
   const [catalogoProd, setCatalogoProd]       = useState([]);
@@ -548,9 +551,24 @@ export default function Salidas() {
       await cargarDatos();
     } catch (err) {
       fallaAccion(err);
+      // El error va en el modal, no también arriba.
+      const producto = productosNota.find(x => String(x.producto_id) === String(productoId));
+      if (producto) {
+        setErrorAccion('');
+        setAvisoProd({ producto, error: err.message });
+      }
     } finally {
       setLoadingProducto(null);
     }
+  }
+
+  /** "+" de un producto: si otra ya no cabe en el tope, avisa en vez de pedirla. */
+  function servirMas(p) {
+    if (!cabeOtraDe(p)) {
+      setAvisoProd({ producto: p });
+      return;
+    }
+    cambiarCantidadProducto(p.producto_id, Number(p.cantidad) + 1);
   }
 
   // Quita un producto (admin): vuelve al inventario y el total baja.
@@ -912,6 +930,13 @@ export default function Salidas() {
   const incluidasDe = (p) => (esEncargo && p.clase === 'bolsa' && !nota?.bolsas_todas_incluidas
     ? Math.min(Number(p.cantidad), bolsasIncluidas(nota, p.producto_id)) : 0);
   const totalProductosNota = productosNota.reduce((a, x) => a + cobradoProducto(x), 0);
+  // Por Encargo: lo servido cuenta contra lo que se cobra por los servicios (lo
+  // que se vende por pieza no). ¿Cabe otra unidad de este renglón?
+  const cabeOtraDe = (p) => {
+    const tope = nota?.tope_nota;
+    if (!tope || seVendePorUnidad(p)) return true;
+    return tope.usado + Number(p.precio_unitario) <= tope.presupuesto + 1e-9;
+  };
   // Con la nota cerrada o el cobro congelado no se tocan productos.
   const puedeTocarProductos = Boolean(nota) && !cobroCongelado
     && !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
@@ -1322,6 +1347,9 @@ export default function Salidas() {
                         </span>
                       )}
                   </p>
+                  {puedeTocarProductos && !cabeOtraDe(p) && (
+                    <p className="text-sm text-amber-700">Ya no cabe otra en el servicio</p>
+                  )}
                 </div>
 
                 <div className="flex flex-1 items-center justify-between gap-2">
@@ -1339,13 +1367,20 @@ export default function Salidas() {
                       {p.cantidad}
                     </span>
                     <button
-                      onClick={() => cambiarCantidadProducto(p.producto_id, Number(p.cantidad) + 1)}
+                      onClick={() => servirMas(p)}
                       disabled={!puedeTocarProductos || loadingProducto != null}
                       aria-label={`Servir más ${tituloProducto(p)}`}
                       className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       +
                     </button>
+                    {/* Llegó al tope: el + sigue activo y explica por qué no sirve otra. */}
+                    {puedeTocarProductos && !cabeOtraDe(p) && (
+                      <svg className="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1514,6 +1549,29 @@ export default function Salidas() {
           onConfirm={() => eliminarProducto(confirmQuitarProd.producto_id)}
         />
       )}
+
+      {/* No se pudo servir más de un producto: por el tope o porque el servidor lo rechazó. */}
+      {avisoProd && (() => {
+        const p = avisoProd.producto;
+        const tope = nota?.tope_nota;
+        const porTope = !avisoProd.error && tope;
+        return (
+          <ConfirmacionModal
+            tono="aviso"
+            titulo={porTope ? `Ya no cabe otra ${unidadDeRenglon(p)}` : `No se pudo cambiar ${tituloProducto(p)}`}
+            mensaje={porTope
+              ? 'Lo servido en la nota ya llega a lo que se cobra por los servicios. '
+                + 'Para servir otra, quita algún producto o sube el precio del servicio en Ajustes.'
+              : avisoProd.error}
+            detalle={porTope ? [
+              { etiqueta: 'Se cobra por los servicios', valor: fmtMonto(tope.presupuesto) },
+              { etiqueta: 'Ya servido', valor: fmtMonto(tope.usado) },
+              { etiqueta: `Otra ${unidadDeRenglon(p)}`, valor: fmtMonto(p.precio_unitario) },
+            ] : []}
+            onClose={() => setAvisoProd(null)}
+          />
+        );
+      })()}
 
       {/* Quitar una carga: dice cuánto deja de cobrarse. */}
       {confirmQuitarCarga && (() => {

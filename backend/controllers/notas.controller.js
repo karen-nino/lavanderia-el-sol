@@ -743,14 +743,13 @@ async function secadoraPorDefinir(client, notaId) {
 }
 
 /**
- * Solo Por Encargo: lo que cuesta cada servicio (máquinas + material servido)
- * no puede pasar de su precio (tope), y el material de toda la nota no puede
- * pasar de lo que se cobra por sus servicios. Aplica a todos los roles.
- * Se llama antes del COMMIT en las rutas que encarecen una carga.
+ * Solo Por Encargo: lo que cuesta cada servicio con precio (máquinas + material
+ * servido) y lo que suma la nota completa contra lo que se cobra por sus servicios.
  *
- * @returns {Promise<string|null>} el mensaje de error, o null si todo cabe.
+ * @returns {Promise<{servicios: object[], nota: {presupuesto: number, usado: number}|null}>}
+ *   `nota` es null si la nota no tiene servicios con precio.
  */
-async function validarTopesCargas(client, notaId) {
+async function topesDeNota(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.orden, nc.tamano, nc.tipo_prenda,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
@@ -776,7 +775,6 @@ async function validarTopesCargas(client, notaId) {
       ORDER BY nc.orden`,
     [notaId]
   );
-  const fmt = (n) => `$${Number(n).toFixed(2)}`;
   const t = await tarifasCarga(client);
   // Costo de máquinas: el guardado en la carga o, si no tiene, el que le toca
   // al servicio.
@@ -785,18 +783,9 @@ async function validarTopesCargas(client, notaId) {
     return guardado > 0 ? guardado : costoMaquinasDeServicio(r.tipo_prenda, r.tamano, t);
   };
 
-  // Primero cada servicio, para decir cuál se pasó y por cuánto.
-  for (const r of rows) {
-    if (r.tope == null) continue;
-    const total = maquinasDe(r) + Number(r.productos);
-    if (total > Number(r.tope) + 1e-9) {
-      const servicio = nombreServicio(r.es_edredon ? 'EDREDON' : 'ROPA', r.tamano, r.tamano_edredon);
-      const desglose = `máquinas ${fmt(maquinasDe(r))} + material ${fmt(r.productos)} = ${fmt(total)}`;
-      return `El servicio ${servicio} (carga ${r.orden}) se cobra en ${fmt(r.tope)} y ${desglose}. `
-        + `Baja $${(total - Number(r.tope)).toFixed(2)}: quita algún producto o la bolsa, `
-        + 'o sube el precio del servicio en Ajustes.';
-    }
-  }
+  const servicios = rows
+    .filter(r => r.tope != null)
+    .map(r => ({ ...r, maquinas: maquinasDe(r), total: maquinasDe(r) + Number(r.productos) }));
 
   // Después la nota completa: máquinas de los servicios + todo el material
   // servido contra lo que se cobra por los servicios. Las máquinas agregadas en
@@ -820,14 +809,41 @@ async function validarTopesCargas(client, notaId) {
   );
   const tot = totales[0];
   // Solo si hay servicios con precio.
-  const hayServicios = rows.some(r => r.tope != null);
-  if (tot && hayServicios) {
-    const maquinas = rows.reduce((a, r) => a + (r.tope == null ? 0 : maquinasDe(r)), 0);
-    const usado = maquinas + Number(tot.material);
-    if (usado > Number(tot.presupuesto) + 1e-9) {
-      return `El material de la nota suma ${fmt(usado)} y los servicios se cobran en ${fmt(tot.presupuesto)}. `
-        + `Baja $${(usado - Number(tot.presupuesto)).toFixed(2)}: quita productos o sube el precio de los servicios en Ajustes.`;
+  const nota = tot && servicios.length > 0
+    ? {
+      presupuesto: Number(tot.presupuesto),
+      usado: servicios.reduce((a, r) => a + r.maquinas, 0) + Number(tot.material),
     }
+    : null;
+
+  return { servicios, nota };
+}
+
+/**
+ * Solo Por Encargo: ningún servicio pasa de su precio (tope) y el material de
+ * toda la nota no pasa de lo que se cobra por sus servicios. Aplica a todos los
+ * roles. Se llama antes del COMMIT en las rutas que encarecen una carga.
+ *
+ * @returns {Promise<string|null>} el mensaje de error, o null si todo cabe.
+ */
+async function validarTopesCargas(client, notaId) {
+  const { servicios, nota } = await topesDeNota(client, notaId);
+  const fmt = (n) => `$${Number(n).toFixed(2)}`;
+
+  // Primero cada servicio, para decir cuál se pasó y por cuánto.
+  for (const r of servicios) {
+    if (r.total > Number(r.tope) + 1e-9) {
+      const servicio = nombreServicio(r.es_edredon ? 'EDREDON' : 'ROPA', r.tamano, r.tamano_edredon);
+      const desglose = `máquinas ${fmt(r.maquinas)} + material ${fmt(r.productos)} = ${fmt(r.total)}`;
+      return `El servicio ${servicio} (carga ${r.orden}) se cobra en ${fmt(r.tope)} y ${desglose}. `
+        + `Baja $${(r.total - Number(r.tope)).toFixed(2)}: quita algún producto o la bolsa, `
+        + 'o sube el precio del servicio en Ajustes.';
+    }
+  }
+
+  if (nota && nota.usado > nota.presupuesto + 1e-9) {
+    return `El material de la nota suma ${fmt(nota.usado)} y los servicios se cobran en ${fmt(nota.presupuesto)}. `
+      + `Baja $${(nota.usado - nota.presupuesto).toFixed(2)}: quita productos o sube el precio de los servicios en Ajustes.`;
   }
 
   return null;
@@ -1972,6 +1988,8 @@ export const getNotaById = async (req, res) => {
       abonos,
       abonado,
       lavadora_terminada: await algunaLavadoraTermino(pool, id),
+      // Por Encargo: tope de la nota y lo usado, para avisar si ya no cabe otra bolsa.
+      tope_nota: (await topesDeNota(pool, id)).nota,
       saldo: rows[0].estado_pago === 'PAGADO'
         ? 0
         : Math.max(0, Number(rows[0].precio_total) - abonado),

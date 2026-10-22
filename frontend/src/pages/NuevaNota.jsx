@@ -5,6 +5,7 @@ import { etiquetaProducto, ordenProducto, seVendePorUnidad, esPolvo } from '../l
 import { capitalizarNombre } from '../lib/texto';
 import { FORMAS_PAGO, FORMAS_PAGO_COBRO, formaPagoLabel } from '../lib/formasPago';
 import AbrirCajaModal from '../components/AbrirCajaModal';
+import ConfirmacionModal from '../components/ConfirmacionModal';
 import ModalCobrar from '../components/ModalCobrar';
 import ElegirMaquinasModal, { SELECCION_EDREDON } from '../components/ElegirMaquinasModal';
 import Selector from '../components/Selector';
@@ -219,6 +220,8 @@ export default function NuevaNota() {
   // Selector de producto: `ambito` 'nota' (por botella) o 'carga' (por medida,
   // con `carga`). Un producto puesto no se cambia: se borra y se agrega otro.
   const [selectorProducto,  setSelectorProducto]  = useState(null);
+  // Producto que ya no cabe en el tope al tocar su "+"; el aviso de abajo no se ve desde ahí.
+  const [avisoTope,         setAvisoTope]         = useState(null);
   // La venta de productos se cobra al momento: "Aceptar" abre este modal.
   const [cobroOpen,         setCobroOpen]         = useState(false);
   const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
@@ -822,6 +825,11 @@ export default function NuevaNota() {
   const excesoDeLaNota = presupuestoServicios > 0 ? materialUsado - presupuestoConAjuste : 0;
   const encargoPrecioTotal  = subtotalServicios + subtotalProductos + ajusteEncargo;
 
+  /** Por Encargo: ¿otra pieza de este producto cabe en lo que se cobra por los servicios? */
+  const cabeOtraDe = (prod) => !prod || !esMaterialDeNota(prod) || presupuestoServicios <= 0
+    || materialUsado + precioProductoNota(prod) <= presupuestoConAjuste + 1e-9;
+  const unidadDeTope = (prod) => (prod?.clase === 'bolsa' ? 'bolsa' : 'medida');
+
   const excesoDeCarga = (c) => {
     const tope = topeDeCarga(c);
     return tope != null ? usadoContraTope(c) - tope : 0;
@@ -1331,6 +1339,9 @@ export default function NuevaNota() {
                       </span>
                     )}
                   </p>
+                  {!cabeOtraDe(prod) && (
+                    <p className="text-sm text-amber-700">Ya no cabe otra en el servicio</p>
+                  )}
                 </div>
 
                 {/* Cantidad, importe y borrar bajan juntos si no caben. */}
@@ -1348,12 +1359,21 @@ export default function NuevaNota() {
                     <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{cant}</span>
                     <button
                       type="button"
-                      onClick={() => actualizarProducto(i, 'cantidad', String(cant + 1))}
+                      onClick={() => (cabeOtraDe(prod)
+                        ? actualizarProducto(i, 'cantidad', String(cant + 1))
+                        : setAvisoTope(prod))}
                       aria-label="Aumentar cantidad"
                       className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 transition-colors"
                     >
                       +
                     </button>
+                    {/* Llegó al tope: el + sigue activo y explica por qué no sirve otra. */}
+                    {!cabeOtraDe(prod) && (
+                      <svg className="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1463,6 +1483,21 @@ export default function NuevaNota() {
           error=""
           cajaAbierta={cajaAbierta}
           onAbrirCaja={() => setModalCajaOpen(true)}
+        />
+      )}
+
+      {avisoTope && (
+        <ConfirmacionModal
+          tono="aviso"
+          titulo={`Ya no cabe otra ${unidadDeTope(avisoTope)}`}
+          mensaje={'Lo servido en la nota ya llega a lo que se cobra por los servicios. '
+            + 'Para servir otra, quita algún producto o sube el precio del servicio en Ajustes.'}
+          detalle={[
+            { etiqueta: 'Se cobra por los servicios', valor: `$${presupuestoConAjuste.toFixed(2)}` },
+            { etiqueta: 'Ya servido', valor: `$${materialUsado.toFixed(2)}` },
+            { etiqueta: `Otra ${unidadDeTope(avisoTope)}`, valor: `$${precioProductoNota(avisoTope).toFixed(2)}` },
+          ]}
+          onClose={() => setAvisoTope(null)}
         />
       )}
 
