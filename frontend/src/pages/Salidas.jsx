@@ -613,50 +613,57 @@ export default function Salidas() {
     // Una línea por vuelta (un relavado repite la máquina). Solo la `actual` tiene
     // botones; las anteriores son historial.
     return cargasNota
-      .map(c => ({
-        id: c.id,
-        orden: c.orden,
-        maquinas: (c.maquinas_usadas ?? []).map(u => {
-          const esLav = u.slot === 'lavadora';
-          return {
-            // Sin maquina_id la máquina se borró: queda el nombre, sin acciones.
-            id: u.maquina_id,
-            // Identifica la vuelta, no la máquina (puede repetirse).
-            pasadaId: u.id,
-            actual: Boolean(u.actual),
-            // Hueco de la vuelta, para saber si quedó libre.
-            slot: u.slot,
-            nombre: u.nombre,
-            tipo: u.tipo,
-            // Programas del modelo: si se pregunta cuál al iniciar.
-            modelo_tiempos: u.modelo_tiempos ?? null,
-            // Con cronómetro, encender ya arranca la carga y se finaliza a mano.
-            cronometro: Boolean(u.cronometro),
-            // Cronómetro con un solo botón, "Iniciar", que da corriente y arranca.
-            con_iniciar: Boolean(u.con_iniciar),
-            // Solo fichas: sin Sonoff ni tope; Iniciar solo arranca el cronómetro.
-            solo_fichas: Boolean(u.solo_fichas),
-            ...(esLav ? {} : { tamano: u.tamano }),
-            // La vuelta viva muestra el estado de su máquina; una cerrada, "terminado".
-            estado: u.actual
-              ? (esLav ? c.lavadora_estado : c.secadora_estado)
-              : 'terminado',
-            en_uso_desde: u.actual ? (esLav ? c.lavadora_en_uso_desde : c.secadora_en_uso_desde) : null,
-            ciclo_minutos: u.actual ? (esLav ? c.lavadora_ciclo_minutos : c.secadora_ciclo_minutos) : null,
-            // Programa elegido al iniciar: avisa cuándo terminó (el corte sigue en el tope).
-            ciclo_elegido_minutos: u.actual
-              ? (esLav ? c.lavadora_ciclo_elegido_minutos : c.secadora_ciclo_elegido_minutos) : null,
-            esperandoArranque: Boolean(u.actual
-              && (esLav ? c.lavadora_esperando_arranque : c.secadora_esperando_arranque)),
-            tomadaPor: u.actual && u.maquina_id ? usadaPorOtra(u.maquina_id) : null,
-            // Autoservicio: la lavadora cuya carga aún debe secar no cierra aquí; la ropa
-            // pasa a la secadora desde la tarjeta de Máquinas.
-            encadenaSecado: esLav && esAutoservicio
-              && Boolean(c.secadora_tipo_previsto)
-              && !c.secadora_id && !c.secadora_usada_id,
-          };
-        }),
-      }))
+      .map(c => {
+        // Las fichas de más son de la carga: se enseñan en su última secadora.
+        const usadas = c.maquinas_usadas ?? [];
+        const ultimaSecadora = [...usadas].reverse().find(u => u.slot === 'secadora');
+        return {
+          id: c.id,
+          orden: c.orden,
+          maquinas: usadas.map(u => {
+            const esLav = u.slot === 'lavadora';
+            return {
+              // Sin maquina_id la máquina se borró: queda el nombre, sin acciones.
+              id: u.maquina_id,
+              // Identifica la vuelta, no la máquina (puede repetirse).
+              pasadaId: u.id,
+              actual: Boolean(u.actual),
+              // Hueco de la vuelta, para saber si quedó libre.
+              slot: u.slot,
+              nombre: u.nombre,
+              tipo: u.tipo,
+              // Programas del modelo: si se pregunta cuál al iniciar.
+              modelo_tiempos: u.modelo_tiempos ?? null,
+              // Con cronómetro, encender ya arranca la carga y se finaliza a mano.
+              cronometro: Boolean(u.cronometro),
+              // Cronómetro con un solo botón, "Iniciar", que da corriente y arranca.
+              con_iniciar: Boolean(u.con_iniciar),
+              // Solo fichas: sin Sonoff ni tope; Iniciar solo arranca el cronómetro.
+              solo_fichas: Boolean(u.solo_fichas),
+              ...(esLav ? {} : { tamano: u.tamano }),
+              // La vuelta viva muestra el estado de su máquina; una cerrada, "terminado".
+              estado: u.actual
+                ? (esLav ? c.lavadora_estado : c.secadora_estado)
+                : 'terminado',
+              en_uso_desde: u.actual ? (esLav ? c.lavadora_en_uso_desde : c.secadora_en_uso_desde) : null,
+              ciclo_minutos: u.actual ? (esLav ? c.lavadora_ciclo_minutos : c.secadora_ciclo_minutos) : null,
+              // Programa elegido al iniciar: avisa cuándo terminó (el corte sigue en el tope).
+              ciclo_elegido_minutos: u.actual
+                ? (esLav ? c.lavadora_ciclo_elegido_minutos : c.secadora_ciclo_elegido_minutos) : null,
+              esperandoArranque: Boolean(u.actual
+                && (esLav ? c.lavadora_esperando_arranque : c.secadora_esperando_arranque)),
+              tomadaPor: u.actual && u.maquina_id ? usadaPorOtra(u.maquina_id) : null,
+              // Autoservicio: la lavadora cuya carga aún debe secar no cierra aquí; la ropa
+              // pasa a la secadora desde la tarjeta de Máquinas.
+              encadenaSecado: esLav && esAutoservicio
+                && Boolean(c.secadora_tipo_previsto)
+                && !c.secadora_id && !c.secadora_usada_id,
+              fichasExtra: u === ultimaSecadora ? Number(c.fichas_extra) || 0 : 0,
+              precioFichasExtra: u === ultimaSecadora ? Number(c.precio_fichas_extra) || 0 : 0,
+            };
+          }),
+        };
+      })
       .filter(g => g.maquinas.length > 0);
   })();
 
@@ -1052,6 +1059,13 @@ export default function Salidas() {
                       <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
                       {tipoLabel && (
                         <span className="text-sm text-gray-500">— {tipoLabel}</span>
+                      )}
+                      {/* Fichas de más que se le metieron (en Por Encargo no se cobran). */}
+                      {m.fichasExtra > 0 && (
+                        <span className="text-sm font-medium text-blue basis-full">
+                          {m.fichasExtra === 1 ? '+1 ficha extra' : `+${m.fichasExtra} fichas extra`}
+                          {m.precioFichasExtra > 0 && ` · ${fmtMonto(m.precioFichasExtra)}`}
+                        </span>
                       )}
                       {m.tomadaPor && (
                         <span className="text-sm font-medium text-amber-700 basis-full">

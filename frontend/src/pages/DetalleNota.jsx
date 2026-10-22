@@ -734,6 +734,15 @@ export default function DetalleNota() {
   const maquinasEnUso = new Set(nota.maquinas_en_uso ?? []);
   const maquinasNota = [...new Set([...(nota.maquinas_nombres ?? []), ...maquinasEnUso])]
     .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+  // Fichas de más por secadora: las de la carga van a su última secadora.
+  const fichasPorMaquina = new Map();
+  for (const cg of nota.cargas ?? []) {
+    const fichas = Number(cg.fichas_extra) || 0;
+    const sec = [...(cg.maquinas_usadas ?? [])].reverse().find(u => u.slot === 'secadora');
+    if (fichas > 0 && sec?.nombre) {
+      fichasPorMaquina.set(sec.nombre, (fichasPorMaquina.get(sec.nombre) ?? 0) + fichas);
+    }
+  }
   // Cancelar: de admin (por ahora también de empleados), sin cobro ni abonos
   // (para eso está revertir).
   const puedeCancelar = (esAdmin || EMPLEADOS_CANCELAN)
@@ -1123,7 +1132,13 @@ export default function DetalleNota() {
           <p className="text-lg font-bold mt-0.5">
             {maquinasNota.map((m, i) => (
               <span key={m} className={maquinasEnUso.has(m) ? 'text-blue-700' : 'text-gray-500'}>
-                {m}{i < maquinasNota.length - 1 ? ', ' : ''}
+                {m}
+                {fichasPorMaquina.has(m) && (
+                  <span className="text-sm font-medium text-blue">
+                    {' '}(+{fichasPorMaquina.get(m)} {fichasPorMaquina.get(m) === 1 ? 'ficha extra' : 'fichas extra'})
+                  </span>
+                )}
+                {i < maquinasNota.length - 1 ? ', ' : ''}
               </span>
             ))}
           </p>
