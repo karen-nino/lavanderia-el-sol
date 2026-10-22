@@ -1737,7 +1737,8 @@ export const getNotas = async (req, res) => {
                    OR (mm.id = nc.secadora_id AND nc.secadora_iniciada_at IS NOT NULL)
                 WHERE nc.nota_id = n.id AND mm.estado = 'en_uso') AS maquinas_en_uso,
               -- Secadora que cobra por programa, aún sin precio (Autoservicio).
-              EXISTS (SELECT 1 FROM nota_cargas nc
+              -- Una cancelada ya no se cobra: nada queda por definir.
+              n.estado <> 'CANCELADA' AND EXISTS (SELECT 1 FROM nota_cargas nc
                        WHERE nc.nota_id = n.id AND nc.secadora_por_definir) AS secadora_por_definir,
               -- ¿Corre ahora alguna lavadora / secadora arrancada por la nota?
               -- Con varias cargas pueden ser las dos.

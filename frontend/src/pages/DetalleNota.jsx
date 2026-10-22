@@ -767,7 +767,8 @@ export default function DetalleNota() {
   const abonadoNota = Number(nota.abonado ?? 0);
   const saldoNota = Number(nota.saldo ?? nota.precio_total ?? 0);
   // Autoservicio: secadora que cobra por programa, sin precio hasta iniciarla.
-  const secadoraPorDefinir = (nota.cargas ?? []).some(c => c.secadora_por_definir);
+  const secadoraPorDefinir = nota.estado !== 'CANCELADA'
+    && (nota.cargas ?? []).some(c => c.secadora_por_definir);
   // "Procesado" (solo Por Encargo): el único camino a Por Entregar; suelta las
   // máquinas y avisa por WhatsApp. Ya procesada, repite el aviso. Se muestra
   // aunque falte mensaje o teléfono (lo explica el modal).
@@ -1422,7 +1423,7 @@ export default function DetalleNota() {
                           {nombreDeCarga(cg)}
                         </span>
                         {!maquinaSinPrecio && (
-                          cg.secadora_por_definir && totalCarga === 0
+                          cg.secadora_por_definir && secadoraPorDefinir && totalCarga === 0
                             ? <span className="text-sm font-medium text-amber-700">Por definir</span>
                             : <span className="text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
                         )}
@@ -1459,7 +1460,7 @@ export default function DetalleNota() {
                                 )}
                               </div>
                               {/* Sin importe: vuelta repetida o máquina de Por Encargo. */}
-                              {m.porDefinir && !maquinaSinPrecio ? (
+                              {m.porDefinir && secadoraPorDefinir && !maquinaSinPrecio ? (
                                 <span className="flex-shrink-0 text-sm font-medium text-amber-700">Por definir</span>
                               ) : m.precio != null && !maquinaSinPrecio && (
                                 <span className="flex-shrink-0 text-sm text-gray-600">{fmtMonto(m.precio)}</span>

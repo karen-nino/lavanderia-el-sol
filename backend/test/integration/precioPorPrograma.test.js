@@ -297,3 +297,15 @@ describe('Más fichas: se elige uno de los tiempos con su costo', () => {
     expect((await fichas(nota.id)).fichas_extra).toBe(3);
   });
 });
+
+describe('nota cancelada', () => {
+  it('ya no dice secadora por definir en la lista', async () => {
+    const s4 = await sec49();
+    const { body: nota } = await notaAuto(s4);
+    const lista = async () => (await api('get', '/api/notas')).body;
+    const enLista = (body) => (Array.isArray(body) ? body : body.notas ?? body.data ?? []).find(n => n.id === nota.id);
+    expect(enLista(await lista()).secadora_por_definir).toBe(true);
+    await api('patch', `/api/notas/${nota.id}/estado`, { estado: 'CANCELADA' }).expect(200);
+    expect(enLista(await lista()).secadora_por_definir).toBe(false);
+  });
+});
