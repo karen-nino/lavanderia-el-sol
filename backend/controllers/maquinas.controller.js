@@ -1259,10 +1259,12 @@ export const masTiempo = async (req, res) => {
 };
 
 /**
- * "Otra ficha" de la secadora de fichas (Sec49): suma los minutos de una ficha
- * desde que se le da Iniciar, sin esperar a que acabe el programa y sin tope
- * (el tope de corte se recorre con el fin: ver TOPE_RELOJ). El fin nuevo sale
- * del fin anterior o, si ya pasó, de ahora: con 15 min por delante quedan 25.
+ * "Más fichas" de la secadora de fichas (Sec49): con `minutos`, uno de sus
+ * programas, suma esos minutos y en Autoservicio cobra su precio; sin él, una
+ * ficha. Desde que se le da Iniciar, sin esperar a que acabe el programa y sin
+ * tope (el tope de corte se recorre con el fin: ver TOPE_RELOJ). El fin nuevo
+ * sale del fin anterior o, si ya pasó, de ahora: con 15 min por delante y 10 más
+ * quedan 25.
  */
 export const otraFicha = async (req, res) => {
   const { id } = req.params;
@@ -1273,6 +1275,7 @@ export const otraFicha = async (req, res) => {
     const { rows } = await client.query(
       `SELECT m.*, ${MINUTOS_POR_FICHA} AS minutos_por_ficha,
               ${PRECIO_POR_FICHA} AS precio_por_ficha,
+              ${TIEMPOS_DEL_MODELO} AS modelo_tiempos,
               ${esCronometroSql('m')} AS cronometro,
               ${soloFichasSql('m')} AS solo_fichas
          FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
@@ -1297,6 +1300,24 @@ export const otraFicha = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `${maq.nombre} no está corriendo: dale Iniciar primero.` });
     }
+    // "Más fichas": uno de los programas del modelo (1, 2 o 3 min), con su precio.
+    // Sin `minutos` (versión anterior), una ficha.
+    const programas = (maq.modelo_tiempos?.minutos ?? []).map(Number);
+    const preciosProg = maq.modelo_tiempos?.precios ?? [];
+    let minutos = porFicha;
+    let precioPrograma = null;
+    if (req.body?.minutos != null) {
+      const pedido = Number(req.body.minutos);
+      const i = programas.indexOf(pedido);
+      if (!maq.modelo_tiempos?.pregunta || i < 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `${maq.nombre} no ofrece ese tiempo.` });
+      }
+      minutos = pedido;
+      precioPrograma = preciosProg[i] == null ? null : Number(preciosProg[i]);
+    }
+    // Las fichas que entran por esos minutos (al menos una).
+    const fichas = Math.max(1, Math.ceil(minutos / porFicha));
     const { rows: upd } = await client.query(
       `UPDATE maquinas
           SET minutos_pagados = COALESCE(minutos_pagados, ciclo_elegido_minutos) + $2,
@@ -1312,7 +1333,7 @@ export const otraFicha = async (req, res) => {
         RETURNING ciclo_elegido_minutos, minutos_pagados,
                   GREATEST(0, ROUND(EXTRACT(EPOCH FROM (en_uso_desde
                     + make_interval(mins => ciclo_elegido_minutos) - NOW())) / 60))::int AS minutos_restantes`,
-      [maq.id, porFicha]
+      [maq.id, minutos]
     );
 
     // La carga que la tiene puesta cuenta la ficha; en Autoservicio también la
@@ -1334,13 +1355,16 @@ export const otraFicha = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: `${maq.nombre} la está usando otra nota: métele la ficha desde esa nota.` });
     }
-    const precio = carga && carga.tipo_servicio === 'AUTOSERVICIO' ? Number(maq.precio_por_ficha) || 0 : 0;
+    // Se cobra el precio del programa o, si no tiene, cada ficha a su costo.
+    const precio = carga && carga.tipo_servicio === 'AUTOSERVICIO'
+      ? precioPrograma ?? fichas * (Number(maq.precio_por_ficha) || 0)
+      : 0;
     if (carga) {
       await client.query(
         `UPDATE nota_cargas
-            SET fichas_extra = fichas_extra + 1, precio_fichas_extra = precio_fichas_extra + $2
+            SET fichas_extra = fichas_extra + $3, precio_fichas_extra = precio_fichas_extra + $2
           WHERE id = $1`,
-        [carga.id, precio]
+        [carga.id, precio, fichas]
       );
       if (precio > 0) {
         try {
@@ -1357,10 +1381,11 @@ export const otraFicha = async (req, res) => {
     await client.query('COMMIT');
 
     // Fuera de la transacción: el pulso tarda.
-    await meterFichasExtra(maq.id, porFicha);
+    await meterFichasExtra(maq.id, minutos);
 
     res.json({
-      message: `${maq.nombre}: +${porFicha} min con otra ficha. Le quedan ${upd[0].minutos_restantes} min.`
+      message: `${maq.nombre}: +${minutos} min con ${fichas === 1 ? 'otra ficha' : `${fichas} fichas más`}. `
+        + `Le quedan ${upd[0].minutos_restantes} min.`
         + (precio > 0 ? ` Se cobran $${precio.toFixed(2)} en la nota.` : ''),
       precio,
       ciclo_elegido_minutos: upd[0].ciclo_elegido_minutos,

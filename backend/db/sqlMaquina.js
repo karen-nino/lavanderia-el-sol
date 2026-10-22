@@ -16,6 +16,19 @@ export const PROGRAMAS_DEL_MODELO = (mo) =>
   `ARRAY_REMOVE(ARRAY[${mo}.minutos_2, ${mo}.minutos_3, ${mo}.minutos_4], NULL)`;
 
 /**
+ * Precio de cada programa, alineado con PROGRAMAS_DEL_MODELO (NULL = ese
+ * programa se cobra por tamaño).
+ */
+export const PRECIOS_DE_PROGRAMAS = (mo) => `ARRAY(
+  SELECT x.p
+    FROM unnest(ARRAY[${mo}.minutos_2, ${mo}.minutos_3, ${mo}.minutos_4],
+                ARRAY[${mo}.precio_programa_2, ${mo}.precio_programa_3, ${mo}.precio_programa_4])
+         WITH ORDINALITY AS x(mi, p, n)
+   WHERE x.mi IS NOT NULL
+   ORDER BY x.n
+)`;
+
+/**
  * Minutos de ciclo configurados para la máquina `m`, o NULL: los de su modelo
  * (en el que pregunta, es su tope) o, si no, los de su marca para su tipo y
  * tamaño. Con NULL se usa el respaldo por tamaño de Ajustes.
@@ -138,7 +151,8 @@ export const OPCIONES_DE_MARCA = `(
 export const TIEMPOS_DEL_MODELO = `(
   SELECT json_build_object(
            'pregunta', mo.pregunta_tiempo,
-           'minutos',  ${PROGRAMAS_DEL_MODELO('mo')}
+           'minutos',  ${PROGRAMAS_DEL_MODELO('mo')},
+           'precios',  ${PRECIOS_DE_PROGRAMAS('mo')}
          )
     FROM marcas_maquina mm
     JOIN modelos_maquina mo ON mo.marca_id = mm.id

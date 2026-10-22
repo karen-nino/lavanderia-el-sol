@@ -11,7 +11,7 @@ import ConfirmacionModal from '../components/ConfirmacionModal';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ElegirTiempoModal from '../components/ElegirTiempoModal';
 import GranelPorServicio from '../components/GranelPorServicio';
-import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
+import { preguntaTiempo, tiemposDeMaquina, etiquetaPrograma } from '../lib/tiemposModelo';
 import { marcaYTamano } from '../lib/estadoMaquina';
 
 function fmtMonto(n) {
@@ -110,7 +110,7 @@ export default function Salidas() {
   const [minutosPorMaquina, setMinutosPorMaquina] = useState({});
   const [encendiendo,      setEncendiendo]      = useState(null); // máquina recibiendo corriente
   const [deteniendo,       setDeteniendo]       = useState(null); // máquina deteniéndose (animación)
-  // "Otra ficha" de la secadora de fichas: la máquina mientras se confirma.
+  // "Más fichas" de la secadora de fichas: la máquina mientras se elige el tiempo.
   const [confirmOtraFicha, setConfirmOtraFicha] = useState(null);
 
   // Máquinas libres para los modales de asignar y cambiar.
@@ -658,6 +658,10 @@ export default function Salidas() {
               encadenaSecado: esLav && esAutoservicio
                 && Boolean(c.secadora_tipo_previsto)
                 && !c.secadora_id && !c.secadora_usada_id,
+              // Autoservicio: la secadora que cobra por programa, aún sin precio.
+              porDefinir: u.actual && !esLav && Boolean(c.secadora_por_definir),
+              // Otra vuelta del mismo hueco (Por Encargo): Relavado o Más secado.
+              repite: usadas.filter(x => x.slot === u.slot).indexOf(u) > 0,
               fichasExtra: u === ultimaSecadora ? Number(c.fichas_extra) || 0 : 0,
               precioFichasExtra: u === ultimaSecadora ? Number(c.precio_fichas_extra) || 0 : 0,
             };
@@ -700,9 +704,12 @@ export default function Salidas() {
   const previstoPendiente = (c, slot) => slot === 'lavadora'
     ? Boolean(c.lavadora_tipo_previsto) && !c.lavadora_id && !c.lavadora_usada_id
     : Boolean(c.secadora_tipo_previsto) && !c.secadora_id && !c.secadora_usada_id;
+  // Relavado y Más secado (hueco ya usado) solo en Por Encargo.
   const huecosDeCarga = (c) => ({
-    lavadora: Boolean(c) && !c.lavadora_id && !previstoPendiente(c, 'lavadora'),
-    secadora: Boolean(c) && !c.secadora_id && !previstoPendiente(c, 'secadora'),
+    lavadora: Boolean(c) && !c.lavadora_id && !previstoPendiente(c, 'lavadora')
+      && !(esAutoservicio && c.lavadora_usada_id),
+    secadora: Boolean(c) && !c.secadora_id && !previstoPendiente(c, 'secadora')
+      && !(esAutoservicio && c.secadora_usada_id),
   });
 
   // Se puede quitar si nunca arrancó, no es la única de la nota y el cobro no
@@ -764,8 +771,8 @@ export default function Salidas() {
   const programaCumplido = (m) => Boolean(m.cronometro && m.en_uso_desde && m.ciclo_elegido_minutos)
     && now - new Date(m.en_uso_desde).getTime() >= Number(m.ciclo_elegido_minutos) * 60000;
 
-  // "Otra ficha" de la secadora de fichas (Sec49): desde que corre en esta nota,
-  // cada ficha suma sus minutos al fin, sin tope.
+  // "Más fichas" de la secadora de fichas (Sec49): desde que corre en esta nota,
+  // suma el tiempo elegido al fin, sin tope.
   const minutosPorFicha = (m) => Number(deFichas(m)?.minutos_por_ficha) || 0;
   const puedeOtraFicha = (m) => {
     if (!m.actual || m.estado !== 'en_uso' || m.esperandoArranque || m.tomadaPor) return false;
@@ -774,18 +781,21 @@ export default function Salidas() {
     return Boolean(fisica) && !fisica.solo_fichas && String(fisica.en_uso_nota_id) === String(nota?.id);
   };
 
-  const meterOtraFicha = async () => {
+  // Con `minutos`, uno de los tiempos del modelo (con su precio); sin él, una ficha.
+  const meterOtraFicha = async (minutos = null) => {
     if (!confirmOtraFicha) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      const r = await api.patch(`/maquinas/${confirmOtraFicha.id}/otra-ficha`, { nota_id: nota?.id });
+      const r = await api.patch(`/maquinas/${confirmOtraFicha.id}/otra-ficha`, {
+        nota_id: nota?.id, ...(minutos != null && { minutos }),
+      });
       if (r) {
         setConfirmOtraFicha(null);
         await cargarDatos();
       }
     } catch (err) {
-      fallaAccion(err, err.message || 'No se pudo meter otra ficha.');
+      fallaAccion(err, err.message || 'No se pudieron meter más fichas.');
     } finally {
       setLoadingMaquina(false);
     }
@@ -1055,6 +1065,16 @@ export default function Salidas() {
                       {tipoLabel && (
                         <span className="text-sm text-gray-500">— {tipoLabel}</span>
                       )}
+                      {m.repite && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-light-blue text-blue">
+                          {m.tipo === 'secadora' ? 'Más secado' : 'Relavado'}
+                        </span>
+                      )}
+                      {m.porDefinir && (
+                        <span className="text-sm font-medium text-amber-700 basis-full">
+                          Precio por definir: se cobra según el tiempo que elijas al iniciarla.
+                        </span>
+                      )}
                       {/* Fichas de más que se le metieron (en Por Encargo no se cobran). */}
                       {m.fichasExtra > 0 && (
                         <span className="text-sm font-medium text-blue basis-full">
@@ -1082,7 +1102,7 @@ export default function Salidas() {
                           // Secadora de fichas: se acabó su tiempo; si le cabe, Otro ciclo.
                           <span className="text-sm font-medium text-amber-600 basis-full">
                             {puedeOtraFicha(m)
-                              ? 'Se le acabó el tiempo. Dale otra ficha o finalízala.'
+                              ? 'Se le acabó el tiempo. Dale más fichas o finalízala.'
                               : 'Se le acabó el tiempo. Finalízala.'}
                           </span>
                         ) : programaCumplido(m) ? (
@@ -1165,14 +1185,14 @@ export default function Salidas() {
                             >
                               Finalizar Carga
                             </button>
-                            {/* Secadora de fichas: desde que corre, otra ficha suma sus minutos (sin tope). */}
+                            {/* Secadora de fichas: desde que corre, más fichas suman tiempo (sin tope). */}
                             {puedeOtraFicha(m) && (
                               <button
                                 onClick={() => { setErrorAccion(''); setConfirmOtraFicha(m); }}
                                 disabled={loadingMaquina}
                                 className="px-4 py-2 bg-white border border-blue text-blue hover:bg-light-blue disabled:opacity-60 text-sm font-medium rounded-lg transition-colors"
                               >
-                                Otra ficha
+                                Más fichas
                               </button>
                             )}
                           </div>
@@ -1520,6 +1540,8 @@ export default function Salidas() {
         <ElegirTiempoModal
           maquina={eligiendoTiempo.maquina}
           tiempos={tiemposDeMaquina(eligiendoTiempo.maquina)}
+          /* Autoservicio: cada programa con su precio (la carga toma el elegido). */
+          etiqueta={etiquetaPrograma(eligiendoTiempo.maquina, esAutoservicio)}
           guardando={loadingMaquina}
           error={errorAccion}
           onElegir={elegirTiempo}
@@ -1527,7 +1549,25 @@ export default function Salidas() {
         />
       )}
 
-      {confirmOtraFicha && (() => {
+      {/* Más fichas: los tiempos del modelo, cada uno con su costo en Autoservicio. */}
+      {confirmOtraFicha && preguntaTiempo(confirmOtraFicha) && (
+        <ElegirTiempoModal
+          maquina={confirmOtraFicha}
+          tiempos={tiemposDeMaquina(confirmOtraFicha)}
+          titulo="¿Cuánto tiempo más?"
+          descripcion={esAutoservicio
+            ? 'Se suma a lo que le queda y se cobra en la nota.'
+            : 'Se suma a lo que le queda.'}
+          etiqueta={etiquetaPrograma(confirmOtraFicha, esAutoservicio)}
+          guardando={loadingMaquina}
+          error={errorAccion}
+          onElegir={(min) => meterOtraFicha(min)}
+          onCancelar={() => { setConfirmOtraFicha(null); setErrorAccion(''); }}
+        />
+      )}
+
+      {/* Sin tiempos en el modelo: una ficha. */}
+      {confirmOtraFicha && !preguntaTiempo(confirmOtraFicha) && (() => {
         const m = confirmOtraFicha;
         const porFicha = minutosPorFicha(m);
         // Se cobra solo en Autoservicio (en Por Encargo el secado va en el servicio).
@@ -1541,7 +1581,7 @@ export default function Salidas() {
             procesando={loadingMaquina}
             error={errorAccion}
             onClose={() => { setConfirmOtraFicha(null); setErrorAccion(''); }}
-            onConfirm={meterOtraFicha}
+            onConfirm={() => meterOtraFicha()}
           >
             {/* Lo que se suma a la nota, en una pastilla y no como fila. */}
             {costo > 0 && (

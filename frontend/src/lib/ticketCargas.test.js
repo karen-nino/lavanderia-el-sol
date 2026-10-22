@@ -95,6 +95,12 @@ describe('maquinasDeCarga', () => {
   it('la secadora va sin calificativo: es de un solo tamaño', () => {
     expect(maquinasDeCarga(carga({
       secadora_usada_id: 9, secadora_usada_nombre: 'S1', precio_secadora: 45,
-    }))).toEqual([{ nombre: 'Secadora', tipo: '', precio: 45 }]);
+    }))).toEqual([{ nombre: 'Secadora', tipo: '', precio: 45, porDefinir: false }]);
+  });
+
+  it('la secadora que cobra por programa va por definir hasta iniciarla', () => {
+    expect(maquinasDeCarga(carga({
+      secadora_usada_id: 9, precio_secadora: 0, secadora_por_definir: true,
+    }))[0].porDefinir).toBe(true);
   });
 });

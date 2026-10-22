@@ -16,9 +16,10 @@ beforeEach(async () => {
 
 const api = (metodo, url, body) => request(app)[metodo](url).set(auth(admin.token)).send(body);
 
+// Relavado solo hay en Por Encargo.
 async function notaConLavadora(lavId) {
   const creada = await api('post', '/api/notas', {
-    tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+    tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
     cargas: [{ lavadora_tipo: 'mediana' }],
   });
   expect(creada.status).toBe(201);

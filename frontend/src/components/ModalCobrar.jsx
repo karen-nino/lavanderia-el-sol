@@ -11,12 +11,14 @@ function fmtMonto(n) {
  * Con `cajaAbierta === false` no se recibe dinero (el backend responde 409
  * CAJA_CERRADA): el aviso ofrece abrirla. Liquidar en $0 sí se permite.
  *
+ * Con `sinLiquidar` (el motivo, p. ej. la secadora por definir) solo se abona.
+ *
  * Nueva Nota también lo usa para el pago anticipado de Por Encargo (sin folio,
  * con su título).
  */
 export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', monto, onMonto, formaPago, onFormaPago,
                        onCancelar, onConfirmar, loading, error, cajaAbierta, onAbrirCaja,
-                       abonado = 0, total }) {
+                       abonado = 0, total, sinLiquidar = null }) {
   const sinSaldo = saldo <= 1e-9;
   const importe = Number(monto);
   const montoOk = Number.isFinite(importe) && importe > 0 && importe <= saldo + 1e-9;
@@ -25,6 +27,7 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
   // Qué pasará al confirmar, dicho antes.
   const liquida = sinSaldo || (montoOk && importe >= saldo - 1e-9);
   const restante = montoOk ? saldo - importe : 0;
+  const bloqueaLiquidar = Boolean(sinLiquidar) && liquida;
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -48,6 +51,13 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
+        )}
+
+        {sinLiquidar && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            <p className="text-sm font-semibold text-amber-900">Todavía no se puede liquidar</p>
+            <p className="mt-0.5 text-sm text-amber-800">{sinLiquidar} Mientras tanto puedes abonar.</p>
+          </div>
         )}
 
         {cajaAbierta === false && (
@@ -128,7 +138,7 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
           </button>
           <button
             onClick={onConfirmar}
-            disabled={loading || !valido || !formaPago}
+            disabled={loading || !valido || !formaPago || bloqueaLiquidar}
             className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? 'Procesando...' : liquida ? 'Liquidar' : 'Abonar'}

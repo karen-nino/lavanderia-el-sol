@@ -470,7 +470,7 @@ describe('modelo con tres tiempos', () => {
 
     const { body } = await request(app).get('/api/maquinas').set(auth(admin.token));
     const secadora = body.find(m => m.id === secadoraId);
-    expect(secadora.modelo_tiempos).toEqual({ pregunta: true, minutos: [30, 45, 60] });
+    expect(secadora.modelo_tiempos).toEqual({ pregunta: true, minutos: [30, 45, 60], precios: [null, null, null] });
     expect([secadora.cronometro, secadora.con_iniciar]).toEqual([true, true]);
   });
 });

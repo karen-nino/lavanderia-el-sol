@@ -14,9 +14,9 @@ beforeEach(async () => {
 const api = (m, url, body) => request(app)[m](url).set(auth(admin.token)).send(body);
 const estado = async (id) => (await pool.query('SELECT estado FROM maquinas WHERE id = $1', [id])).rows[0].estado;
 
-async function notaAuto(cargas = 1) {
+async function notaAuto(cargas = 1, tipo_servicio = 'AUTOSERVICIO') {
   const n = await api('post', '/api/notas', {
-    tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+    tipo_servicio, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
     cargas: Array.from({ length: cargas }, () => ({ lavadora_tipo: 'mediana' })),
   });
   expect(n.status).toBe(201);
@@ -54,7 +54,8 @@ describe('quitar una carga', () => {
 
   it('no se quita una carga que ya lavó y espera su relavado', async () => {
     const l1 = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
-    const a = await notaAuto(2);
+    // Relavado solo hay en Por Encargo.
+    const a = await notaAuto(2, 'POR_ENCARGO');
     const c = a.cargas[0];
     await asignar(a, c, l1);
     await api('patch', `/api/notas/${a.id}/activar-pendientes`, { maquina_id: l1 }).expect(200);

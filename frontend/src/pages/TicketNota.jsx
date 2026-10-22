@@ -155,6 +155,7 @@ function Asteriscos() {
 /** Texto plano del ticket para WhatsApp, con el mismo desglose que el recibo. */
 function armarTextoTicket(nota, rfc, notaPie) {
   const L = ['*Lavandería El Sol*'];
+  const porDefinir = (nota.cargas ?? []).some(cg => cg.secadora_por_definir);
   // Misma cabecera que el recibo: dirección de la sucursal y R.F.C. (texto libre).
   if (nota.sucursal_direccion) L.push(nota.sucursal_direccion);
   if (rfc) L.push(rfc);
@@ -178,7 +179,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
     if (conEncabezado) L.push(`${etiquetaCarga(cg, nota.tipo_servicio)}:`);
     const vineta = conEncabezado ? '  • ' : '';
     maquinasDeCarga(cg, nota.tipo_servicio).forEach(m => {
-      L.push(`${vineta}${m.cantidad ?? 1} x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
+      L.push(`${vineta}${m.cantidad ?? 1} x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${m.porDefinir ? 'Por definir' : fmtMonto(m.precio)}`);
     });
     // Las medidas son internas: no salen en el ticket.
     (cg.productos ?? []).filter(p => p.unidad !== 'medida')
@@ -243,6 +244,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
   }
 
   L.push('', `*Total: ${fmtMonto(nota.precio_total)}*`);
+  if (porDefinir) L.push('+ secadora por definir');
   // Lo abonado y lo que resta.
   const abonos = abonosDeNota(nota);
   if (abonos.length > 0) {
@@ -473,7 +475,7 @@ export default function TicketNota() {
               <span className="inline-block w-9">{m.cantidad ?? 1}</span>
               {m.nombre.toUpperCase()}{m.tipo && ` ${m.tipo.toUpperCase()}`}
             </span>
-            <span className="whitespace-nowrap font-bold">{fmtMonto(m.precio)}</span>
+            <span className="whitespace-nowrap font-bold">{m.porDefinir ? 'POR DEFINIR' : fmtMonto(m.precio)}</span>
           </div>
         ))}
         {/* Las medidas son internas. */}
@@ -639,6 +641,9 @@ export default function TicketNota() {
               <span>TOTAL M.N.</span>
               <span className="whitespace-nowrap text-blue">{fmtMonto(nota.precio_total)}</span>
             </div>
+            {(nota.cargas ?? []).some(cg => cg.secadora_por_definir) && (
+              <p className="text-right text-[13px] font-bold mt-1">+ SECADORA POR DEFINIR</p>
+            )}
             <SelloPago nota={nota} />
 
             {/* Abonos, si los hay: fecha, forma y lo que resta (quién lo recibió es interno). */}

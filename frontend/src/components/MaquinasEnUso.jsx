@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import MachineCard from './MachineCard';
 import MaquinaCicloOverlay from './MaquinaCicloOverlay';
 import ElegirTiempoModal from './ElegirTiempoModal';
-import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
+import { preguntaTiempo, tiemposDeMaquina, etiquetaPrograma } from '../lib/tiemposModelo';
 import { marcaYTamano } from '../lib/estadoMaquina';
 
 /** Cada cuánto se vuelven a consultar notas y máquinas. */
@@ -421,6 +421,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     <ElegirTiempoModal
       maquina={eligiendoTiempo}
       tiempos={tiemposDeMaquina(eligiendoTiempo)}
+      /* Pasa de la lavadora en Autoservicio: cada programa con su precio. */
+      etiqueta={etiquetaPrograma(eligiendoTiempo, esAutoservicioTerminar)}
       guardando={terminando}
       error={errorTerminar}
       onElegir={(min) => confirmarTerminarCiclo(min)}
@@ -432,6 +434,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     <ElegirTiempoModal
       maquina={eligiendoArranque}
       tiempos={tiemposDeMaquina(eligiendoArranque)}
+      etiqueta={etiquetaPrograma(eligiendoArranque, notas.some(n =>
+        String(n.id) === String(eligiendoArranque.en_uso_nota_id) && n.tipo_servicio === 'AUTOSERVICIO'))}
       onElegir={(min) => pedirOtroCiclo(eligiendoArranque, min)}
       onCancelar={() => setEligiendoArranque(null)}
     />

@@ -766,6 +766,8 @@ export default function DetalleNota() {
   const abonosNota = nota.abonos ?? [];
   const abonadoNota = Number(nota.abonado ?? 0);
   const saldoNota = Number(nota.saldo ?? nota.precio_total ?? 0);
+  // Autoservicio: secadora que cobra por programa, sin precio hasta iniciarla.
+  const secadoraPorDefinir = (nota.cargas ?? []).some(c => c.secadora_por_definir);
   // "Procesado" (solo Por Encargo): el único camino a Por Entregar; suelta las
   // máquinas y avisa por WhatsApp. Ya procesada, repite el aviso. Se muestra
   // aunque falte mensaje o teléfono (lo explica el modal).
@@ -1038,6 +1040,9 @@ export default function DetalleNota() {
                 <p className="text-sm text-amber-800 mt-1">
                   Abonado {fmtMonto(abonadoNota)} de {fmtMonto(nota.precio_total)}
                 </p>
+              )}
+              {secadoraPorDefinir && (
+                <p className="text-sm font-medium text-amber-800 mt-1">+ secadora por definir</p>
               )}
             </div>
             <svg className="w-8 h-8 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1367,6 +1372,10 @@ export default function DetalleNota() {
                       precio: esPrimera
                         ? Number(esLav ? cg.precio_lavadora : cg.precio_secadora)
                         : null,
+                      // Autoservicio: la secadora por programa aún sin precio.
+                      porDefinir: esPrimera && !esLav && Boolean(cg.secadora_por_definir),
+                      // Otra vuelta del mismo hueco (Por Encargo).
+                      repite: !esPrimera,
                     };
                   });
                   // Por Encargo: huecos con tipo y sin máquina (se asignan en Salidas).
@@ -1413,7 +1422,9 @@ export default function DetalleNota() {
                           {nombreDeCarga(cg)}
                         </span>
                         {!maquinaSinPrecio && (
-                          <span className="text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
+                          cg.secadora_por_definir && totalCarga === 0
+                            ? <span className="text-sm font-medium text-amber-700">Por definir</span>
+                            : <span className="text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
                         )}
                       </div>
                       {maquinasCarga.length === 0 && slotsPrevistos.length === 0 ? (
@@ -1441,9 +1452,16 @@ export default function DetalleNota() {
                                 {tipoLabel && (
                                   <span className="text-sm text-gray-500">— {tipoLabel}</span>
                                 )}
+                                {m.repite && (
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-light-blue text-blue">
+                                    {m.tipo === 'secadora' ? 'Más secado' : 'Relavado'}
+                                  </span>
+                                )}
                               </div>
                               {/* Sin importe: vuelta repetida o máquina de Por Encargo. */}
-                              {m.precio != null && !maquinaSinPrecio && (
+                              {m.porDefinir && !maquinaSinPrecio ? (
+                                <span className="flex-shrink-0 text-sm font-medium text-amber-700">Por definir</span>
+                              ) : m.precio != null && !maquinaSinPrecio && (
                                 <span className="flex-shrink-0 text-sm text-gray-600">{fmtMonto(m.precio)}</span>
                               )}
                             </div>
@@ -1471,7 +1489,7 @@ export default function DetalleNota() {
                       {/* Fichas de más de la secadora de fichas (en Por Encargo no se cobran). */}
                       {Number(cg.fichas_extra) > 0 && (
                         <p className="text-sm text-gray-500">
-                          {Number(cg.fichas_extra) === 1 ? 'Otra ficha' : `Otras ${cg.fichas_extra} fichas`}
+                          {Number(cg.fichas_extra) === 1 ? '1 ficha extra' : `${cg.fichas_extra} fichas extra`}
                           {Number(cg.precio_fichas_extra) > 0
                             ? `: ${fmtMonto(cg.precio_fichas_extra)}`
                             : <> · <span className="text-green-700 font-medium">Incluido</span></>}
@@ -1520,6 +1538,9 @@ export default function DetalleNota() {
           </FilaDetalle>
           <FilaDetalle label="Precio total">
             <span className="font-semibold text-gray-900">{fmtMonto(nota.precio_total)}</span>
+            {secadoraPorDefinir && (
+              <span className="text-sm font-medium text-amber-700"> + secadora por definir</span>
+            )}
           </FilaDetalle>
           {/* Una nota cancelada no tiene estado de pago: no se va a cobrar. */}
           {nota.estado !== 'CANCELADA' && (
@@ -1817,6 +1838,9 @@ export default function DetalleNota() {
           error={errorAccion}
           cajaAbierta={cajaAbierta}
           onAbrirCaja={() => setModalCajaOpen(true)}
+          sinLiquidar={secadoraPorDefinir
+            ? 'Inicia la secadora en Salidas para saber cuánto cobrar: su precio depende del tiempo que se elija.'
+            : null}
         />
       )}
 

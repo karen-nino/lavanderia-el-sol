@@ -251,6 +251,7 @@ const aNumero = (v) => (v === '' || v == null ? null : Number(v));
 const fotoTiempo = (t) => [
   aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
   aNumero(t.minutos_por_ficha), aNumero(t.precio_por_ficha),
+  aNumero(t.precio_programa_2), aNumero(t.precio_programa_3), aNumero(t.precio_programa_4),
 ].join('|');
 /** Lo editable de una sucursal, para compararla con lo guardado. */
 const huellaSucursal = (s) => JSON.stringify([s.nombre ?? '', s.direccion ?? '', s.telefono ?? '', s.horario_semana ?? null]);
@@ -1465,9 +1466,12 @@ function AjustesAdmin() {
         ? 'Arriba, el tope: a esos minutos se le corta la luz si nadie la finaliza. Abajo, los programas: al iniciarla se pregunta cuál corre y se avisa cuando lo cumpla. Tope vacío = el programa más largo.'
         : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.';
     }
+    if (t?.pregunta_tiempo && t?.tipo === 'secadora') {
+      base += ' Precio: lo que se cobra en Autoservicio por cada tiempo, según el que se elija al iniciarla. Vacío = el precio por tamaño.';
+    }
     if (!esDeFichas(t)) return base;
     const deQue = t?.pregunta_tiempo ? 'del programa elegido' : (conTemporizador ? 'del tiempo de carga' : 'del tope');
-    return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${deQue}. Vacío = no es de fichas. Costo ficha: lo que se cobra en Autoservicio por cada "Otra ficha". Vacío = sin costo.`;
+    return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${deQue}. Vacío = no es de fichas. Costo ficha: lo que se cobra en Autoservicio por cada ficha de "Más fichas" cuando el tiempo elegido no tiene precio. Vacío = sin costo.`;
   };
 
   // Los tres programas solo salen en los modelos marcados con varios programas.
@@ -1510,7 +1514,7 @@ function AjustesAdmin() {
         />
         <span className={`${unidadCls} flex-shrink-0`}>min</span>
       </div>
-      {/* Lo que se cobra por cada "Otra ficha" (Autoservicio). */}
+      {/* Lo que se cobra por ficha en "Más fichas" si el tiempo no tiene precio (Autoservicio). */}
       <div className="mt-3 flex items-center gap-2">
         <span className={`${unidadCls} flex-shrink-0 w-24`}>Costo ficha</span>
         {/* Como el precio por carga: $ antes y MXN después. */}
@@ -1563,7 +1567,25 @@ function AjustesAdmin() {
               className={`${inputCls} text-center`}
             />
           ))}
-          <span className={`${unidadCls} flex-shrink-0`}>min</span>
+          <span className={`${unidadCls} flex-shrink-0 w-10`}>min</span>
+        </div>
+      ) : null}
+      {/* Secadora: precio de cada programa en Autoservicio, debajo de su tiempo. */}
+      {tieneVariosTiempos(t) && t.tipo === 'secadora' ? (
+        <div className="mt-3 flex items-center gap-2">
+          <span className={`${unidadCls} flex-shrink-0 w-24 flex justify-between pr-1`}>
+            Precio <span>$</span>
+          </span>
+          {['precio_programa_2', 'precio_programa_3', 'precio_programa_4'].map(campo => (
+            <input
+              key={campo}
+              type="number" inputMode="decimal" min="0" step="0.01" placeholder="—"
+              value={t[campo] ?? ''}
+              onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, campo)}
+              className={`${inputCls} text-center`}
+            />
+          ))}
+          <span className={`${unidadCls} flex-shrink-0 w-10`}>MXN</span>
         </div>
       ) : null}
       {avisoProgramasSobreTope(t)}
@@ -1623,7 +1645,11 @@ function AjustesAdmin() {
       minutos_4: aNumero(t.minutos_4),
       // Solo en secadoras.
       ...(t.tipo === 'secadora'
-        ? { minutos_por_ficha: aNumero(t.minutos_por_ficha), precio_por_ficha: aNumero(t.precio_por_ficha) }
+        ? {
+            minutos_por_ficha: aNumero(t.minutos_por_ficha), precio_por_ficha: aNumero(t.precio_por_ficha),
+            precio_programa_2: aNumero(t.precio_programa_2), precio_programa_3: aNumero(t.precio_programa_3),
+            precio_programa_4: aNumero(t.precio_programa_4),
+          }
         : {}),
     })));
     tiemposOrigRef.current = tiemposMarca.map(t => ({
@@ -1631,6 +1657,8 @@ function AjustesAdmin() {
       minutos: aNumero(t.minutos), minutos_2: aNumero(t.minutos_2), minutos_3: aNumero(t.minutos_3),
       minutos_4: aNumero(t.minutos_4), minutos_por_ficha: aNumero(t.minutos_por_ficha),
       precio_por_ficha: aNumero(t.precio_por_ficha),
+      precio_programa_2: aNumero(t.precio_programa_2), precio_programa_3: aNumero(t.precio_programa_3),
+      precio_programa_4: aNumero(t.precio_programa_4),
     }));
   };
 

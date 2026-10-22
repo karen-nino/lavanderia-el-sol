@@ -8,6 +8,7 @@ import AbrirCajaModal from '../components/AbrirCajaModal';
 import ModalCobrar from '../components/ModalCobrar';
 import ElegirMaquinasModal, { SELECCION_EDREDON } from '../components/ElegirMaquinasModal';
 import Selector from '../components/Selector';
+import { cobraPorPrograma } from '../lib/tiemposModelo';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -273,6 +274,8 @@ export default function NuevaNota() {
   // Lo que cobra una máquina de Autoservicio, con la misma tarifa que el servidor.
   const precioDeMaquina = (m) => {
     if (!m) return 0;
+    // La que cobra por programa (Sec49) queda por definir: $0 hasta iniciarla.
+    if (m.tipo === 'secadora' && tipoServicio === 'AUTOSERVICIO' && cobraPorPrograma(m)) return 0;
     if (m.tipo === 'secadora') return precioSecado();
     return precioPorTipo(m.tipo === 'lavadora_jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', 'ROPA');
   };
@@ -285,6 +288,15 @@ export default function NuevaNota() {
     // Carga vieja con tipo y sin máquina: se cobra por su tipo.
     + (c.lavadora ? 0 : precioLavadoTipo(c.lavadora_tipo, 'ROPA'))
     + (c.secadora ? 0 : precioSecadoTipo(c.secadora_tipo, 'ROPA'));
+  // Secadora por definir: su precio sale del tiempo que se elija al iniciarla.
+  const secadoraPorDefinir = (c) => tipoServicio === 'AUTOSERVICIO' && cobraPorPrograma(c?.secadora);
+  const hayPorDefinir = () => cargasAuto.some(secadoraPorDefinir);
+  /** Lo que cobra el renglón: "Por definir" si solo es la secadora que aún no tiene precio. */
+  const montoRenglon = (c) => {
+    const sub = subtotalDeCarga(c);
+    if (!secadoraPorDefinir(c)) return `$${sub.toFixed(2)}`;
+    return sub > 0 ? `$${sub.toFixed(2)} + por definir` : 'Por definir';
+  };
   // Máquinas que la nota ya tiene: no se vuelven a ofrecer.
   const maquinasElegidas = cargasAuto.flatMap(c =>
     [c.lavadora?.id, c.secadora?.id].filter(Boolean).map(String));
@@ -2075,8 +2087,9 @@ export default function NuevaNota() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{etiquetaRenglon(c) || `Máquina ${i + 1}`}</p>
                     </div>
-                    <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
-                      ${subtotalDeCarga(c).toFixed(2)}
+                    <span className={`text-right tabular-nums ${secadoraPorDefinir(c)
+                      ? 'text-sm font-semibold text-amber-700' : 'w-16 text-base font-bold text-blue-700'}`}>
+                      {montoRenglon(c)}
                     </span>
                     <button
                       type="button"
@@ -2137,7 +2150,7 @@ export default function NuevaNota() {
                     <div key={i} className="flex justify-between gap-2">
                       <span className="font-medium truncate">{tipoDeRenglon(c) || '—'}</span>
                       <span className="flex-shrink-0 font-medium tabular-nums">
-                        ${subtotalDeCarga(c).toFixed(2)}
+                        {montoRenglon(c)}
                       </span>
                     </div>
                   ))}
@@ -2180,6 +2193,11 @@ export default function NuevaNota() {
                 <span className="text-sm font-medium text-blue">Total</span>
                 <span className="text-3xl font-bold text-blue-700 tabular-nums">${precioTotal.toFixed(2)}</span>
               </div>
+              {hayPorDefinir() && (
+                <p className="text-sm font-medium text-amber-700 text-right mt-1">
+                  + secadora por definir: se cobra según el tiempo que elijan al iniciarla
+                </p>
+              )}
             </div>
             </div>
           );

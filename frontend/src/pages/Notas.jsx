@@ -796,6 +796,9 @@ export default function Notas() {
                           </td>
                           <td className="px-4 py-3 text-right text-gray-600">
                             {fmtMonto(n.precio_total)}
+                            {n.secadora_por_definir && (
+                              <span className="block text-sm font-medium text-amber-700">+ por definir</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-sm">
                             {n.fecha_entrega ? (
@@ -910,7 +913,13 @@ export default function Notas() {
                   {/* Cliente y total. */}
                   <div className="flex items-center justify-between gap-2 mt-2">
                     <p className="text-xl font-semibold">{cliente}</p>
-                    <p className="text-xl font-bold">{fmtMonto(n.precio_total)}</p>
+                    <p className="text-xl font-bold text-right">
+                      {fmtMonto(n.precio_total)}
+                      {/* Secadora que cobra por programa, aún sin precio. */}
+                      {n.secadora_por_definir && (
+                        <span className="block text-sm font-medium text-amber-700">+ por definir</span>
+                      )}
+                    </p>
                   </div>
 
                   {/* Máquinas de la nota: las asignadas y las que ya usó.
