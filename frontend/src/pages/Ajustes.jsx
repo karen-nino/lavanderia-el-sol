@@ -1329,15 +1329,36 @@ function AjustesAdmin() {
       .finally(() => setCatalogosListos(n => n + 1));
   }, []);
 
-  // Al marcar una casilla de un modelo (varios programas, fichas), su bloque de
-  // tiempos se entera sin recargar ni perder lo que se está editando.
+  // Lo que se hace en Marcas y modelos llega al bloque de tiempos sin recargar ni
+  // perder lo que se está editando: casillas, tipo y tamaño al momento; un modelo
+  // nuevo (o reactivado) se trae del servidor; uno desactivado o "sin tiempos" se va.
   const recibirModelos = useCallback((lista) => {
-    const casillas = (t) => {
-      const mo = lista.find(x => String(x.id) === String(t.modelo_id));
-      return mo ? { ...t, pregunta_tiempo: mo.pregunta_tiempo, fichas_sonoff: mo.fichas_sonoff } : t;
+    const delModelo = (t) => lista.find(x => String(x.id) === String(t.modelo_id));
+    const sigue = (t) => { const mo = delModelo(t); return !mo || (mo.activo && !mo.solo_fichas); };
+    const alDia = (t) => {
+      const mo = delModelo(t);
+      return mo ? {
+        ...t, modelo: mo.nombre, tipo: mo.tipo, tamano: mo.tamano,
+        pregunta_tiempo: mo.pregunta_tiempo, fichas_sonoff: mo.fichas_sonoff,
+      } : t;
     };
-    setTiemposMarca(prev => prev.map(casillas));
-    tiemposOrigRef.current = tiemposOrigRef.current.map(casillas);
+    setTiemposMarca(prev => prev.filter(sigue).map(alDia));
+    tiemposOrigRef.current = tiemposOrigRef.current.filter(sigue).map(alDia);
+
+    const conocidos = new Set(tiemposOrigRef.current.map(t => String(t.modelo_id)));
+    const faltan = lista.some(mo => mo.activo && !mo.solo_fichas && !conocidos.has(String(mo.id)));
+    if (!faltan) return;
+    api.get('/etiquetas/tiempos-marca')
+      .then(d => {
+        // Solo se suman los que no estaban: lo demás conserva lo que se edita.
+        const sumar = (actuales) => {
+          const ya = new Set(actuales.map(t => String(t.modelo_id)));
+          return [...actuales, ...(d ?? []).filter(t => !ya.has(String(t.modelo_id)))];
+        };
+        setTiemposMarca(sumar);
+        tiemposOrigRef.current = sumar(tiemposOrigRef.current);
+      })
+      .catch(() => { /* aparecerá al volver a entrar */ });
   }, []);
 
   useEffect(() => {
