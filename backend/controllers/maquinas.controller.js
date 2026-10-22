@@ -1295,6 +1295,9 @@ export const otraFicha = async (req, res) => {
     const { rows: upd } = await client.query(
       `UPDATE maquinas
           SET minutos_pagados = COALESCE(minutos_pagados, ciclo_elegido_minutos) + $2,
+              -- El tope también crece una ficha (20 elegidos, tope 30 y una
+              -- ficha de 10 → tope 40). Al siguiente arranque vuelve al del modelo.
+              ciclo_minutos = ciclo_minutos + $2,
               -- Nuevo fin: desde el fin anterior o, si ya pasó, desde ahora.
               ciclo_elegido_minutos = GREATEST(
                 ciclo_elegido_minutos,

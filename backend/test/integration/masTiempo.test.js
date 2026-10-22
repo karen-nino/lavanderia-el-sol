@@ -242,6 +242,16 @@ describe('PATCH /maquinas/:id/otra-ficha', () => {
     expect(await pagados(id)).toBe(50);
   });
 
+  it('el tope crece una ficha: 20 elegidos, tope 30 y +10 → tope 40', async () => {
+    const id = await sec49();
+    await arrancada(id, 20);
+    const tope = async () => (await pool.query('SELECT ciclo_minutos FROM maquinas WHERE id = $1', [id])).rows[0].ciclo_minutos;
+    expect(await tope()).toBe(30);
+    await otraFicha(id).expect(200);
+    expect(await elegido(id)).toBe(30);
+    expect(await tope()).toBe(40);
+  });
+
   it('ya acabado el programa: cuenta desde ahora', async () => {
     const id = await sec49();
     await arrancada(id, 10);
