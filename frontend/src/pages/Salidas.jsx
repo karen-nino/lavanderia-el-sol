@@ -773,11 +773,6 @@ export default function Salidas() {
     const fisica = deFichas(m);
     return Boolean(fisica) && !fisica.solo_fichas && String(fisica.en_uso_nota_id) === String(nota?.id);
   };
-  // Minutos que le quedan a su programa (0 si ya acabó).
-  const minutosRestantes = (m) => {
-    const fin = new Date(m.en_uso_desde).getTime() + Number(m.ciclo_elegido_minutos) * 60000;
-    return Math.max(0, Math.round((fin - now) / 60000));
-  };
 
   const meterOtraFicha = async () => {
     if (!confirmOtraFicha) return;
@@ -1535,7 +1530,6 @@ export default function Salidas() {
       {confirmOtraFicha && (() => {
         const m = confirmOtraFicha;
         const porFicha = minutosPorFicha(m);
-        const quedan = minutosRestantes(m);
         // Se cobra solo en Autoservicio (en Por Encargo el secado va en el servicio).
         const costo = nota?.tipo_servicio === 'AUTOSERVICIO' ? Number(deFichas(m)?.precio_por_ficha) || 0 : 0;
         return (
@@ -1543,14 +1537,7 @@ export default function Salidas() {
             tono="aviso"
             titulo={`Otra ficha a ${m.nombre}`}
             mensaje={`Se le suman ${porFicha} min.`}
-            detalle={[
-              { etiqueta: 'Le quedan', valor: `${quedan} min` },
-              { etiqueta: 'Quedará con', valor: `${quedan + porFicha} min` },
-              ...(costo > 0 ? [
-                { etiqueta: 'Se cobra en la nota', valor: fmtMonto(costo) },
-                { etiqueta: 'Nuevo total de la nota', valor: fmtMonto(Number(nota?.precio_total || 0) + costo) },
-              ] : []),
-            ]}
+            detalle={costo > 0 ? [{ etiqueta: 'Se cobra en la nota', valor: fmtMonto(costo) }] : undefined}
             textoConfirmar={loadingMaquina ? 'Metiendo…' : 'Meter otra ficha'}
             procesando={loadingMaquina}
             error={errorAccion}
