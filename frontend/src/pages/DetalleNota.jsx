@@ -833,9 +833,15 @@ export default function DetalleNota() {
     (nota.historial_estados || []).map(h => [h.estado, h.created_at])
   );
 
-  /* Los de la nota y los de cada carga; el granel de un servicio con tope va incluido. */
+  /* Los de la nota y los de cada carga. En Por Encargo el granel y las bolsas van
+     incluidos en el servicio (como el total); marca y polvo se cobran. */
   const productosNota = [
-    ...(nota.productos || []).map(p => ({ ...p, carga: null, incluido: p.es_por_medida && Number(p.subtotal) === 0 })),
+    ...(nota.productos || []).map(p => ({
+      ...p,
+      carga: null,
+      incluido: (p.es_por_medida && Number(p.subtotal) === 0)
+        || (esEncargoNota && !seVendePorUnidad(p)),
+    })),
     ...(nota.cargas ?? []).flatMap(cg => (cg.productos ?? []).map(p => ({
       ...p,
       carga: cg,

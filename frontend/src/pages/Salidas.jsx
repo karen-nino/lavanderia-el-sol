@@ -901,7 +901,10 @@ export default function Salidas() {
 
   // En el orden del servidor: lo recién agregado queda abajo.
   const productosNota  = nota?.productos ?? [];
-  const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
+  // Por Encargo: el granel y las bolsas van dentro del servicio (como el total).
+  const incluidoEnServicio = (p) => esEncargo && !seVendePorUnidad(p);
+  const totalProductosNota = productosNota.reduce(
+    (a, x) => a + (incluidoEnServicio(x) ? 0 : Number(x.subtotal || 0)), 0);
   // Con la nota cerrada o el cobro congelado no se tocan productos.
   const puedeTocarProductos = Boolean(nota) && !cobroCongelado
     && !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
@@ -1309,6 +1312,7 @@ export default function Salidas() {
                   <p className="text-sm font-semibold text-gray-900">{etiquetaProducto(p)}</p>
                   <p className="text-sm text-gray-500 tabular-nums">
                     {fmtMonto(p.precio_unitario)}/{unidadDeRenglon(p)}
+                    {incluidoEnServicio(p) && <span className="text-gray-400"> · va dentro del servicio</span>}
                   </p>
                 </div>
 
@@ -1337,9 +1341,13 @@ export default function Salidas() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
-                      {fmtMonto(p.subtotal)}
-                    </span>
+                    {incluidoEnServicio(p) ? (
+                      <span className="w-16 text-right text-base font-bold text-green-700">Incluido</span>
+                    ) : (
+                      <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
+                        {fmtMonto(p.subtotal)}
+                      </span>
+                    )}
                     {esAdmin && !cobroCongelado && (
                       <button
                         onClick={() => setConfirmQuitarProd(p)}
@@ -1485,7 +1493,8 @@ export default function Salidas() {
         <ConfirmacionModal
           titulo="Quitar producto"
           mensaje={`Se quitará ${confirmQuitarProd.cantidad} × ${confirmQuitarProd.nombre} de esta nota y volverá al inventario.`}
-          detalle={[
+          /* Lo incluido en el servicio no mueve el total. */
+          detalle={incluidoEnServicio(confirmQuitarProd) ? [] : [
             { etiqueta: 'Deja de cobrarse', valor: fmtMonto(confirmQuitarProd.subtotal) },
             { etiqueta: 'Nuevo total de la nota',
               valor: fmtMonto(Number(nota?.precio_total || 0) - Number(confirmQuitarProd.subtotal || 0)) },
