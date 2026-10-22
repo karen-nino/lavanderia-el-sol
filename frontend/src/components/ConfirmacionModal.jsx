@@ -7,6 +7,7 @@
  * @param mensaje la consecuencia principal, en una frase.
  * @param puntos consecuencias sueltas; las vacías se ignoran.
  * @param detalle filas [{ etiqueta, valor }] para lo que hay que ver en números.
+ * @param children contenido propio debajo del mensaje (opcional).
  * @param textoConfirmar el verbo del botón.
  * @param procesando deshabilita los botones mientras corre.
  * @param error respuesta del servidor si falló; va dentro del modal para que se vea.
@@ -30,6 +31,7 @@ export default function ConfirmacionModal({
   mensaje,
   puntos = [],
   detalle = [],
+  children,
   textoConfirmar = 'Continuar',
   procesando = false,
   error = '',
@@ -53,6 +55,7 @@ export default function ConfirmacionModal({
           {mensaje && (
             <p className="text-sm text-gray-500 text-center mb-4">{mensaje}</p>
           )}
+          {children}
           {lista.length > 0 && (
             <ul className="text-sm text-gray-600 space-y-2 mb-4">
               {lista.map((p, i) => (

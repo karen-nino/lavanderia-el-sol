@@ -1537,13 +1537,21 @@ export default function Salidas() {
             tono="aviso"
             titulo={`Otra ficha a ${m.nombre}`}
             mensaje={`Se le suman ${porFicha} min.`}
-            detalle={costo > 0 ? [{ etiqueta: 'Se cobra en la nota', valor: fmtMonto(costo) }] : undefined}
             textoConfirmar={loadingMaquina ? 'Metiendo…' : 'Meter otra ficha'}
             procesando={loadingMaquina}
             error={errorAccion}
             onClose={() => { setConfirmOtraFicha(null); setErrorAccion(''); }}
             onConfirm={meterOtraFicha}
-          />
+          >
+            {/* Lo que se suma a la nota, en una pastilla y no como fila. */}
+            {costo > 0 && (
+              <div className="flex justify-center mb-4">
+                <span className="inline-flex items-baseline gap-2 rounded-full bg-amber-50 border border-amber-200 px-4 py-2 text-base text-amber-800">
+                  Costo de ficha <span className="font-bold">+{fmtMonto(costo)}</span>
+                </span>
+              </div>
+            )}
+          </ConfirmacionModal>
         );
       })()}
 
