@@ -672,29 +672,34 @@ const VENTA_DEVUELTA_SQL = `EXISTS (
  */
 /**
  * Renglones de productos en notas no canceladas de la sucursal ($1), con
- * cuándo salieron de verdad del estante: el primer movimiento 'venta' de esa
- * nota y producto o, si no hay, `consumido_at` (que el relleno de la mig. 161
- * fechó el día de la migración). Sin fecha = sigue apartado.
+ * cuándo salieron de verdad del estante. `consumido_at` NULL = sigue apartado.
+ * Si no, el primer movimiento 'venta' de esa nota y producto; sin venta (notas
+ * de antes del historial, que la mig. 161 fechó el día de la migración), el día
+ * en que se puso.
  */
 const RENGLONES_NOTA_SQL = `
   SELECT np.id, np.producto_id, np.nota_id, np.cantidad_medidas, np.created_at, n.folio, n.usuario_id,
-         LEAST(np.consumido_at,
-               (SELECT MIN(v.created_at) FROM producto_movimientos v
-                 WHERE v.tipo = 'venta' AND v.nota_id = np.nota_id
-                   AND v.producto_id = np.producto_id)) AS consumido_at
+         CASE WHEN np.consumido_at IS NOT NULL THEN
+           LEAST(np.consumido_at,
+                 COALESCE((SELECT MIN(v.created_at) FROM producto_movimientos v
+                            WHERE v.tipo = 'venta' AND v.nota_id = np.nota_id
+                              AND v.producto_id = np.producto_id), np.created_at))
+         END AS consumido_at
     FROM nota_productos np
     JOIN notas n ON n.id = np.nota_id
    WHERE n.sucursal = $1 AND n.estado <> 'CANCELADA'`;
 
 /**
  * La venta de un renglón que se apartó un día ANTERIOR: ya contó como salida
- * ese día (al apartarse), así que no vuelve a contar al descontarse. Usa `m`
- * (el movimiento), `renglones` y `bounds`.
+ * ese día (al apartarse), así que no vuelve a contar al descontarse. Se empata
+ * con su renglón por nota, producto y cantidad (otro renglón del mismo producto
+ * puesto hoy sí cuenta). Usa `m` (el movimiento), `renglones` y `bounds`.
  */
 const VENTA_YA_APARTADA_SQL = `EXISTS (
   SELECT 1 FROM renglones r
    WHERE r.nota_id = m.nota_id AND r.producto_id = m.producto_id
-     AND r.created_at < bounds.inicio)`;
+     AND r.cantidad_medidas = m.cantidad_medidas
+     AND r.created_at < bounds.inicio AND r.consumido_at >= bounds.inicio)`;
 
 const TIPOS_MOVIMIENTO = {
   entradas: ['entrada', 'rellenar'],

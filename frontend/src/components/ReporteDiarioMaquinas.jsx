@@ -165,7 +165,7 @@ export default function ReporteDiarioMaquinas() {
           </svg>
           <input
             type="date" value={fecha} max={hoyISO()}
-            onChange={(e) => setFecha(e.target.value || hoyISO())}
+            onChange={(e) => { const f = e.target.value || hoyISO(); if (f !== fecha) { setLoading(true); setFecha(f); } }}
             onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* sin showPicker */ } }}
             aria-label="Día del reporte"
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"

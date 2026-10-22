@@ -650,3 +650,25 @@ describe('GET /api/productos/reporte-diario — apartados', () => {
     expect(r.productos.find((x) => x.id === id).apartado_medidas).toBe(1);
   });
 });
+
+describe('GET /api/productos/reporte-diario — notas de antes del historial', () => {
+  it('un renglón descontado sin movimiento de venta no queda como apartado en días viejos', async () => {
+    const id = await seedProducto({
+      nombre: 'Suavizante', tipo_liquido: 'marca', botella_ml: 1, medida_ml: 1,
+      precio_unitario: null, precio_botella: 30, stock_actual: 5,
+    });
+    const venta = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'PRODUCTOS', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      productos: [{ producto_id: id, cantidad: 1 }],
+    });
+    // Como las de antes del historial: se puso hace 5 días, sin movimiento, y el
+    // relleno lo marcó descontado hoy.
+    await pool.query('DELETE FROM producto_movimientos WHERE nota_id = $1', [venta.body.id]);
+    await pool.query("UPDATE nota_productos SET created_at = now() - interval '5 days' WHERE nota_id = $1", [venta.body.id]);
+
+    const hace3 = new Date(Date.now() - 3 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+    const r = (await request(app).get(`/api/productos/reporte-diario?fecha=${hace3}`).set(auth(admin.token))).body;
+    // Sin el arreglo contaba como apartado ese día y "Queda" salía en 3.
+    expect(r.productos.find((x) => x.id === id).fin_botellas_medidas).toBe(4);
+  });
+});
