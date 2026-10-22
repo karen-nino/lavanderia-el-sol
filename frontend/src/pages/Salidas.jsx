@@ -1080,11 +1080,6 @@ export default function Salidas() {
                           {m.tipo === 'secadora' ? 'Más secado' : 'Relavado'}
                         </span>
                       )}
-                      {m.porDefinir && (
-                        <span className="text-sm font-medium text-amber-700 basis-full">
-                          Precio por definir: se cobra según el tiempo que elijas al iniciarla.
-                        </span>
-                      )}
                       {/* Fichas de más que se le metieron (en Por Encargo no se cobran). */}
                       {m.fichasExtra > 0 && (
                         <span className="text-sm font-medium text-blue basis-full">

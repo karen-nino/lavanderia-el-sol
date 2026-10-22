@@ -2216,15 +2216,14 @@ export default function NuevaNota() {
                 </div>
               )}
 
-              {/* Total. No hay forma de pago: la nota nace pendiente y se liquida en su detalle. */}
-              <div className="flex items-baseline justify-between border-t border-blue-200 pt-3">
-                <span className="text-sm font-medium text-blue">Total</span>
-                <span className="text-3xl font-bold text-blue-700 tabular-nums">${precioTotal.toFixed(2)}</span>
-              </div>
-              {hayPorDefinir() && (
-                <p className="text-sm font-medium text-amber-700 text-right mt-1">
-                  + secadora por definir: se cobra según el tiempo que elijan al iniciarla
-                </p>
+              {/* Total. No hay forma de pago: la nota nace pendiente y se liquida en su detalle.
+                  Con la secadora por definir (la Sec49) no hay total que enseñar todavía:
+                  su renglón ya dice "Por definir". */}
+              {!hayPorDefinir() && (
+                <div className="flex items-baseline justify-between border-t border-blue-200 pt-3">
+                  <span className="text-sm font-medium text-blue">Total</span>
+                  <span className="text-3xl font-bold text-blue-700 tabular-nums">${precioTotal.toFixed(2)}</span>
+                </div>
               )}
             </div>
             </div>
