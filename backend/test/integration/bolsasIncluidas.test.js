@@ -14,8 +14,9 @@ beforeEach(async () => {
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
   await seedEtiquetas('tamanos_bolsa', ['Chica', 'Grande', 'Jumbo']);
-  // Chico: $120 con 1 bolsa incluida.
-  await seedAjustes({ precarga_bolsas_chico: 1 });
+  // Chico: $120 con 1 bolsa incluida. Máquinas en $0: aquí se prueba el cobro,
+  // no el tope (ese tiene su bloque abajo).
+  await seedAjustes({ precarga_bolsas_chico: 1, precio_carga_mediana: 0, precio_carga_secadora: 0 });
 });
 
 const api = (m, url, body) => request(app)[m](url).set(auth(admin.token)).send(body);
@@ -70,12 +71,12 @@ describe('bolsas incluidas en Por Encargo', () => {
     expect(await total(body.id)).toBe(240 + 5);
   });
 
-  it('las de más no gastan del precio del servicio', async () => {
+  it('las de más se cobran, pero también gastan del precio del servicio', async () => {
     const bolsa = await bolsaChico();
-    // 10 bolsas: antes, $50 de material contra el servicio; ahora solo la incluida.
-    const res = await notaChico(bolsa, 10);
-    expect(res.status).toBe(201);
-    expect(await total(res.body.id)).toBe(120 + 45);
+    // 30 bolsas: $150 de material contra un servicio de $120.
+    const res = await notaChico(bolsa, 30);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/material de la nota/i);
   });
 
   it('una nota de antes sigue con todas incluidas', async () => {
@@ -107,6 +108,7 @@ describe('la bolsa de más cuadra en caja y Ventas', () => {
 
 describe('el tope del servicio sigue funcionando', () => {
   // Chico: $120; sus máquinas cuestan 70 + 45 = 115, así que caben $5 de material.
+  beforeEach(() => seedAjustes({ precarga_bolsas_chico: 1, precio_carga_mediana: 70, precio_carga_secadora: 45 }));
   const bolsaDe = async (precio) => {
     const { body } = await api('post', '/api/productos', {
       clase: 'bolsa', nombre: 'Bolsa SPE', tamano_bolsa: 'chica', bolsas_por_rollo: 100,
@@ -146,10 +148,10 @@ describe('el tope del servicio sigue funcionando', () => {
     expect(await total(body.id)).toBe(120);
   });
 
-  it('lo que se cobra aparte (bolsas de más) no cuenta contra el tope', async () => {
+  it('las bolsas de más también cuentan contra el tope', async () => {
     const bolsa = await bolsaDe(5);
-    const res = await notaChico(bolsa, 4); // 1 incluida + 3 de más
-    expect(res.status).toBe(201);
-    expect(await total(res.body.id)).toBe(120 + 15);
+    const res = await notaChico(bolsa, 4); // 1 incluida + 3 de más: 115 + 20 > 120
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/material de la nota/i);
   });
 });

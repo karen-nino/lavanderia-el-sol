@@ -18,3 +18,17 @@ export const COBRO_APARTE_ENCARGO = (np, a, n) => `(CASE
             WHERE ncb.nota_id = ${np}.nota_id AND ncb.bolsa_producto_id = ${np}.producto_id), 0))
          * ${np}.precio_unitario
   ELSE 0 END)`;
+
+/**
+ * Lo que gasta del tope el granel de un servicio aún sin producto elegido
+ * (alias de nota_carga_pendientes y la sucursal de la nota): sus medidas al
+ * precio del más caro de su tipo, para que elegir cualquiera después quepa. El
+ * que trae el cliente no gasta.
+ */
+export const GRANEL_POR_ELEGIR = (pe, sucursal) => `(CASE WHEN ${pe}.del_cliente THEN 0
+  ELSE ${pe}.cantidad * COALESCE((
+    SELECT MAX(pg.precio_unitario) FROM productos pg
+     WHERE pg.tipo_granel_id = ${pe}.tipo_granel_id AND pg.sucursal = ${sucursal}
+       AND pg.archivado = FALSE AND pg.tipo_liquido = 'granel'
+       AND COALESCE(pg.forma, 'liquido') = 'liquido' AND COALESCE(pg.clase, 'liquido') <> 'bolsa'), 0)
+  END)`;

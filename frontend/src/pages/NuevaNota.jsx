@@ -406,8 +406,13 @@ export default function NuevaNota() {
   }, 0);
   // Lo que se cobra de los productos de la nota.
   const subtotalProductos = sumaProductosNota('cobrado');
-  // Lo que gasta del precio de los servicios.
-  const materialProductosNota = sumaProductosNota('material');
+  // Lo que gasta del precio de los servicios: todo lo servido, también las bolsas
+  // de más (se cobran aparte, pero cuentan contra el tope; como el servidor).
+  const materialProductosNota = productosLista.reduce((sum, p) => {
+    const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
+    if (!prod || !esMaterialDeNota(prod)) return sum;
+    return sum + precioProductoNota(prod) * (Number(p.cantidad) || 0);
+  }, 0);
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
   // La venta de productos: sus productos y el ajuste.
   const totalVenta  = subtotalProductos + ajusteNum;
@@ -776,18 +781,26 @@ export default function NuevaNota() {
 
   // Costo interno de la carga: máquinas + material servido (granel y bolsa). Se
   // compara contra el tope; el ajuste no cuenta. Una nota vieja usa su precio guardado.
-  const usadoContraTope = (c) => {
+  // Granel del servicio: el producto se elige en Salidas, así que sus medidas
+  // cuentan al precio del más caro de su tipo (como el servidor): si así cabe,
+  // cabe con cualquiera.
+  const granelContraTope = (c) => [...granelPorTipo().entries()].reduce((sum, [tipoId, opciones]) => {
+    const masCaro = Math.max(0, ...opciones.map(p => Number(p.precio_unitario) || 0));
+    return sum + medidasGranel(c, tipoId) * masCaro;
+  }, 0);
+  // Sin tope (servicios viejos) esto es su precio: ahí el granel aún no se cobra.
+  const usadoContraTope = (c, conGranel = true) => {
     const elegidas = precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda)
       + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
     return (elegidas > 0 ? elegidas : costoMaquinasServicio(c))
-      + subtotalAbsorbidoLista(c.productos);
+      + subtotalAbsorbidoLista(c.productos) + (conGranel ? granelContraTope(c) : 0);
   };
 
   // Precio cobrado por una carga: el tope (o, sin tope, la suma real), más lo que
   // se vende por unidad y el ajuste.
   const subtotalCargaEncargo = (c) => {
     const tope = topeDeCarga(c);
-    const base = tope != null ? Number(tope) : usadoContraTope(c);
+    const base = tope != null ? Number(tope) : usadoContraTope(c, false);
     return base + subtotalMarcaLista(c.productos) + (Number(c.ajuste) || 0);
   };
   // Ajuste de la nota: descuento (negativo) o cargo extra (positivo). Va antes

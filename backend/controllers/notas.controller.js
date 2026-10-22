@@ -6,7 +6,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, 
 // máquina" llama directo para no depender del listener; es idempotente.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
 import { sellarPasadasVivas } from '../db/pasadas.js';
-import { COBRO_APARTE_ENCARGO } from '../db/sqlProductos.js';
+import { COBRO_APARTE_ENCARGO, GRANEL_POR_ELEGIR } from '../db/sqlProductos.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, PRECIOS_DE_PROGRAMAS, OPCIONES_DE_MARCA,
   esCronometroSql, conIniciarSql, soloFichasSql, cronometroActivo, TOPE_RELOJ,
@@ -757,13 +757,19 @@ async function validarTopesCargas(client, notaId) {
             nc.tamano_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
             -- Cuenta lo servido (granel y bolsa); lo que se vende por unidad va aparte.
+            -- Más el granel aún sin producto, al precio del más caro de su tipo.
             COALESCE(SUM(CASE WHEN a.se_vende_por_unidad THEN 0
-                              ELSE np.cantidad * np.precio_unitario END), 0) AS productos,
+                              ELSE np.cantidad * np.precio_unitario END), 0)
+              + MAX(pend.estimado) AS productos,
             nc.precio_tope AS tope
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
        LEFT JOIN productos a ON a.id = np.producto_id
+       CROSS JOIN LATERAL (
+         SELECT COALESCE(SUM(${GRANEL_POR_ELEGIR('pe', 'n.sucursal')}), 0) AS estimado
+           FROM nota_carga_pendientes pe WHERE pe.carga_id = nc.id
+       ) pend
       WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO'
         AND (nc.tamano IS NOT NULL OR UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
       GROUP BY nc.id
@@ -800,11 +806,14 @@ async function validarTopesCargas(client, notaId) {
        -- El ajuste de la nota cambia lo que se cobra, así que entra al presupuesto.
        COALESCE((SELECT SUM(nc2.precio_tope) FROM nota_cargas nc2 WHERE nc2.nota_id = $1), 0)
          + n.ajuste AS presupuesto,
-       -- Lo servido que va en los servicios: sin las bolsas de más, que se cobran aparte.
-       COALESCE((SELECT SUM(np.cantidad * np.precio_unitario - ${COBRO_APARTE_ENCARGO('np', 'a', 'n')})
+       -- Todo lo servido, también las bolsas de más (se cobran aparte, pero
+       -- cuentan contra el tope), y el granel aún sin producto.
+       COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                    FROM nota_productos np
                    JOIN productos a ON a.id = np.producto_id
-                  WHERE np.nota_id = $1 AND NOT a.se_vende_por_unidad), 0) AS material
+                  WHERE np.nota_id = $1 AND NOT a.se_vende_por_unidad), 0)
+         + COALESCE((SELECT SUM(${GRANEL_POR_ELEGIR('pe', 'n.sucursal')})
+                       FROM nota_carga_pendientes pe WHERE pe.nota_id = $1), 0) AS material
        FROM notas n
       WHERE n.id = $1 AND n.tipo_servicio = 'POR_ENCARGO'`,
     [notaId]
