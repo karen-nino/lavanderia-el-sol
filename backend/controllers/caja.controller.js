@@ -104,7 +104,8 @@ export async function repartirCobros(client, cobrosSql, params) {
        LEFT JOIN LATERAL (
          SELECT SUM(nc.precio_lavadora) FILTER (WHERE NOT t.jumbo) AS lav_mediana,
                 SUM(nc.precio_lavadora) FILTER (WHERE t.jumbo)     AS lav_jumbo,
-                SUM(nc.precio_secadora)                            AS secadoras,
+                -- La secadora con sus fichas de más (como recalcularPrecioTotal).
+                SUM(nc.precio_secadora + nc.precio_fichas_extra)   AS secadoras,
                 SUM(pc.todos)                                      AS productos,
                 -- Lo que vale el servicio Por Encargo (como recalcularPrecioTotal).
                 SUM(v.encargo) FILTER (WHERE UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
@@ -125,7 +126,7 @@ export async function repartirCobros(client, cobrosSql, params) {
              -- El servicio y, aparte, lo que se cobra encima (va a Productos).
              SELECT GREATEST(0, CASE WHEN nc.precio_tope IS NOT NULL
                                      THEN nc.precio_tope
-                                     ELSE nc.precio_lavadora + nc.precio_secadora
+                                     ELSE nc.precio_lavadora + nc.precio_secadora + nc.precio_fichas_extra
                                 END + nc.ajuste) AS encargo,
                     CASE WHEN nc.precio_tope IS NOT NULL THEN pc.marca ELSE pc.todos END
                                                      AS encargo_productos

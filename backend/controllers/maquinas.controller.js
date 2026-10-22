@@ -399,9 +399,9 @@ export const getUsoMaquina = async (req, res) => {
               CASE WHEN ROW_NUMBER() OVER (PARTITION BY p.carga_id, p.slot
                                            ORDER BY p.asignada_at, p.id) = 1
                         AND (CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
-                                  ELSE nc.precio_secadora END) > 0
+                                  ELSE nc.precio_secadora + nc.precio_fichas_extra END) > 0
                    THEN CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
-                             ELSE nc.precio_secadora END
+                             ELSE nc.precio_secadora + nc.precio_fichas_extra END
                    ELSE CASE
                           WHEN mx.tipo = 'secadora' AND mx.tamano = 'jumbo' THEN aj.precio_secadora_jumbo
                           WHEN mx.tipo = 'secadora'                         THEN aj.precio_carga_secadora
@@ -1309,14 +1309,23 @@ export const otraFicha = async (req, res) => {
 
     // La carga que la tiene puesta cuenta la ficha; en Autoservicio también la
     // cobra (en Por Encargo el secado va en el servicio).
+    // Asignar no aparta: varias notas abiertas pueden tenerla puesta. Cuenta la
+    // que la arrancó (como `en_uso_nota_id` de getMaquinas).
     const { rows: cargas } = await client.query(
       `SELECT nc.id, nc.nota_id, n.tipo_servicio
          FROM nota_cargas nc JOIN notas n ON n.id = nc.nota_id
-        WHERE nc.secadora_id = $1 AND n.estado NOT IN ('CANCELADA', 'FINALIZADA')
-        ORDER BY nc.id DESC LIMIT 1`,
+        WHERE nc.secadora_id = $1 AND nc.secadora_iniciada_at IS NOT NULL
+          AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
+        ORDER BY nc.secadora_iniciada_at DESC LIMIT 1`,
       [maq.id]
     );
     const carga = cargas[0];
+    // Desde Salidas llega la nota: si la está usando otra, no se le cobra a esta.
+    const notaPedida = req.body?.nota_id;
+    if (notaPedida != null && (!carga || String(carga.nota_id) !== String(notaPedida))) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: `${maq.nombre} la está usando otra nota: métele la ficha desde esa nota.` });
+    }
     const precio = carga && carga.tipo_servicio === 'AUTOSERVICIO' ? Number(maq.precio_por_ficha) || 0 : 0;
     if (carga) {
       await client.query(

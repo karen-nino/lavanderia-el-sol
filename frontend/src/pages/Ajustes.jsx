@@ -1514,7 +1514,7 @@ function AjustesAdmin() {
       <div className="mt-3 flex items-center gap-2">
         <span className={`${unidadCls} flex-shrink-0 w-24`}>Costo ficha</span>
         <input
-          type="number" inputMode="decimal" min="0" step="0.5" placeholder="—"
+          type="number" inputMode="decimal" min="0" step="0.01" placeholder="—"
           value={t.precio_por_ficha ?? ''}
           onChange={e => setMinutosMarca(clave, e.target.value, 'precio_por_ficha')}
           className={`${inputCls} text-center`}

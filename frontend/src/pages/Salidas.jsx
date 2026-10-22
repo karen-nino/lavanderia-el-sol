@@ -777,7 +777,7 @@ export default function Salidas() {
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      const r = await api.patch(`/maquinas/${confirmOtraFicha.id}/otra-ficha`, {});
+      const r = await api.patch(`/maquinas/${confirmOtraFicha.id}/otra-ficha`, { nota_id: nota?.id });
       if (r) {
         setConfirmOtraFicha(null);
         await cargarDatos();

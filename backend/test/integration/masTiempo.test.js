@@ -310,3 +310,33 @@ describe('otra ficha — costo', () => {
     expect(mal.status).toBe(400);
   });
 });
+
+describe('otra ficha — a qué nota se cobra', () => {
+  it('a la que la arrancó, no a otra más nueva que solo la tiene asignada', async () => {
+    const id = await sec49();
+    await pool.query("UPDATE modelos_maquina SET precio_por_ficha = 10 WHERE nombre = 'Sec49'");
+    const nueva = async () => (await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ secadora_tipo: 'mediana' }],
+    })).body;
+    const asignar = (n) => request(app).patch(`/api/notas/${n.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: n.cargas[0].id, slot: 'secadora', maquina_id: id }).expect(200);
+    // Las dos la tienen asignada (asignar no aparta); la más vieja la arranca.
+    const vieja = await nueva();
+    const otra = await nueva();
+    await asignar(vieja);
+    await asignar(otra);
+    await request(app).patch(`/api/notas/${vieja.id}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: id, minutos: 30 }).expect(200);
+
+    expect((await otraFicha(id)).status).toBe(200);
+    const fichas = async (n) =>
+      (await pool.query('SELECT fichas_extra FROM nota_cargas WHERE id = $1', [n.cargas[0].id])).rows[0].fichas_extra;
+    expect(await fichas(vieja)).toBe(1);
+    expect(await fichas(otra)).toBe(0);
+    // Pedida desde la otra nota: no se le cobra a nadie.
+    const mal = await request(app).patch(`/api/maquinas/${id}/otra-ficha`).set(auth(admin.token)).send({ nota_id: otra.id });
+    expect(mal.status).toBe(409);
+    expect(await fichas(vieja)).toBe(1);
+  });
+});

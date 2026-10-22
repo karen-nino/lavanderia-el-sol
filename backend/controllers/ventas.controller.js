@@ -270,7 +270,7 @@ export async function getResumen(req, res) {
                   COALESCE(SUM(CASE WHEN o.tipo_servicio = 'POR_ENCARGO' AND nc.precio_tope IS NOT NULL
                                     THEN nc.precio_tope END), 0)                       AS servicios,
                   COALESCE(SUM(CASE WHEN NOT (o.tipo_servicio = 'POR_ENCARGO' AND nc.precio_tope IS NOT NULL)
-                                    THEN nc.precio_lavadora + nc.precio_secadora END), 0) AS cargas,
+                                    THEN nc.precio_lavadora + nc.precio_secadora + nc.precio_fichas_extra END), 0) AS cargas,
                   COALESCE(SUM(nc.ajuste), 0)                                         AS ajuste_cargas
              FROM notas o
              LEFT JOIN nota_cargas nc ON nc.nota_id = o.id
