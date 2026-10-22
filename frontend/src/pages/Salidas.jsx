@@ -1540,8 +1540,8 @@ export default function Salidas() {
         <ElegirTiempoModal
           maquina={eligiendoTiempo.maquina}
           tiempos={tiemposDeMaquina(eligiendoTiempo.maquina)}
-          /* Autoservicio: cada programa con su precio (la carga toma el elegido). */
-          etiqueta={etiquetaPrograma(eligiendoTiempo.maquina, esAutoservicio)}
+          /* Autoservicio, secadora por definir: cada programa con el precio que tomará la carga. */
+          etiqueta={etiquetaPrograma(eligiendoTiempo.maquina, esAutoservicio && eligiendoTiempo.maquina.porDefinir)}
           guardando={loadingMaquina}
           error={errorAccion}
           onElegir={elegirTiempo}

@@ -434,8 +434,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     <ElegirTiempoModal
       maquina={eligiendoArranque}
       tiempos={tiemposDeMaquina(eligiendoArranque)}
+      /* Con precio solo si la nota espera el programa para cobrar la secadora. */
       etiqueta={etiquetaPrograma(eligiendoArranque, notas.some(n =>
-        String(n.id) === String(eligiendoArranque.en_uso_nota_id) && n.tipo_servicio === 'AUTOSERVICIO'))}
+        String(n.id) === String(eligiendoArranque.en_uso_nota_id) && n.secadora_por_definir))}
       onElegir={(min) => pedirOtroCiclo(eligiendoArranque, min)}
       onCancelar={() => setEligiendoArranque(null)}
     />
