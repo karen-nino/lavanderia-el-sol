@@ -722,7 +722,9 @@ export const getMovimientos = async (req, res) => {
   try {
     // Ventas de un día (columna Ventas del Reporte diario): lo puesto ese día en
     // notas no canceladas, con la forma de un movimiento 'venta'.
-    if (req.query.tipo === 'ventas' && fecha) {
+    if (req.query.tipo === 'ventas') {
+      // Sin día no hay ventas que listar (no se cae al historial completo).
+      if (!fecha) return res.json([]);
       const { rows: ventas } = await pool.query(
         `SELECT 'v' || np.id AS id, np.producto_id, n.usuario_id, 'venta' AS tipo,
                 'botellas' AS destino, np.cantidad_medidas, np.nota_id, np.created_at,
