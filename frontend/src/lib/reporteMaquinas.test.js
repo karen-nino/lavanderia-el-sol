@@ -23,7 +23,7 @@ describe('tipoMaquinaTexto', () => {
 });
 
 describe('totalesReporte', () => {
-  it('suma vueltas, tiempo, topes y lo generado', () => {
+  it('suma ciclos, tiempo, topes y lo generado', () => {
     const t = totalesReporte([
       { usos: 2, segundos: 600, topes: 1, generado: 140 },
       { usos: 1, segundos: 300, topes: 0, generado: 50 },

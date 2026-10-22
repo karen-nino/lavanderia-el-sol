@@ -22,7 +22,7 @@ function fechaLegible(iso) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Vueltas de una máquina en el día: horario, nota, tiempo y lo que generó cada una. */
+/** Ciclos de una máquina en el día: horario, nota, tiempo y lo que generó cada uno. */
 function PasadasModal({ maquina, fecha, onClose }) {
   const navigate = useNavigate();
   return (
@@ -30,7 +30,7 @@ function PasadasModal({ maquina, fecha, onClose }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-gray-100">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-gray-900">Vueltas de {maquina.nombre}</h3>
+            <h3 className="text-base font-semibold text-gray-900">Ciclos de {maquina.nombre}</h3>
             <p className="text-sm text-gray-500 truncate">{tipoMaquinaTexto(maquina)} · {fechaLarga(fechaLocalISO(fecha))}</p>
           </div>
           <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 flex-shrink-0">
@@ -69,7 +69,7 @@ function PasadasModal({ maquina, fecha, onClose }) {
 }
 
 /**
- * Reporte diario de Máquinas (admin y empleados): por máquina, las vueltas del
+ * Reporte diario de Máquinas (admin y empleados): por máquina, los ciclos del
  * día, el tiempo encendida, las veces al tope, sus notas y lo generado.
  */
 export default function ReporteDiarioMaquinas() {
@@ -114,7 +114,7 @@ export default function ReporteDiarioMaquinas() {
             <thead className="bg-gray-50 text-sm text-gray-500 uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-3 text-left">Máquina</th>
-                <th className="px-4 py-3 text-left">Vueltas</th>
+                <th className="px-4 py-3 text-left">Ciclos</th>
                 <th className="px-4 py-3 text-left">Tiempo encendida</th>
                 <th className="px-4 py-3 text-left">Al tope</th>
                 <th className="px-4 py-3 text-right">Generado</th>
@@ -128,11 +128,11 @@ export default function ReporteDiarioMaquinas() {
                     <p className="text-sm text-gray-400 whitespace-nowrap">{tipoMaquinaTexto(m)}</p>
                   </td>
                   <td className="px-4 py-3 text-gray-700">
-                    {/* Al tocarlas, cada vuelta con su nota. */}
+                    {/* Al tocarlos, cada ciclo con su nota. */}
                     {m.usos > 0 ? (
                       <button type="button" onClick={() => setDetalle(m)}
                         className="text-left text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors whitespace-nowrap">
-                        {m.usos} {m.usos === 1 ? 'vuelta' : 'vueltas'}
+                        {m.usos} {m.usos === 1 ? 'ciclo' : 'ciclos'}
                       </button>
                     ) : <span className="text-gray-400">—</span>}
                   </td>
@@ -220,7 +220,7 @@ export default function ReporteDiarioMaquinas() {
           {/* Resumen del día. */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              ['Vueltas', totales.usos],
+              ['Ciclos', totales.usos],
               ['Tiempo encendida', totales.usos ? textoDuracion(totales.segundos) : '—'],
               ['Generado', textoMoneda(totales.generado)],
             ].map(([titulo, valor]) => (
