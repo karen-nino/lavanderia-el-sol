@@ -6,7 +6,9 @@
 
 import { slug, esc, imprimirDocumento, fechaLarga } from './exportUtils';
 import { descargarExcel } from './exportExcel';
-import { tipoMaquinaTexto, esSecadora, textoDuracion, textoMoneda, totalesReporte } from './reporteMaquinas';
+import {
+  tipoMaquinaTexto, esSecadora, textoDuracion, textoMoneda, totalesReporte, ciclosPorServicio,
+} from './reporteMaquinas';
 
 // 'YYYY-MM-DD' → Date local (sin corrimiento por zona horaria).
 const fechaLocal = (iso) => {
@@ -29,7 +31,8 @@ export function hojasReporteMaquinas(data) {
         { titulo: 'Tipo', ancho: 18 },
       ] },
       { titulo: 'Uso del día', color: 'verde', columnas: [
-        { titulo: 'Ciclos', tipo: 'numero', ancho: 10 },
+        { titulo: 'Ciclos Autoservicio', tipo: 'numero', ancho: 12 },
+        { titulo: 'Ciclos SPE', tipo: 'numero', ancho: 10 },
         { titulo: 'Tiempo encendida', ancho: 18 },
         { titulo: 'Al tope', tipo: 'numero', ancho: 10 },
         { titulo: 'Notas', tipo: 'notas', ancho: 34 },
@@ -39,7 +42,8 @@ export function hojasReporteMaquinas(data) {
       ] },
     ],
     filas: maquinas.map((m) => [
-      m.nombre, tipoMaquinaTexto(m), m.usos, m.usos ? textoDuracion(m.segundos) : '', m.topes, foliosDe(m), m.generado,
+      m.nombre, tipoMaquinaTexto(m), ciclosPorServicio(m).auto, ciclosPorServicio(m).spe,
+      m.usos ? textoDuracion(m.segundos) : '', m.topes, foliosDe(m), m.generado,
     ]),
   }];
 }
@@ -54,7 +58,8 @@ const seccion = (titulo, maquinas) => {
   const filas = maquinas.map((m) => `
     <tr>
       <td>${esc(m.nombre)}<br><span style="color:#6b7280">${esc(tipoMaquinaTexto(m))}</span></td>
-      <td>${m.usos || '—'}</td>
+      <td>${ciclosPorServicio(m).auto || '—'}</td>
+      <td>${ciclosPorServicio(m).spe || '—'}</td>
       <td>${m.usos ? esc(textoDuracion(m.segundos)) : '—'}</td>
       <td>${m.topes || '—'}</td>
       <td>${esc(foliosDe(m)) || '—'}</td>
@@ -64,7 +69,8 @@ const seccion = (titulo, maquinas) => {
     <div class="seccion">${esc(titulo)}</div>
     <table class="resumen">
       <thead>
-        <tr><th>Máquina</th><th>Ciclos</th><th>Tiempo encendida</th><th>Al tope</th><th>Notas</th><th>Total</th></tr>
+        <tr><th rowspan="2">Máquina</th><th colspan="2">Ciclos</th><th rowspan="2">Tiempo encendida</th><th rowspan="2">Al tope</th><th rowspan="2">Notas</th><th rowspan="2">Total</th></tr>
+        <tr><th>Autoservicio</th><th>SPE</th></tr>
       </thead>
       <tbody>${filas}</tbody>
     </table>`;

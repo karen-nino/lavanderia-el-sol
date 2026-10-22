@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { fechaLarga } from '../lib/exportUtils';
 import {
   tipoMaquinaTexto, esSecadora, textoDuracion, textoMoneda, horarioPasada, totalesReporte, SERVICIO_TEXTO,
+  ciclosPorServicio, esCicloAutoservicio,
 } from '../lib/reporteMaquinas';
 import { imprimirReporteMaquinas, descargarReporteMaquinasExcel } from '../lib/exportReporteMaquinas';
 
@@ -22,15 +23,21 @@ function fechaLegible(iso) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Ciclos de una máquina en el día: horario, nota, tiempo y lo que generó cada uno. */
-function PasadasModal({ maquina, fecha, onClose }) {
+/**
+ * Ciclos de una máquina en el día: horario, nota, tiempo y lo que generó cada uno.
+ * Con `servicio` ('auto' o 'spe') solo los de ese servicio.
+ */
+function PasadasModal({ maquina, servicio, fecha, onClose }) {
   const navigate = useNavigate();
+  const pasadas = maquina.pasadas.filter(p => !servicio || (servicio === 'auto') === esCicloAutoservicio(p));
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-gray-100">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-gray-900">Ciclos de {maquina.nombre}</h3>
+            <h3 className="text-base font-semibold text-gray-900">
+              Ciclos de {maquina.nombre}{servicio && ` · ${servicio === 'auto' ? 'Autoservicio' : 'SPE'}`}
+            </h3>
             <p className="text-sm text-gray-500 truncate">{tipoMaquinaTexto(maquina)} · {fechaLarga(fechaLocalISO(fecha))}</p>
           </div>
           <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 flex-shrink-0">
@@ -40,7 +47,7 @@ function PasadasModal({ maquina, fecha, onClose }) {
           </button>
         </div>
         <div className="overflow-y-auto py-1">
-          {maquina.pasadas.map(p => (
+          {pasadas.map(p => (
             <div key={p.id} className="px-5 py-2.5 border-b border-gray-50 last:border-0 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <button
@@ -112,12 +119,17 @@ export default function ReporteDiarioMaquinas() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-sm text-gray-500 uppercase tracking-wide">
+              {/* "Ciclos" agrupa las dos columnas: Autoservicio y SPE (Por Encargo). */}
               <tr>
-                <th className="px-4 py-3 text-left">Máquina</th>
-                <th className="px-4 py-3 text-left">Ciclos</th>
-                <th className="px-4 py-3 text-left">Tiempo encendida</th>
-                <th className="px-4 py-3 text-left">Al tope</th>
-                <th className="px-4 py-3 text-right">Total</th>
+                <th rowSpan={2} className="px-4 py-3 text-left align-bottom">Máquina</th>
+                <th colSpan={2} className="px-4 pt-3 pb-1 text-center border-b border-gray-200">Ciclos</th>
+                <th rowSpan={2} className="px-4 py-3 text-left align-bottom">Tiempo encendida</th>
+                <th rowSpan={2} className="px-4 py-3 text-left align-bottom">Al tope</th>
+                <th rowSpan={2} className="px-4 py-3 text-right align-bottom">Total</th>
+              </tr>
+              <tr>
+                <th className="px-4 pt-1 pb-3 text-left">Autoservicio</th>
+                <th className="px-4 pt-1 pb-3 text-left">SPE</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -127,15 +139,17 @@ export default function ReporteDiarioMaquinas() {
                     <p className="font-medium text-gray-800">{m.nombre}</p>
                     <p className="text-sm text-gray-400 whitespace-nowrap">{tipoMaquinaTexto(m)}</p>
                   </td>
-                  <td className="px-4 py-3 text-gray-700">
-                    {/* Al tocarlos, cada ciclo con su nota. */}
-                    {m.usos > 0 ? (
-                      <button type="button" onClick={() => setDetalle(m)}
-                        className="text-left text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors whitespace-nowrap">
-                        {m.usos} {m.usos === 1 ? 'ciclo' : 'ciclos'}
-                      </button>
-                    ) : <span className="text-gray-400">—</span>}
-                  </td>
+                  {/* Al tocarlos, cada ciclo de ese servicio con su nota. */}
+                  {[['auto', ciclosPorServicio(m).auto], ['spe', ciclosPorServicio(m).spe]].map(([servicio, n]) => (
+                    <td key={servicio} className="px-4 py-3 text-gray-700">
+                      {n > 0 ? (
+                        <button type="button" onClick={() => setDetalle({ maquina: m, servicio })}
+                          className="text-left text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors whitespace-nowrap">
+                          {n} {n === 1 ? 'ciclo' : 'ciclos'}
+                        </button>
+                      ) : <span className="text-gray-400">—</span>}
+                    </td>
+                  ))}
                   <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{m.usos > 0 ? textoDuracion(m.segundos) : <span className="text-gray-400">—</span>}</td>
                   <td className="px-4 py-3 text-gray-700">{m.topes > 0 ? m.topes : <span className="text-gray-400">—</span>}</td>
                   <td className="px-4 py-3 text-right text-gray-800 font-medium whitespace-nowrap">
@@ -235,7 +249,9 @@ export default function ReporteDiarioMaquinas() {
         </>
       )}
 
-      {detalle && <PasadasModal maquina={detalle} fecha={fecha} onClose={() => setDetalle(null)} />}
+      {detalle && (
+        <PasadasModal maquina={detalle.maquina} servicio={detalle.servicio} fecha={fecha} onClose={() => setDetalle(null)} />
+      )}
     </div>
   );
 }

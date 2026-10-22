@@ -42,6 +42,15 @@ export const SERVICIO_TEXTO = {
   AUTOSERVICIO: 'Autoservicio', POR_ENCARGO: 'Por Encargo', EDREDON: 'Edredón', PRODUCTOS: 'Productos',
 };
 
+/** ¿El ciclo fue de una nota de Autoservicio? Lo demás cuenta como SPE (Por Encargo). */
+export const esCicloAutoservicio = (p) => p?.tipo_servicio === 'AUTOSERVICIO';
+
+/** Ciclos de una máquina separados en Autoservicio y SPE. */
+export function ciclosPorServicio(m) {
+  const auto = (m?.pasadas ?? []).filter(esCicloAutoservicio).length;
+  return { auto, spe: (m?.pasadas?.length ?? 0) - auto };
+}
+
 /** Totales del día: ciclos, segundos y lo generado. */
 export function totalesReporte(maquinas = []) {
   return maquinas.reduce((t, m) => ({
