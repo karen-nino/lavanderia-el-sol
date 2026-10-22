@@ -104,3 +104,52 @@ describe('la bolsa de más cuadra en caja y Ventas', () => {
     expect(nota.productos[0]).toMatchObject({ cobrado: 5, incluido: false });
   });
 });
+
+describe('el tope del servicio sigue funcionando', () => {
+  // Chico: $120; sus máquinas cuestan 70 + 45 = 115, así que caben $5 de material.
+  const bolsaDe = async (precio) => {
+    const { body } = await api('post', '/api/productos', {
+      clase: 'bolsa', nombre: 'Bolsa SPE', tamano_bolsa: 'chica', bolsas_por_rollo: 100,
+      precio_unitario: precio, servicios_bolsa: ['chico'],
+    });
+    await api('post', `/api/productos/${body.id}/movimiento`,
+      { tipo: 'entrada', destino: 'piezas', unidad: 'rollo', cantidad: 1 }).expect(200);
+    return body.id;
+  };
+
+  it('la bolsa incluida sí gasta del precio del servicio: si no cabe, no se crea', async () => {
+    const cara = await bolsaDe(10); // 115 + 10 = 125 > 120
+    const res = await notaChico(cara, 1);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/material de la nota/i);
+    const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM notas');
+    expect(rows[0].n).toBe(0);
+  });
+
+  it('la bolsa incluida que cabe se queda en el precio del servicio', async () => {
+    const justa = await bolsaDe(5); // 115 + 5 = 120
+    const res = await notaChico(justa, 1);
+    expect(res.status).toBe(201);
+    expect(await total(res.body.id)).toBe(120);
+  });
+
+  it('el granel que se pasa en Salidas se rechaza y el total no cambia', async () => {
+    const bolsa = await bolsaDe(5);
+    const { body } = await notaChico(bolsa, 1);
+    const { rows: [{ id: jabon }] } = await pool.query(
+      `INSERT INTO productos (nombre, precio_unitario, stock_actual, stock_reservado, es_por_medida,
+                              tipo_liquido, forma, botella_ml, medida_ml, sucursal)
+       VALUES ('Jabón', 8, 100, 0, TRUE, 'granel', 'liquido', 800, 200, 'centro') RETURNING id`);
+    const res = await api('post', `/api/notas/${body.id}/productos`, { producto_id: jabon, cantidad: 1 });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/material de la nota/i);
+    expect(await total(body.id)).toBe(120);
+  });
+
+  it('lo que se cobra aparte (bolsas de más) no cuenta contra el tope', async () => {
+    const bolsa = await bolsaDe(5);
+    const res = await notaChico(bolsa, 4); // 1 incluida + 3 de más
+    expect(res.status).toBe(201);
+    expect(await total(res.body.id)).toBe(120 + 15);
+  });
+});
