@@ -1,5 +1,6 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
+import { COBRO_APARTE_ENCARGO } from '../db/sqlProductos.js';
 
 /**
  * Lo cobrado en una caja, por forma de pago (solo el efectivo entra al cajón).
@@ -94,7 +95,7 @@ export async function repartirCobros(client, cobrosSql, params) {
             COALESCE(c.lav_mediana, 0) AS lavadoras_medianas,
             COALESCE(c.lav_jumbo, 0)   AS lavadoras_jumbo,
             COALESCE(c.secadoras, 0)   AS secadoras,
-            -- En Por Encargo solo cuenta aparte lo que se vende por unidad.
+            -- En Por Encargo solo cuenta aparte lo cobrado encima (marca, polvo y bolsas de más).
             CASE WHEN n.tipo_servicio = 'POR_ENCARGO'
                  THEN COALESCE(c.encargo_productos, 0) + COALESCE(sueltos.marca, 0)
                  ELSE COALESCE(c.productos, 0) + COALESCE(sueltos.total, 0)
@@ -150,7 +151,7 @@ export async function repartirCobros(client, cobrosSql, params) {
        ) c ON TRUE
        LEFT JOIN LATERAL (
          SELECT SUM(np.cantidad * np.precio_unitario) AS total,
-                SUM(np.cantidad * np.precio_unitario) FILTER (WHERE a.se_vende_por_unidad) AS marca
+                SUM(${COBRO_APARTE_ENCARGO('np', 'a', 'n')}) AS marca
            FROM nota_productos np
            JOIN productos a ON a.id = np.producto_id
           WHERE np.nota_id = n.id AND np.carga_id IS NULL

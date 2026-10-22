@@ -1,8 +1,8 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.117.4",
-  "versionMinima": "1.117.2",
+  "version": "1.118.0",
+  "versionMinima": "1.118.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -6,6 +6,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, 
 // máquina" llama directo para no depender del listener; es idempotente.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
 import { sellarPasadasVivas } from '../db/pasadas.js';
+import { COBRO_APARTE_ENCARGO } from '../db/sqlProductos.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, PRECIOS_DE_PROGRAMAS, OPCIONES_DE_MARCA,
   esCronometroSql, conIniciarSql, soloFichasSql, cronometroActivo, TOPE_RELOJ,
@@ -394,13 +395,14 @@ export async function recalcularPrecioTotal(client, notaId, opciones = {}) {
                WHERE nc.nota_id = n.id
             ) carga
           ), 0)
-          -- Productos sueltos. En Por Encargo solo los que se venden por unidad:
-          -- el granel y las bolsas los paga el servicio.
-          + COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
+          -- Productos sueltos. En Por Encargo solo lo que se cobra aparte: marca,
+          -- polvo y las bolsas de más (ver COBRO_APARTE_ENCARGO).
+          + COALESCE((SELECT SUM(CASE WHEN n.tipo_servicio <> 'POR_ENCARGO'
+                                      THEN np.cantidad * np.precio_unitario
+                                      ELSE ${COBRO_APARTE_ENCARGO('np', 'a', 'n')} END)
                         FROM nota_productos np
                         JOIN productos a ON a.id = np.producto_id
-                       WHERE np.nota_id = n.id AND np.carga_id IS NULL
-                         AND (n.tipo_servicio <> 'POR_ENCARGO' OR a.se_vende_por_unidad)), 0)
+                       WHERE np.nota_id = n.id AND np.carga_id IS NULL), 0)
           + n.ajuste
       WHERE n.id = $1
       RETURNING precio_total`,
@@ -798,7 +800,8 @@ async function validarTopesCargas(client, notaId) {
        -- El ajuste de la nota cambia lo que se cobra, así que entra al presupuesto.
        COALESCE((SELECT SUM(nc2.precio_tope) FROM nota_cargas nc2 WHERE nc2.nota_id = $1), 0)
          + n.ajuste AS presupuesto,
-       COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
+       -- Lo servido que va en los servicios: sin las bolsas de más, que se cobran aparte.
+       COALESCE((SELECT SUM(np.cantidad * np.precio_unitario - ${COBRO_APARTE_ENCARGO('np', 'a', 'n')})
                    FROM nota_productos np
                    JOIN productos a ON a.id = np.producto_id
                   WHERE np.nota_id = $1 AND NOT a.se_vende_por_unidad), 0) AS material
@@ -1361,6 +1364,35 @@ async function medidasDeServicio(client, prenda, tamano, tamanoEdredon) {
   return Number(rows[0]?.n) || 0;
 }
 
+/**
+ * La bolsa ligada al servicio (Inventario) y cuántas incluye (Ajustes →
+ * Servicios Por Encargo; el edredón, según su tamaño). Las de más se cobran.
+ */
+async function bolsasDeServicio(client, prenda, tamano, tamanoEdredon, sucursal) {
+  const clave = claveLigueServicio(prenda, tamano);
+  if (!clave) return { productoId: null, incluidas: 0 };
+  let incluidas = 0;
+  if (clave === 'edredon') {
+    if (tamanoEdredon) {
+      const { rows } = await client.query(
+        'SELECT precarga_bolsas FROM tamanos_edredon WHERE lower(nombre) = lower($1) LIMIT 1',
+        [String(tamanoEdredon).trim()]
+      );
+      incluidas = Number(rows[0]?.precarga_bolsas) || 0;
+    }
+  } else {
+    const { rows } = await client.query(`SELECT precarga_bolsas_${clave} AS n FROM ajustes WHERE id = 1`);
+    incluidas = Number(rows[0]?.n) || 0;
+  }
+  const { rows: bolsa } = await client.query(
+    `SELECT id FROM productos
+      WHERE clase = 'bolsa' AND archivado = FALSE AND sucursal = $1 AND $2 = ANY(servicios_bolsa)
+      ORDER BY id LIMIT 1`,
+    [sucursal, clave]
+  );
+  return { productoId: bolsa[0]?.id ?? null, incluidas };
+}
+
 /** Granel líquido de la sucursal agrupado por tipo (Map tipo → productos). */
 async function opcionesGranelDeServicio(client, sucursal) {
   const { rows } = await client.query(
@@ -1449,16 +1481,22 @@ async function granelSinElegir(client, notaId, maquinaIds) {
 async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
   const insertadas = [];
   for (const f of filas) {
+    // Por Encargo: el servicio incluye sus bolsas (congeladas aquí); las de más se cobran.
+    const bolsas = tipo_servicio === 'POR_ENCARGO' && f.precio_tope != null
+      ? await bolsasDeServicio(client, f.tipo_prenda, f.tamano, f.tamano_edredon, sucursal)
+      : { productoId: null, incluidas: 0 };
     const { rows } = await client.query(
       `INSERT INTO nota_cargas
          (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
           lavadora_tipo, secadora_tipo, precio_lavadora, precio_secadora,
-          tipo_prenda, tipo_tela, tamano_edredon, tamano, ajuste, precio_tope, secadora_por_definir)
-       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+          tipo_prenda, tipo_tela, tamano_edredon, tamano, ajuste, precio_tope, secadora_por_definir,
+          bolsa_producto_id, bolsas_incluidas)
+       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
       [notaId, f.orden, f.lavadora_id, f.secadora_id, f.lavadora_tipo, f.secadora_tipo,
        f.precio_lavadora, f.precio_secadora,
        f.tipo_prenda, f.tipo_tela, f.tamano_edredon, f.tamano, f.ajuste,
-       f.precio_tope ?? null, Boolean(f.secadora_por_definir)]
+       f.precio_tope ?? null, Boolean(f.secadora_por_definir),
+       bolsas.productoId, bolsas.incluidas]
     );
     const carga = rows[0];
     // Primera pasada de cada hueco que nació con máquina.
@@ -1483,6 +1521,7 @@ async function cargasDeNota(client, notaId) {
             nc.precio_lavadora, nc.precio_secadora, nc.es_adicional,
             -- Fichas de más de la secadora de fichas y lo que suman.
             nc.fichas_extra, nc.precio_fichas_extra, nc.secadora_por_definir,
+            nc.bolsa_producto_id, nc.bolsas_incluidas,
             nc.tipo_prenda, nc.tipo_tela, nc.tamano_edredon, nc.tamano, nc.ajuste,
             -- Una carga que ya arrancó no se puede quitar.
             nc.lavadora_iniciada_at, nc.secadora_iniciada_at,

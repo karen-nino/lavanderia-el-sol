@@ -13,6 +13,7 @@ import ElegirTiempoModal from '../components/ElegirTiempoModal';
 import GranelPorServicio from '../components/GranelPorServicio';
 import { preguntaTiempo, tiemposDeMaquina, etiquetaPrograma } from '../lib/tiemposModelo';
 import { marcaYTamano } from '../lib/estadoMaquina';
+import { cobroAparteEncargo, bolsasIncluidas } from '../lib/cobroProductos';
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
@@ -901,10 +902,14 @@ export default function Salidas() {
 
   // En el orden del servidor: lo recién agregado queda abajo.
   const productosNota  = nota?.productos ?? [];
-  // Por Encargo: el granel y las bolsas van dentro del servicio (como el total).
-  const incluidoEnServicio = (p) => esEncargo && !seVendePorUnidad(p);
-  const totalProductosNota = productosNota.reduce(
-    (a, x) => a + (incluidoEnServicio(x) ? 0 : Number(x.subtotal || 0)), 0);
+  // Por Encargo: el granel y las bolsas del servicio van dentro de su precio (como
+  // el total); marca, polvo y las bolsas de más se cobran.
+  const cobradoProducto = (p) => (esEncargo ? cobroAparteEncargo(nota, p) : Number(p.subtotal || 0));
+  const incluidoEnServicio = (p) => esEncargo && cobradoProducto(p) === 0;
+  // De las bolsas de la nota, las que van en el servicio (si se cobran las de más).
+  const incluidasDe = (p) => (esEncargo && p.clase === 'bolsa' && !nota?.bolsas_todas_incluidas
+    ? Math.min(Number(p.cantidad), bolsasIncluidas(nota, p.producto_id)) : 0);
+  const totalProductosNota = productosNota.reduce((a, x) => a + cobradoProducto(x), 0);
   // Con la nota cerrada o el cobro congelado no se tocan productos.
   const puedeTocarProductos = Boolean(nota) && !cobroCongelado
     && !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
@@ -1312,7 +1317,13 @@ export default function Salidas() {
                   <p className="text-sm font-semibold text-gray-900">{etiquetaProducto(p)}</p>
                   <p className="text-sm text-gray-500 tabular-nums">
                     {fmtMonto(p.precio_unitario)}/{unidadDeRenglon(p)}
-                    {incluidoEnServicio(p) && <span className="text-gray-400"> · va dentro del servicio</span>}
+                    {incluidoEnServicio(p)
+                      ? <span className="text-gray-400"> · va dentro del servicio</span>
+                      : incluidasDe(p) > 0 && (
+                        <span className="text-gray-400">
+                          {` · ${incluidasDe(p)} ${incluidasDe(p) === 1 ? 'incluida' : 'incluidas'} en el servicio`}
+                        </span>
+                      )}
                   </p>
                 </div>
 
@@ -1345,7 +1356,7 @@ export default function Salidas() {
                       <span className="w-16 text-right text-base font-bold text-green-700">Incluido</span>
                     ) : (
                       <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
-                        {fmtMonto(p.subtotal)}
+                        {fmtMonto(cobradoProducto(p))}
                       </span>
                     )}
                     {esAdmin && !cobroCongelado && (
@@ -1495,9 +1506,9 @@ export default function Salidas() {
           mensaje={`Se quitará ${confirmQuitarProd.cantidad} × ${confirmQuitarProd.nombre} de esta nota y volverá al inventario.`}
           /* Lo incluido en el servicio no mueve el total. */
           detalle={incluidoEnServicio(confirmQuitarProd) ? [] : [
-            { etiqueta: 'Deja de cobrarse', valor: fmtMonto(confirmQuitarProd.subtotal) },
+            { etiqueta: 'Deja de cobrarse', valor: fmtMonto(cobradoProducto(confirmQuitarProd)) },
             { etiqueta: 'Nuevo total de la nota',
-              valor: fmtMonto(Number(nota?.precio_total || 0) - Number(confirmQuitarProd.subtotal || 0)) },
+              valor: fmtMonto(Number(nota?.precio_total || 0) - cobradoProducto(confirmQuitarProd)) },
           ]}
           textoConfirmar={loadingProducto === confirmQuitarProd.producto_id ? 'Quitando…' : 'Quitar producto'}
           procesando={loadingProducto === confirmQuitarProd.producto_id}

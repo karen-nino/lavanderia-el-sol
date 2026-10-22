@@ -7,6 +7,7 @@ import { ES_DEMO } from '../lib/entorno';
 import { maquinasDeCarga, cargaVisibleEnTicket } from '../lib/ticketCargas';
 import { notaAlPieDeTicket } from '../lib/ticketNotaPie';
 import { formaPagoLabel } from '../lib/formasPago';
+import { cobroAparteEncargo } from '../lib/cobroProductos';
 
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: 'Autoservicio',
@@ -152,6 +153,22 @@ function Asteriscos() {
   );
 }
 
+/**
+ * Productos sueltos que se cobran. En Por Encargo solo lo cobrado encima del
+ * servicio: marca, polvo y las bolsas de más (con su cantidad e importe); el
+ * granel y las bolsas incluidas los paga el servicio y no se listan.
+ */
+function sueltosCobrados(nota, productos) {
+  if (nota.tipo_servicio !== 'POR_ENCARGO') return productos;
+  return productos
+    .map(p => {
+      const cobrado = cobroAparteEncargo(nota, p);
+      if (cobrado === Number(p.subtotal)) return p;
+      return { ...p, cantidad: Math.round(cobrado / Number(p.precio_unitario)) || 0, subtotal: cobrado };
+    })
+    .filter(p => Number(p.subtotal) > 0);
+}
+
 /** Texto plano del ticket para WhatsApp, con el mismo desglose que el recibo. */
 function armarTextoTicket(nota, rfc, notaPie) {
   const L = ['*Lavandería El Sol*'];
@@ -226,10 +243,8 @@ function armarTextoTicket(nota, rfc, notaPie) {
     volcarBloque(adicionales);
   }
 
-  // Como el recibo (prodsNota): en Por Encargo el granel y las bolsas sueltos
-  // los paga el servicio y no se listan.
-  const productos = (nota.productos ?? []).filter(p => p.unidad !== 'medida'
-      && (!esEncargo || seVendePorUnidad(p)))
+  // Como el recibo (prodsNota): en Por Encargo solo lo cobrado encima.
+  const productos = sueltosCobrados(nota, (nota.productos ?? []).filter(p => p.unidad !== 'medida'))
     .sort((a, b) => ordenProducto(a) - ordenProducto(b));
   if (productos.length > 0) {
     L.push('', '*Productos*');
@@ -407,11 +422,8 @@ export default function TicketNota() {
 
   const cargas      = nota.cargas ?? [];
   const productos   = [...(nota.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
-  // Productos que se imprimen: sin medidas, y en Por Encargo solo lo que se vende
-  // por unidad (el granel y las bolsas los paga el servicio).
-  const prodsNota   = productos.filter(p =>
-    p.unidad !== 'medida'
-    && (nota.tipo_servicio !== 'POR_ENCARGO' || seVendePorUnidad(p)));
+  // Productos que se imprimen: sin medidas, y en Por Encargo solo lo cobrado encima.
+  const prodsNota   = sueltosCobrados(nota, productos.filter(p => p.unidad !== 'medida'));
   // Cargas del alta (originales) y las agregadas después (adicionales).
   const visibles    = cargas.filter(cg => cargaVisibleEnTicket(cg, nota.tipo_servicio));
   // Autoservicio no usa el bloque "ADICIONAL".

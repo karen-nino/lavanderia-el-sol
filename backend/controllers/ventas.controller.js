@@ -2,6 +2,17 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO, fechaLocal, esFechaISO } from '../utils/tz.js';
 import { esCronometroSql, CICLOS_DE_PASADAS, TOPE_RELOJ } from '../db/sqlMaquina.js';
 import { leerCortes, repartirCobros } from './caja.controller.js';
+import { COBRO_APARTE_ENCARGO } from '../db/sqlProductos.js';
+
+/**
+ * Lo que una línea de producto cobró aparte (alias np, a, nc y el de la nota): en
+ * Por Encargo, lo de COBRO_APARTE_ENCARGO, salvo en una carga sin precio de
+ * servicio (ahí se cobra todo); en los demás servicios, todo.
+ */
+const COBRADO_PRODUCTO = (o = 'o') => `(CASE
+  WHEN ${o}.tipo_servicio <> 'POR_ENCARGO' OR (np.carga_id IS NOT NULL AND nc.precio_tope IS NULL)
+    THEN np.cantidad * np.precio_unitario
+  ELSE ${COBRO_APARTE_ENCARGO('np', 'a', o)} END)`;
 
 /**
  * Zona del negocio como literal SQL: los días de los reportes son locales, no
@@ -232,9 +243,9 @@ export async function getResumen(req, res) {
                      'forma', a.forma, 'se_vende_por_unidad', a.se_vende_por_unidad,
                      'unidad', np.unidad, 'cantidad', np.cantidad,
                      'subtotal', np.cantidad * np.precio_unitario,
-                     'incluido', NOT (o.tipo_servicio <> 'POR_ENCARGO'
-                                      OR a.se_vende_por_unidad
-                                      OR (np.carga_id IS NOT NULL AND nc.precio_tope IS NULL))
+                     -- Lo que se cobró aparte (en Por Encargo, sin lo que va en el servicio).
+                     'cobrado', ${COBRADO_PRODUCTO()},
+                     'incluido', ${COBRADO_PRODUCTO()} = 0 AND o.tipo_servicio = 'POR_ENCARGO'
                    ) ORDER BY np.created_at, np.id)
               FROM nota_productos np
               JOIN productos a ON a.id = np.producto_id
@@ -246,14 +257,11 @@ export async function getResumen(req, res) {
         LEFT JOIN usuarios u ON u.id = o.usuario_id
         -- Productos cobrados aparte (en Por Encargo, el material va en el servicio).
         LEFT JOIN (
-          SELECT np.nota_id, SUM(np.cantidad * np.precio_unitario) AS total_productos
+          SELECT np.nota_id, SUM(${COBRADO_PRODUCTO('n2')}) AS total_productos
           FROM nota_productos np
           JOIN notas n2    ON n2.id = np.nota_id
           JOIN productos a ON a.id = np.producto_id
           LEFT JOIN nota_cargas nc ON nc.id = np.carga_id
-          WHERE n2.tipo_servicio <> 'POR_ENCARGO'
-             OR a.se_vende_por_unidad
-             OR (np.carga_id IS NOT NULL AND nc.precio_tope IS NULL)
           GROUP BY np.nota_id
         ) np_t ON np_t.nota_id = o.id
         WHERE ${whereLista}
@@ -280,15 +288,12 @@ export async function getResumen(req, res) {
          productos_aparte AS (
            -- Solo lo cobrado encima: en Por Encargo lo que se vende por unidad
            -- (o todo, sin precio de servicio); en los demás, todo.
-           SELECT np.nota_id, SUM(np.cantidad * np.precio_unitario) AS total
+           SELECT np.nota_id, SUM(${COBRADO_PRODUCTO()}) AS total
              FROM nota_productos np
              JOIN notas o     ON o.id = np.nota_id
              JOIN productos a ON a.id = np.producto_id
              LEFT JOIN nota_cargas nc ON nc.id = np.carga_id
             WHERE ${whereBase}
-              AND (o.tipo_servicio <> 'POR_ENCARGO'
-                   OR a.se_vende_por_unidad
-                   OR (np.carga_id IS NOT NULL AND nc.precio_tope IS NULL))
             GROUP BY np.nota_id
          )
          SELECT

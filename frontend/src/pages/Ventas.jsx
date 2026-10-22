@@ -937,7 +937,8 @@ export default function Ventas() {
                     <span className="block text-sm text-gray-400">{p.cantidad} {unidadProductoVenta(p)}</span>
                   </span>
                   <span className="text-right text-gray-600 whitespace-nowrap">
-                    {p.incluido ? <span className="text-gray-400">Incluido</span> : fmt(p.subtotal)}
+                    {/* En Por Encargo, solo lo cobrado aparte (de las bolsas, las de más). */}
+                    {p.incluido ? <span className="text-gray-400">Incluido</span> : fmt(p.cobrado ?? p.subtotal)}
                   </span>
                 </li>
               ))}

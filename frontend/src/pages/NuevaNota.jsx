@@ -379,15 +379,35 @@ export default function NuevaNota() {
   // todo producto se cobra.
   const esMaterialDeNota = (prod) =>
     tipoServicio === 'POR_ENCARGO' && !seVendePorUnidad(prod);
-  const sumaProductosNota = (cuenta) => productosLista.reduce((sum, p) => {
+  // Bolsas de ese producto que incluyen los servicios (Ajustes); las de más se
+  // cobran (como el servidor, que las congela al crear la nota).
+  const bolsasIncluidasNota = (prod) => (tipoServicio === 'POR_ENCARGO' && prod?.clase === 'bolsa'
+    ? encargoCargas.reduce((s, c) => {
+        // Servicio y clave como SERVICIO_POR_V y servicioBolsa, que se declaran más abajo.
+        const sv = serviciosDe(tamanosEdredon).find(x => x.v === c.servicio);
+        const clave = String(c.tipo_prenda).toUpperCase() === 'EDREDON' ? 'edredon'
+          : ['chico', 'mediano', 'grande'].includes(c.tamano) ? c.tamano : null;
+        if (!sv || !clave || !(prod.servicios_bolsa ?? []).includes(clave)) return s;
+        return s + precargaDeServicio(sv).bolsas;
+      }, 0)
+    : 0);
+  /** Piezas de un renglón que se cobran: todas, salvo el material (y la bolsa, solo las de más). */
+  const cantidadCobrada = (prod, cant) => {
+    if (!esMaterialDeNota(prod)) return cant;
+    if (prod?.clase === 'bolsa') return Math.max(0, cant - bolsasIncluidasNota(prod));
+    return 0;
+  };
+  const sumaProductosNota = (parte) => productosLista.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
-    if (!prod || !cuenta(prod)) return sum;
-    return sum + precioProductoNota(prod) * (Number(p.cantidad) || 0);
+    if (!prod) return sum;
+    const cant = Number(p.cantidad) || 0;
+    const cobradas = cantidadCobrada(prod, cant);
+    return sum + precioProductoNota(prod) * (parte === 'cobrado' ? cobradas : cant - cobradas);
   }, 0);
   // Lo que se cobra de los productos de la nota.
-  const subtotalProductos = sumaProductosNota(prod => !esMaterialDeNota(prod));
+  const subtotalProductos = sumaProductosNota('cobrado');
   // Lo que gasta del precio de los servicios.
-  const materialProductosNota = sumaProductosNota(esMaterialDeNota);
+  const materialProductosNota = sumaProductosNota('material');
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
   // La venta de productos: sus productos y el ajuste.
   const totalVenta  = subtotalProductos + ajusteNum;
@@ -1274,10 +1294,12 @@ export default function NuevaNota() {
         {productosLista.map((item, i) => {
             const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
             const cant = Number(item.cantidad) || 0;
-            const subtotal = precioProductoNota(prod) * cant;
-            // En Por Encargo el granel y las bolsas no se cobran: gastan del precio del
-            // servicio, y el renglón lo dice.
-            const esMaterial = esMaterialDeNota(prod);
+            // En Por Encargo el granel y las bolsas del servicio no se cobran: gastan del
+            // precio del servicio, y el renglón lo dice. Las bolsas de más sí se cobran.
+            const cobradas = prod ? cantidadCobrada(prod, cant) : cant;
+            const subtotal = precioProductoNota(prod) * cobradas;
+            const esMaterial = esMaterialDeNota(prod) && cobradas === 0;
+            const incluidas = esMaterialDeNota(prod) && cobradas > 0 ? cant - cobradas : 0;
             return (
               <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                 {/* El producto no se cambia: se borra el renglón y se agrega otro. */}
@@ -1289,6 +1311,11 @@ export default function NuevaNota() {
                     {prod ? precioProductoTexto(prod, ambitoProductosNota) : '—'}
                     {prod && esMaterial && (
                       <span className="ml-1.5 not-italic text-gray-400">· va dentro del servicio</span>
+                    )}
+                    {prod && incluidas > 0 && (
+                      <span className="ml-1.5 not-italic text-gray-400">
+                        · {incluidas} {incluidas === 1 ? 'incluida' : 'incluidas'} en el servicio
+                      </span>
                     )}
                   </p>
                 </div>
@@ -1889,14 +1916,15 @@ export default function NuevaNota() {
 
                   {productosLista.some(p => {
                     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
-                    return prod && Number(p.cantidad) > 0 && !esMaterialDeNota(prod);
+                    return prod && cantidadCobrada(prod, Number(p.cantidad) || 0) > 0;
                   }) && (
                     <div className="pt-2 mt-1 border-t border-blue-200/60 space-y-2">
                       {productosLista.map((p, j) => {
                         const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
-                        const cant = Number(p.cantidad) || 0;
-                        // El material va dentro del precio del servicio: no es un renglón.
-                        if (!prod || cant <= 0 || esMaterialDeNota(prod)) return null;
+                        // El material va dentro del precio del servicio: no es un renglón
+                        // (de las bolsas, solo las de más).
+                        const cant = prod ? cantidadCobrada(prod, Number(p.cantidad) || 0) : 0;
+                        if (!prod || cant <= 0) return null;
                         return (
                           <div key={j} className="flex justify-between gap-2">
                             <span>

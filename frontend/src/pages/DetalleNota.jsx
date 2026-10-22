@@ -15,6 +15,7 @@ import AbrirCajaModal from '../components/AbrirCajaModal';
 import ModalCobrar from '../components/ModalCobrar';
 import { ES_DEMO } from '../lib/entorno';
 import { armarMensajeWhatsapp, hayMensajeWhatsapp, telefonoWhatsapp } from '../lib/mensajeWhatsapp';
+import { cobroAparteEncargo } from '../lib/cobroProductos';
 
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
@@ -833,15 +834,21 @@ export default function DetalleNota() {
     (nota.historial_estados || []).map(h => [h.estado, h.created_at])
   );
 
-  /* Los de la nota y los de cada carga. En Por Encargo el granel y las bolsas van
-     incluidos en el servicio (como el total); marca y polvo se cobran. */
+  /* Los de la nota y los de cada carga. En Por Encargo el granel y las bolsas del
+     servicio van incluidos (como el total); marca, polvo y bolsas de más se cobran. */
   const productosNota = [
-    ...(nota.productos || []).map(p => ({
-      ...p,
-      carga: null,
-      incluido: (p.es_por_medida && Number(p.subtotal) === 0)
-        || (esEncargoNota && !seVendePorUnidad(p)),
-    })),
+    ...(nota.productos || []).map(p => {
+      const cobrado = esEncargoNota ? cobroAparteEncargo(nota, p) : Number(p.subtotal);
+      return {
+        ...p,
+        carga: null,
+        cobrado,
+        // Bolsas: cuántas van en el servicio cuando se cobran solo las de más.
+        incluidas: esEncargoNota && cobrado > 0 && cobrado < Number(p.subtotal)
+          ? Math.round((Number(p.subtotal) - cobrado) / Number(p.precio_unitario)) : 0,
+        incluido: (p.es_por_medida && Number(p.subtotal) === 0) || (esEncargoNota && cobrado === 0),
+      };
+    }),
     ...(nota.cargas ?? []).flatMap(cg => (cg.productos ?? []).map(p => ({
       ...p,
       carga: cg,
@@ -850,8 +857,16 @@ export default function DetalleNota() {
     }))),
   ];
   const totalProductos = productosNota.reduce(
-    (s, p) => s + (p.incluido ? 0 : Number(p.subtotal)), 0
+    (s, p) => s + (p.incluido ? 0 : Number(p.cobrado ?? p.subtotal)), 0
   );
+  /** Importe de un renglón cobrado: con bolsas incluidas, solo las de más. */
+  const montoProducto = (p) => fmtMonto(p.cobrado ?? p.subtotal);
+  /** "2 piezas × $5.00 · 1 incluida" cuando el servicio incluye parte. */
+  const cantidadProducto = (p) => {
+    const base = `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`;
+    if (!p.incluidas) return base;
+    return `${base} · ${p.incluidas} ${p.incluidas === 1 ? 'incluida' : 'incluidas'}`;
+  };
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -1185,13 +1200,13 @@ export default function DetalleNota() {
                     {subtituloProducto(p) && `${subtituloProducto(p)} · `}
                     {incluido
                       ? `${p.cantidad} ${unidadProdTxt(p)}`
-                      : `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`}
+                      : cantidadProducto(p)}
                   </p>
                 </div>
                 <span className="text-sm font-semibold flex-shrink-0">
                   {incluido
                     ? <span className="text-green-700">Incluido</span>
-                    : <span className="text-gray-700">{fmtMonto(p.subtotal)}</span>}
+                    : <span className="text-gray-700">{montoProducto(p)}</span>}
                 </span>
               </div>
               );
@@ -1526,14 +1541,14 @@ export default function DetalleNota() {
                       <span className="text-sm font-semibold text-gray-500 min-w-0">{tituloProducto(p)}</span>
                       {p.incluido
                         ? <span className="flex-shrink-0 text-sm font-medium text-green-700">Incluido</span>
-                        : <span className="flex-shrink-0 text-sm font-medium text-gray-700">{fmtMonto(p.subtotal)}</span>}
+                        : <span className="flex-shrink-0 text-sm font-medium text-gray-700">{montoProducto(p)}</span>}
                     </div>
                     <p className="text-sm text-gray-500">
                       {p.carga && `${nombreDeCarga(p.carga)} · `}
                       {subtituloProducto(p) && `${subtituloProducto(p)} · `}
                       {p.incluido
                         ? `${p.cantidad} ${unidadProdTxt(p)}`
-                        : `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`}
+                        : cantidadProducto(p)}
                     </p>
                   </div>
                 ))}
