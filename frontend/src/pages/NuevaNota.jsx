@@ -1357,10 +1357,14 @@ export default function NuevaNota() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* Siempre en azul. */}
-                    <span className="w-16 text-right text-base font-bold tabular-nums text-blue-700">
-                      ${subtotal.toFixed(2)}
-                    </span>
+                    {/* Lo que va dentro del servicio dice "Incluido", como en Salidas. */}
+                    {esMaterial ? (
+                      <span className="w-16 text-right text-base font-bold text-green-700">Incluido</span>
+                    ) : (
+                      <span className="w-16 text-right text-base font-bold tabular-nums text-blue-700">
+                        ${subtotal.toFixed(2)}
+                      </span>
+                    )}
 
                     <button
                       type="button"
