@@ -350,3 +350,29 @@ describe('otra ficha — a qué nota se cobra', () => {
     expect(await fichas(vieja)).toBe(1);
   });
 });
+
+// Iniciar otra máquina de la misma nota vuelve a sellar los ciclos de la nota:
+// no debe bajarle a la S4 el tope que le subieron sus fichas.
+describe('otra ficha — el tope se conserva', () => {
+  it('al iniciar otra máquina de la misma nota', async () => {
+    const id = await sec49();
+    const otra = await seedMaquina({ nombre: 'S9', tipo: 'secadora', tamano: 'mediana' });
+    const nota = (await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ secadora_tipo: 'mediana' }, { secadora_tipo: 'mediana' }],
+    })).body;
+    const asignar = (carga, maquina) => request(app).patch(`/api/notas/${nota.id}/asignar-carga-maquina`)
+      .set(auth(admin.token)).send({ carga_id: carga.id, slot: 'secadora', maquina_id: maquina }).expect(200);
+    await asignar(nota.cargas[0], id);
+    await asignar(nota.cargas[1], otra);
+    await request(app).patch(`/api/notas/${nota.id}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: id, minutos: 20 }).expect(200);
+    await otraFicha(id).expect(200);
+    const tope = async () => (await pool.query('SELECT ciclo_minutos FROM maquinas WHERE id = $1', [id])).rows[0].ciclo_minutos;
+    expect(await tope()).toBe(40);
+
+    await request(app).patch(`/api/notas/${nota.id}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: otra }).expect(200);
+    expect(await tope()).toBe(40);
+  });
+});

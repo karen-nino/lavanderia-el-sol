@@ -586,7 +586,9 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
   const ti = await tiemposCarga(client);
   await client.query(
     `UPDATE maquinas m
-        SET ciclo_minutos = ciclos.minutos,
+        -- Una que ya corría con fichas de más conserva el tope que le subieron.
+        SET ciclo_minutos = CASE WHEN m.minutos_pagados IS NOT NULL AND m.en_uso_desde <> NOW()
+                                 THEN m.ciclo_minutos ELSE ciclos.minutos END,
             -- Si arrancó en esta transacción (en_uso_desde = NOW()), limpia el
             -- programa y lo sumado de la vuelta anterior.
             ciclo_elegido_minutos = CASE WHEN m.en_uso_desde = NOW() THEN NULL
