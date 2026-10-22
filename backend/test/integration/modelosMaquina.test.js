@@ -534,3 +534,37 @@ describe('modelo de fichas', () => {
     expect(rows[0]).toMatchObject({ estado: 'disponible', encendida_sin_iniciar_at: null });
   });
 });
+
+describe('casilla "Trabaja con fichas: con Sonoff y con tiempos"', () => {
+  const porFichaDe = async (maquinaId) => {
+    const { body } = await request(app).get('/api/maquinas').set(auth(admin.token));
+    return body.find(m => m.id === maquinaId).minutos_por_ficha;
+  };
+
+  it('sin la casilla, "Cada ficha" no cuenta', async () => {
+    const sq = await seedMarca('Speed Queen');
+    const { body: modelo } = await crearModelo(admin.token, {
+      marca_id: sq, nombre: 'Sec49', tipo: 'secadora', tamano: 'mediana', pregunta_tiempo: true,
+    }).expect(201);
+    expect(modelo.fichas_sonoff).toBe(false);
+    await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
+      .send({ modelo_id: modelo.id, minutos_por_ficha: 1 }).expect(200);
+    const s4 = await seedMaquina({ nombre: 'S4', tipo: 'secadora', tamano: 'mediana', marca: 'Speed Queen', modelo: 'Sec49' });
+    expect(await porFichaDe(s4)).toBeNull();
+
+    await request(app).put(`/api/etiquetas/modelos-maquina/${modelo.id}`).set(auth(admin.token))
+      .send({ fichas_sonoff: true }).expect(200);
+    expect(await porFichaDe(s4)).toBe(1);
+  });
+
+  it('va con varios programas, pero no con la de fichas sin Sonoff', async () => {
+    const sq = await seedMarca('Speed Queen');
+    const { body: modelo } = await crearModelo(admin.token, {
+      marca_id: sq, nombre: 'Sec49', tipo: 'secadora', tamano: 'mediana', pregunta_tiempo: true, fichas_sonoff: true,
+    }).expect(201);
+    expect([modelo.pregunta_tiempo, modelo.fichas_sonoff]).toEqual([true, true]);
+    const { body: otro } = await request(app).put(`/api/etiquetas/modelos-maquina/${modelo.id}`)
+      .set(auth(admin.token)).send({ solo_fichas: true }).expect(200);
+    expect([otro.solo_fichas, otro.fichas_sonoff, otro.pregunta_tiempo]).toEqual([true, false, false]);
+  });
+});

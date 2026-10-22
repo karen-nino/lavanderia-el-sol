@@ -120,6 +120,8 @@ export const MINUTOS_POR_FICHA = `(
     JOIN modelos_maquina mo ON mo.marca_id = mm.id
    WHERE mm.nombre = m.marca
      AND mo.nombre = m.modelo
+     -- Solo con la casilla "Trabaja con fichas: con Sonoff y con tiempos".
+     AND mo.fichas_sonoff
 )`;
 
 /** Costo de cada ficha de la secadora de fichas (su modelo), o NULL. */
@@ -129,6 +131,8 @@ export const PRECIO_POR_FICHA = `(
     JOIN modelos_maquina mo ON mo.marca_id = mm.id
    WHERE mm.nombre = m.marca
      AND mo.nombre = m.modelo
+     -- Solo con la casilla "Trabaja con fichas: con Sonoff y con tiempos".
+     AND mo.fichas_sonoff
 )`;
 
 /** Opciones del modelo de la máquina: `dos_ciclos` (sin modelo, FALSE). */

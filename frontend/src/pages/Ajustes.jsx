@@ -576,9 +576,18 @@ function CatalogoEtiquetas({
   const porDefecto = () => Object.fromEntries(extraCampos.map(c => [c.name, c.defecto]));
   const [nuevoExtra, setNuevoExtra] = useState(porDefecto);
   const [editExtra,  setEditExtra]  = useState({});
+  // Una casilla apaga las que excluye; cambiar el tipo apaga las que no le tocan.
   const conCambio = (prev, campo, v) => ({
-    ...prev, [campo.name]: v, ...(campo.excluye && v ? { [campo.excluye]: false } : {}),
+    ...prev, [campo.name]: v,
+    ...(campo.excluye && v
+      ? Object.fromEntries([campo.excluye].flat().map(n => [n, false])) : {}),
+    ...Object.fromEntries(extraCampos
+      .filter(c => campo.name === 'tipo' && c.soloTipo && c.soloTipo !== v)
+      .map(c => [c.name, false])),
   });
+  /** Campos que le tocan a lo capturado (p. ej. una casilla solo de secadoras). */
+  const camposPara = (valores) => extraCampos.filter(c =>
+    !c.soloTipo || (valores.tipo ?? extraCampos.find(x => x.name === 'tipo')?.defecto) === c.soloTipo);
 
   // En el subtítulo, una casilla se resume con su `chip`.
   const etiquetaDe = (campo, valor) => (
@@ -741,7 +750,7 @@ function CatalogoEtiquetas({
             className={inputCls}
           />
         </div>
-        {extraCampos.map(campo => campoExtra(
+        {camposPara(nuevoExtra).map(campo => campoExtra(
           campo,
           nuevoExtra[campo.name] ?? campo.defecto,
           (v) => setNuevoExtra(prev => conCambio(prev, campo, v)),
@@ -779,7 +788,7 @@ function CatalogoEtiquetas({
                       autoFocus
                     />
                   </div>
-                  {extraCampos.map(campo => campoExtra(
+                  {camposPara(editExtra).map(campo => campoExtra(
                     campo,
                     editExtra[campo.name] ?? campo.defecto,
                     (v) => setEditExtra(prev => conCambio(prev, campo, v)),
@@ -905,8 +914,12 @@ const CAMPOS_MODELO = [
   // Modelos con varios programas: se declara aquí para no cargar a los demás.
   { name: 'pregunta_tiempo', defecto: false, tipo: 'check', excluye: 'solo_fichas',
     label: 'Varios programas: se elige cuál al iniciar', chip: 'varios programas' },
+  // Secadora de fichas con Sonoff (Sec49): solo con ella salen "Cada ficha" y
+  // "Costo ficha" en los tiempos. Va con varios programas.
+  { name: 'fichas_sonoff', defecto: false, tipo: 'check', excluye: 'solo_fichas', soloTipo: 'secadora',
+    label: 'Trabaja con fichas: con Sonoff y con tiempos', chip: 'fichas con Sonoff' },
   // Solo fichas: sin Sonoff ni tiempos; no va con varios programas.
-  { name: 'solo_fichas', defecto: false, tipo: 'check', excluye: 'pregunta_tiempo',
+  { name: 'solo_fichas', defecto: false, tipo: 'check', excluye: ['pregunta_tiempo', 'fichas_sonoff'],
     label: 'Trabaja con fichas: sin Sonoff y sin tiempos', chip: 'fichas' },
   // "Una carga corre 2 ciclos" no se muestra con cronómetro. Para el temporizador:
   //   { name: 'dos_ciclos', defecto: false, tipo: 'check',
@@ -1279,7 +1292,6 @@ function AjustesAdmin() {
 
   const [tiemposMarca, setTiemposMarca] = useState([]);
   // Secadoras sin ficha capturada a las que se les abrió el campo "Cada ficha".
-  const [fichaAbierta, setFichaAbierta] = useState(() => new Set());
   const [edredones, setEdredones] = useState([]);
   /* Edredones y tiempos ya cargados (2): desde ahí se toma la foto de partida. */
   const [catalogosListos, setCatalogosListos] = useState(0);
@@ -1471,33 +1483,21 @@ function AjustesAdmin() {
     }
     if (!esDeFichas(t)) return base;
     const deQue = t?.pregunta_tiempo ? 'del programa elegido' : (conTemporizador ? 'del tiempo de carga' : 'del tope');
-    return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${deQue}. Vacío = no es de fichas. Costo ficha: lo que se cobra en Autoservicio por cada ficha de "Más fichas" cuando el tiempo elegido no tiene precio. Vacío = sin costo.`;
+    return `${base} Cada ficha: al iniciarla, el Sonoff le mete una ficha por cada tantos minutos ${deQue}. Costo ficha: lo que se cobra en Autoservicio por cada ficha de "Más fichas" cuando el tiempo elegido no tiene precio. Vacío = sin costo.`;
   };
 
   // Los tres programas solo salen en los modelos marcados con varios programas.
   const tieneVariosTiempos = (t) => Boolean(t.pregunta_tiempo);
 
-  /** Secadora con ficha capturada, o a la que se le abrió el campo. */
-  const esDeFichas = (t) => t?.tipo === 'secadora'
-    && (fichaAbierta.has(claveTiempo(t)) || (t.minutos_por_ficha ?? '') !== '');
+  /** Secadora marcada "Trabaja con fichas: con Sonoff y con tiempos" en su modelo. */
+  const esDeFichas = (t) => t?.tipo === 'secadora' && Boolean(t.fichas_sonoff);
 
   // Secadoras de fichas: al iniciarla se mete una ficha por cada tantos minutos
-  // del programa (o del tope). Las que no son de fichas (Samsung: se encienden y
-  // se aprieta Start, como las lavadoras) solo ven el botón para abrir el campo.
+  // del programa (o del tope). Las demás (Samsung: se encienden y se aprieta
+  // Start, como las lavadoras) no llevan estos campos.
   const campoFicha = (t, inputCls, unidadCls) => {
-    if (t.tipo !== 'secadora') return null;
+    if (!esDeFichas(t)) return null;
     const clave = claveTiempo(t);
-    if (!esDeFichas(t)) {
-      return (
-        <button
-          type="button"
-          onClick={() => setFichaAbierta(prev => new Set(prev).add(clave))}
-          className={`${unidadCls} mt-2 underline underline-offset-2 hover:text-gray-700`}
-        >
-          Es de fichas con Sonoff
-        </button>
-      );
-    }
     return (
       <>
       <div className="mt-3 flex items-center gap-2">
@@ -1505,11 +1505,7 @@ function AjustesAdmin() {
         <input
           type="number" inputMode="numeric" min="1" step="1" placeholder="—"
           value={t.minutos_por_ficha ?? ''}
-          onChange={e => {
-            // Vaciarlo no esconde el campo mientras se edita.
-            setFichaAbierta(prev => new Set(prev).add(clave));
-            setMinutosMarca(clave, e.target.value, 'minutos_por_ficha');
-          }}
+          onChange={e => setMinutosMarca(clave, e.target.value, 'minutos_por_ficha')}
           className={`${inputCls} text-center`}
         />
         <span className={`${unidadCls} flex-shrink-0`}>min</span>

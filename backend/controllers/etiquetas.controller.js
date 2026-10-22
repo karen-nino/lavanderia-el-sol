@@ -308,7 +308,7 @@ export const crearModeloMaquina = async (req, res) => {
   if (!nombre) {
     return res.status(400).json({ message: 'El nombre es requerido.' });
   }
-  const { tipo, tamano, pregunta_tiempo, dos_ciclos, solo_fichas } = req.body;
+  const { tipo, tamano, pregunta_tiempo, dos_ciclos, solo_fichas, fichas_sonoff } = req.body;
   if (!TIPOS_TIEMPO.includes(tipo)) {
     return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
   }
@@ -321,13 +321,15 @@ export const crearModeloMaquina = async (req, res) => {
   try {
     // El orden es dentro de la marca.
     const { rows } = await pool.query(
-      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, solo_fichas, orden)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, solo_fichas,
+                                    fichas_sonoff, orden)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
                (SELECT COALESCE(MAX(orden), 0) + 1 FROM modelos_maquina WHERE marca_id = $1))
        RETURNING *`,
-      // El de fichas no tiene programas que elegir.
+      // El de fichas sin Sonoff no tiene programas ni fichas con Sonoff.
       [marcaId, nombre, tipo, tamano, minutos.valor,
-       Boolean(pregunta_tiempo) && !solo_fichas, Boolean(dos_ciclos), Boolean(solo_fichas)]
+       Boolean(pregunta_tiempo) && !solo_fichas, Boolean(dos_ciclos), Boolean(solo_fichas),
+       Boolean(fichas_sonoff) && !solo_fichas]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -350,7 +352,7 @@ export const actualizarModeloMaquina = async (req, res) => {
   if (!/^\d+$/.test(String(id))) {
     return res.status(404).json({ message: 'No se encontró el modelo.' });
   }
-  const { nombre, activo, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, solo_fichas } = req.body;
+  const { nombre, activo, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, solo_fichas, fichas_sonoff } = req.body;
 
   const updates = [];
   const values  = [];
@@ -390,6 +392,11 @@ export const actualizarModeloMaquina = async (req, res) => {
   if (solo_fichas !== undefined) {
     updates.push(`solo_fichas = $${i++}`);
     values.push(Boolean(solo_fichas));
+  }
+  // "Trabaja con fichas: con Sonoff y con tiempos"; la de sin Sonoff la apaga.
+  if (fichas_sonoff !== undefined || solo_fichas) {
+    updates.push(`fichas_sonoff = $${i++}`);
+    values.push(Boolean(fichas_sonoff) && !solo_fichas);
   }
   // Si el modelo corre dos ciclos por carga.
   if (dos_ciclos !== undefined) {
@@ -481,7 +488,7 @@ export const getTiemposMarca = async (req, res) => {
               mo.id AS modelo_id, mo.nombre AS modelo,
               mo.tipo, mo.tamano,
               mo.minutos, mo.minutos_2, mo.minutos_3, mo.minutos_4, mo.pregunta_tiempo, mo.dos_ciclos,
-              mo.minutos_por_ficha, mo.precio_por_ficha,
+              mo.minutos_por_ficha, mo.precio_por_ficha, mo.fichas_sonoff,
               mo.precio_programa_2, mo.precio_programa_3, mo.precio_programa_4
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id

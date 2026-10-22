@@ -28,9 +28,9 @@ async function sec49(precios = [20, 40, 50]) {
   await seedMarca({ nombre: 'Speed Queen', tipo: 'secadora', tamano: 'mediana' });
   await pool.query(
     `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, minutos_2, minutos_3, minutos_4,
-                                  pregunta_tiempo, minutos_por_ficha,
+                                  pregunta_tiempo, minutos_por_ficha, fichas_sonoff,
                                   precio_programa_2, precio_programa_3, precio_programa_4)
-     SELECT id, 'Sec49', 'secadora', 'mediana', 30, 10, 20, 30, TRUE, 10, $1, $2, $3
+     SELECT id, 'Sec49', 'secadora', 'mediana', 30, 10, 20, 30, TRUE, 10, TRUE, $1, $2, $3
        FROM marcas_maquina WHERE nombre = 'Speed Queen'`,
     precios
   );
