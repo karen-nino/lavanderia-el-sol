@@ -31,8 +31,8 @@ export function hojasReporteMaquinas(data) {
         { titulo: 'Tipo', ancho: 18 },
       ] },
       { titulo: 'Uso del día', color: 'verde', columnas: [
-        { titulo: 'Ciclos Autoservicio', tipo: 'numero', ancho: 12 },
-        { titulo: 'Ciclos SPE', tipo: 'numero', ancho: 10 },
+        { titulo: 'Autoservicio', tipo: 'numero', ancho: 12 },
+        { titulo: 'SPE', tipo: 'numero', ancho: 10 },
         { titulo: 'Tiempo encendida', ancho: 18 },
         { titulo: 'Al tope', tipo: 'numero', ancho: 10 },
         { titulo: 'Notas', tipo: 'notas', ancho: 34 },
@@ -69,8 +69,7 @@ const seccion = (titulo, maquinas) => {
     <div class="seccion">${esc(titulo)}</div>
     <table class="resumen">
       <thead>
-        <tr><th rowspan="2">Máquina</th><th colspan="2">Ciclos</th><th rowspan="2">Tiempo encendida</th><th rowspan="2">Al tope</th><th rowspan="2">Notas</th><th rowspan="2">Total</th></tr>
-        <tr><th>Autoservicio</th><th>SPE</th></tr>
+        <tr><th>Máquina</th><th>Autoservicio</th><th>SPE</th><th>Tiempo encendida</th><th>Al tope</th><th>Notas</th><th>Total</th></tr>
       </thead>
       <tbody>${filas}</tbody>
     </table>`;

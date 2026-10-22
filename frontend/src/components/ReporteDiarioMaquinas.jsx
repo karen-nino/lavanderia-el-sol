@@ -119,17 +119,14 @@ export default function ReporteDiarioMaquinas() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-sm text-gray-500 uppercase tracking-wide">
-              {/* "Ciclos" agrupa las dos columnas: Autoservicio y SPE (Por Encargo). */}
+              {/* Los ciclos, en dos columnas: Autoservicio y SPE (Por Encargo). */}
               <tr>
-                <th rowSpan={2} className="px-4 py-3 text-left align-bottom">Máquina</th>
-                <th colSpan={2} className="px-4 pt-3 pb-1 text-center border-b border-gray-200">Ciclos</th>
-                <th rowSpan={2} className="px-4 py-3 text-left align-bottom">Tiempo encendida</th>
-                <th rowSpan={2} className="px-4 py-3 text-left align-bottom">Al tope</th>
-                <th rowSpan={2} className="px-4 py-3 text-right align-bottom">Total</th>
-              </tr>
-              <tr>
-                <th className="px-4 pt-1 pb-3 text-left">Autoservicio</th>
-                <th className="px-4 pt-1 pb-3 text-left">SPE</th>
+                <th className="px-4 py-3 text-left">Máquina</th>
+                <th className="px-4 py-3 text-left">Autoservicio</th>
+                <th className="px-4 py-3 text-left">SPE</th>
+                <th className="px-4 py-3 text-left">Tiempo encendida</th>
+                <th className="px-4 py-3 text-left">Al tope</th>
+                <th className="px-4 py-3 text-right">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
