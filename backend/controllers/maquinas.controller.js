@@ -270,7 +270,9 @@ export const getReporteDiarioMaquinas = async (req, res) => {
        )
        SELECT v.id, v.maquina_id, v.slot, v.inicio_at, v.llego_tope,
               n.id AS nota_id, n.folio, n.tipo_servicio,
-              TRIM(COALESCE(c.nombre, '') || ' ' || COALESCE(c.apellido, '')) AS cliente,
+              -- El cliente o, en Autoservicio, el nombre que se dio (referencia).
+              COALESCE(NULLIF(TRIM(COALESCE(c.nombre, '') || ' ' || COALESCE(c.apellido, '')), ''),
+                       n.referencia) AS cliente,
               -- Sigue corriendo: la máquina tiene puesta esta carga y no se finalizó.
               (v.finalizada_at IS NULL AND v.puesta_id = m.id AND m.en_uso_desde IS NOT NULL) AS en_curso,
               CASE WHEN v.finalizada_at IS NOT NULL THEN v.finalizada_at END AS fin_at,

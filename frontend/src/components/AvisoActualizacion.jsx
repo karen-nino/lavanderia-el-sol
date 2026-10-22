@@ -140,7 +140,7 @@ export default function AvisoActualizacion() {
   }
 
   return (
-    <div className="flex-shrink-0 bg-light-blue text-dark-blue px-4 py-2.5 flex items-center justify-between gap-3">
+    <div className="flex-shrink-0 bg-light-blue text-dark-blue px-4 py-2.5 flex items-center justify-between gap-3 print:hidden">
       <p className="text-sm min-w-0">
         <span className="font-semibold">Hay una versión nueva</span> ({info.version})
       </p>
