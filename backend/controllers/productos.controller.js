@@ -768,6 +768,33 @@ export const getMovimientos = async (req, res) => {
   }
 };
 
+// ── GET /productos/:id/apartados ────────────────────────────────
+/**
+ * Notas abiertas que tienen apartado este producto (renglones sin descontar):
+ * folio, cliente, cuánto y desde cuándo. Es lo que suma su stock_reservado.
+ */
+export const getApartados = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT np.id, np.nota_id, n.folio, n.tipo_servicio, n.estado, np.created_at,
+              np.cantidad, np.unidad, np.cantidad_medidas,
+              TRIM(COALESCE(c.nombre, '') || ' ' || COALESCE(c.apellido, '')) AS cliente,
+              n.referencia
+         FROM nota_productos np
+         JOIN notas n ON n.id = np.nota_id
+         LEFT JOIN clientes c ON c.id = n.cliente_id
+        WHERE np.producto_id = $1 AND n.sucursal = $2
+          AND np.consumido_at IS NULL AND n.estado <> 'CANCELADA'
+        ORDER BY np.created_at ASC, np.id ASC`,
+      [req.params.id, req.sucursal]
+    );
+    res.json(rows.map((r) => ({ ...r, cliente: r.cliente || null })));
+  } catch (err) {
+    console.error('getApartados error:', err);
+    res.status(500).json({ message: 'No se pudieron cargar las notas con este producto apartado. Intenta de nuevo.' });
+  }
+};
+
 // ── GET /productos/reporte-diario?fecha=YYYY-MM-DD ──────────────
 /**
  * Reporte del día por producto, bolsas incluidas (cualquier rol): qué había al

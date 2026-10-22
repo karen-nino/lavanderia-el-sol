@@ -6,7 +6,7 @@ import { validarId } from '../middleware/validarId.js';
 import {
   getProductos, createProducto, updateProducto, deleteProducto,
   deleteProductosMultiples, archivarProducto,
-  rellenarBotellas, crearMovimiento, getMovimientos, getReporteDiario,
+  rellenarBotellas, crearMovimiento, getMovimientos, getReporteDiario, getApartados,
 } from '../controllers/productos.controller.js';
 
 const router = Router();
@@ -24,6 +24,8 @@ router.post('/eliminar-multiples', requireAdmin, deleteProductosMultiples);
 router.patch('/:id/archivar', requireAdmin, archivarProducto);
 // Movimientos de stock (entrada/salida/rellenar): operativos, no requieren admin.
 router.get('/:id/movimientos', getMovimientos);
+// Notas abiertas que tienen apartado el producto.
+router.get('/:id/apartados', getApartados);
 router.post('/:id/movimiento', crearMovimiento);
 router.post('/:id/rellenar',   rellenarBotellas);
 router.put('/:id',     updateProducto);

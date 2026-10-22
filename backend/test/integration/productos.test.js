@@ -620,6 +620,17 @@ describe('GET /api/productos/reporte-diario — apartados', () => {
     expect(movs.body.map((m) => m.tipo).sort()).toEqual(['apartado', 'venta']);
   });
 
+  it('dice en qué notas está lo apartado', async () => {
+    const id = await crearMarca();
+    await vender(id, 2, 'PAGADO');
+    const nota = (await vender(id, 1, 'PENDIENTE')).body;
+    const res = await request(app).get(`/api/productos/${id}/apartados`).set(auth(admin.token));
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].nota_id).toBe(nota.id);
+    expect(Number(res.body[0].cantidad)).toBe(1);
+  });
+
   it('lo apartado ayer y cobrado hoy salió ayer, no hoy', async () => {
     const id = await crearMarca();
     const nota = (await vender(id, 1, 'PENDIENTE')).body;

@@ -6,7 +6,7 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas, lineasDevuelto, tituloProducto } from '../lib/formatoInventario';
 import { imprimirReporte, descargarReporteExcel } from '../lib/exportReporteInventario';
 import { fechaLarga } from '../lib/exportUtils';
-import { formatHora12 } from '../lib/fecha';
+import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import SucursalBar from '../components/SucursalBar';
 import Selector from '../components/Selector';
 
@@ -1387,6 +1387,68 @@ function PuntoApartado() {
   );
 }
 
+const SERVICIO_TXT = { AUTOSERVICIO: 'Autoservicio', POR_ENCARGO: 'Por Encargo', EDREDON: 'Edredón', PRODUCTOS: 'Productos' };
+
+/** Notas abiertas que tienen apartado el producto: cuánto, de quién y desde cuándo. */
+function ApartadosModal({ producto, onClose }) {
+  const navigate = useNavigate();
+  const [notas, setNotas] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let activo = true;
+    api.get(`/productos/${producto.id}/apartados`)
+      .then(d => { if (activo) setNotas(d); })
+      .catch(e => { if (activo) setError(e.message); });
+    return () => { activo = false; };
+  }, [producto.id]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-gray-100">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-gray-900">Apartadas en notas</h3>
+            <p className="text-sm text-gray-500 truncate">{tituloProd(producto)}{subtituloProd(producto) ? ` · ${subtituloProd(producto)}` : ''}</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="overflow-y-auto py-1">
+          {error ? (
+            <p className="text-center text-red-600 text-sm py-10 px-5">{error}</p>
+          ) : notas == null ? (
+            <p className="text-center text-gray-400 text-sm py-10">Cargando…</p>
+          ) : notas.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-10">Ya no hay nada apartado</p>
+          ) : notas.map(n => (
+            <div key={n.id} className="px-5 py-2.5 border-b border-gray-50 last:border-0 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => { onClose(); navigate(`/notas/${n.nota_id}`); }}
+                  className="block max-w-full text-sm font-medium text-blue hover:underline underline-offset-2 truncate text-left"
+                >
+                  Nota {n.folio ?? `#${n.nota_id}`}
+                </button>
+                <p className="text-sm text-gray-400 truncate">
+                  {[SERVICIO_TXT[n.tipo_servicio], n.cliente || n.referencia, formatFechaHora12(n.created_at)].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                {partesExistencia(producto, n.cantidad_medidas).join(' y ')}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Badge del granel (bidón). Solo se dibuja algo cuando está por acabarse o agotado.
 function BadgeGranel({ estado }) {
   if (estado === 'agotado') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Sin bidones</span>;
@@ -1771,6 +1833,7 @@ export default function Inventario() {
   const [prodAEliminar,   setProdAEliminar]   = useState(null);
   const [prodAArchivar,   setProdAArchivar]   = useState(null);
   const [infoProducto,    setInfoProducto]    = useState(null);  // info modal (mobile)
+  const [apartadosDe,     setApartadosDe]     = useState(null);  // producto cuyas notas con apartado se ven
   const [modalMovimiento, setModalMovimiento] = useState(null);  // { producto, tipo }
   const [modalRellenar,   setModalRellenar]   = useState(null);  // producto
   const [modalHistorial,  setModalHistorial]  = useState(null);  // producto
@@ -2293,11 +2356,19 @@ export default function Inventario() {
                         </td>
                         <td className="px-4 py-3">
                           <div className={`flex items-start gap-2 ${es !== 'ok' ? 'flex-wrap' : ''}`}>
-                            {/* El punto naranja (algo apartado en notas) va a la izquierda; los avisos, a la derecha y, si no caben, abajo. */}
-                            {es === 'ok' && medidasApartadas(p) > 0 && <PuntoApartado />}
+                            {/* Los avisos van a la derecha y, si no caben, abajo. */}
                             <span className="min-w-0 font-medium text-gray-800"><Partes partes={partesDisponible(p)} /></span>
                             {es !== 'ok' && <BadgeEstado estado={es} />}
                           </div>
+                          {/* Lo apartado, con su punto naranja: al tocarlo, las notas que lo tienen. */}
+                          {medidasApartadas(p) > 0 && (
+                            <button type="button" onClick={() => setApartadosDe(p)} className="mt-1 flex items-start gap-1.5 text-left text-sm">
+                              <PuntoApartado />
+                              <span className="min-w-0 text-blue hover:underline underline-offset-2">
+                                Apartadas: <Partes partes={partesApartadas(p)} />
+                              </span>
+                            </button>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-gray-600">
                           {esGranelLiquido(p)
@@ -2438,6 +2509,8 @@ export default function Inventario() {
       </div>
 
       {/* Modal info producto (mobile) */}
+      {apartadosDe && <ApartadosModal producto={apartadosDe} onClose={() => setApartadosDe(null)} />}
+
       {infoProducto && (() => {
         const p = infoProducto;
         const es = estadoStock(p);
@@ -2513,10 +2586,11 @@ export default function Inventario() {
                 {medidasApartadas(p) > 0 && (
                   <div>
                     <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Apartadas en notas</p>
-                    <div className="flex items-start gap-2">
+                    {/* Al tocarlo, las notas que lo tienen apartado. */}
+                    <button type="button" onClick={() => setApartadosDe(p)} className="flex items-start gap-2 text-left">
                       <PuntoApartado />
-                      <span className="min-w-0 text-base font-medium text-gray-700"><Partes partes={partesApartadas(p)} /></span>
-                    </div>
+                      <span className="min-w-0 text-base font-medium text-blue hover:underline underline-offset-2"><Partes partes={partesApartadas(p)} /></span>
+                    </button>
                   </div>
                 )}
 
