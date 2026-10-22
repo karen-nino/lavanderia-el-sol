@@ -720,6 +720,25 @@ export const getMovimientos = async (req, res) => {
   const fecha = esFechaISO(req.query.fecha) ? req.query.fecha : null;
   const tipos = TIPOS_MOVIMIENTO[req.query.tipo] ?? null;
   try {
+    // Ventas de un día (columna Ventas del Reporte diario): lo puesto ese día en
+    // notas no canceladas, con la forma de un movimiento 'venta'.
+    if (req.query.tipo === 'ventas' && fecha) {
+      const { rows: ventas } = await pool.query(
+        `SELECT 'v' || np.id AS id, np.producto_id, n.usuario_id, 'venta' AS tipo,
+                'botellas' AS destino, np.cantidad_medidas, np.nota_id, np.created_at,
+                TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
+                n.folio AS nota_folio
+           FROM nota_productos np
+           JOIN notas n ON n.id = np.nota_id
+           LEFT JOIN usuarios u ON u.id = n.usuario_id
+          WHERE np.producto_id = $1 AND n.sucursal = $2 AND n.estado <> 'CANCELADA'
+            AND np.created_at >= ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City'
+            AND np.created_at <  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City'
+          ORDER BY np.created_at DESC, np.id DESC`,
+        [id, req.sucursal, fecha]
+      );
+      return res.json(ventas);
+    }
     const { rows } = await pool.query(
       `WITH bounds AS (
          SELECT ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City' AS inicio,

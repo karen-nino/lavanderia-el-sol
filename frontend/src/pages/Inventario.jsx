@@ -1480,7 +1480,7 @@ function fechaLocalISO(iso) {
 }
 
 /**
- * Celda de Entradas o Salidas: con movimiento es un botón que abre el detalle.
+ * Celda de Ventas, Entradas o Salidas: con movimiento es un botón que abre el detalle.
  * `hayAlgo` la vuelve botón aunque el neto sea guion (una devolución).
  */
 function CeldaMovimiento({ lineas, hayAlgo = false, onClick }) {
@@ -1508,7 +1508,7 @@ function cantidadMovimiento(m, p, esMarca, tipo) {
   return textoBotellas(n, p.medidas_por_botella);
 }
 
-const TITULO_MOVIMIENTOS = { entradas: 'Entradas', salidas: 'Salidas', devueltos: 'Devuelto' };
+const TITULO_MOVIMIENTOS = { ventas: 'Ventas', entradas: 'Entradas', salidas: 'Salidas', devueltos: 'Devuelto' };
 
 /** Entradas o salidas de un producto en un día: quién, a qué hora y cuánto (con enlace a su nota). */
 function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
@@ -1703,11 +1703,10 @@ function ReporteDiario() {
                         ? <p className="text-sm text-gray-400">Bolsa</p>
                         : esMarca && p.marca && <p className="text-sm text-gray-400">{p.nombre}</p>}
                     </td>
-                    {/* Lo puesto en notas ese día. */}
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                      {textoVentas(p, esMarca) === '—'
-                        ? <span className="text-gray-400">—</span>
-                        : textoVentas(p, esMarca)}
+                    <td className="px-4 py-3 text-gray-700">
+                      {/* Lo puesto en notas ese día; al tocarlo, en qué notas. */}
+                      <CeldaMovimiento lineas={[textoVentas(p, esMarca)]}
+                        onClick={() => setDetalle({ producto: p, tipo: 'ventas' })} />
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       <CeldaMovimiento lineas={lineasEntradas(p, esMarca)} hayAlgo={p.rellenado_medidas > 0}
