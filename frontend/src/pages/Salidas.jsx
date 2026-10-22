@@ -1306,6 +1306,10 @@ export default function Salidas() {
         </div>
       </div>
 
+      {/* Granel de cada servicio Por Encargo: sin elegirlo no arranca la lavadora.
+          Se esconde si la nota no lleva granel. */}
+      <GranelPorServicio nota={nota} puedeEditar={puedeTocarProductos} onCambio={cargarDatos} />
+
       {/* Por Encargo: cuánto del precio de los servicios ya se usó, como en Nueva Nota. */}
       {nota?.tope_nota && (() => {
         const t = nota.tope_nota;
@@ -1345,10 +1349,6 @@ export default function Salidas() {
           </div>
         );
       })()}
-
-      {/* Granel de cada servicio Por Encargo: sin elegirlo no arranca la lavadora.
-          Se esconde si la nota no lleva granel. */}
-      <GranelPorServicio nota={nota} puedeEditar={puedeTocarProductos} onCambio={cargarDatos} />
 
       {/* Sección 2 — Productos: también se agregan aquí; el admin puede quitar uno. */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
