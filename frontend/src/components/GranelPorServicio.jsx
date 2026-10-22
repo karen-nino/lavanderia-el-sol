@@ -206,9 +206,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                         </p>
                       ))}
                     {falta && (
-                      <p className="text-sm text-amber-700 mt-0.5">
-                        Tope superado · ${falta.usado.toFixed(2)}
-                      </p>
+                      <p className="text-sm text-amber-700 mt-0.5">Tope alcanzado</p>
                     )}
                   </div>
 
@@ -277,13 +275,12 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
             titulo={f ? `Ya no cabe otra medida de ${tipo.toLowerCase()}` : `No se pudo cambiar ${tipo.toLowerCase()}`}
             mensaje={!f ? aviso.error
               : f.que === 'servicio'
-                ? `El servicio ${aviso.etiqueta} ya llega a su precio. Para servir otra, quita algo del servicio o sube su precio en Ajustes.`
-                : 'Lo servido en la nota ya llega a lo que se cobra por los servicios. '
-                  + 'Para servir otra, quita algún producto o sube el precio del servicio en Ajustes.'}
+                ? `${aviso.etiqueta} llegó a su tope. Sirve menos o sube su precio en Ajustes.`
+                : 'La nota llegó a su tope. Quita algo o sube el precio en Ajustes.'}
             detalle={f ? [
-              { etiqueta: f.que === 'servicio' ? `Precio de ${aviso.etiqueta}` : 'Se cobra por los servicios', valor: fmt(f.tope) },
-              { etiqueta: f.que === 'servicio' ? 'Ya usado (máquinas y material)' : 'Ya servido', valor: fmt(f.usado) },
-              { etiqueta: 'Otra medida', valor: fmt(f.precio) },
+              { etiqueta: f.que === 'servicio' ? `Tope de ${aviso.etiqueta}` : 'Tope por los servicios', valor: fmt(f.tope) },
+              { etiqueta: f.que === 'servicio' ? 'En el servicio' : 'En nota', valor: fmt(f.usado) },
+              { etiqueta: 'Costo por medida', valor: fmt(f.precio) },
             ] : []}
             onClose={() => setAviso(null)}
           />

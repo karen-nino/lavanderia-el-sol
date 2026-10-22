@@ -1306,6 +1306,46 @@ export default function Salidas() {
         </div>
       </div>
 
+      {/* Por Encargo: cuánto del precio de los servicios ya se usó, como en Nueva Nota. */}
+      {nota?.tope_nota && (() => {
+        const t = nota.tope_nota;
+        const servicios = t.servicios ?? [];
+        const ajuste = Number(nota.ajuste) || 0;
+        const disponible = t.presupuesto - t.usado;
+        const sePasa = disponible < -1e-9;
+        // Tres cifras en columnas: etiqueta chica arriba, monto abajo.
+        const cifras = [
+          { etiqueta: 'Tope', valor: fmtMonto(t.presupuesto), cls: 'text-gray-700' },
+          { etiqueta: 'Usado', valor: fmtMonto(t.usado), cls: 'text-gray-700' },
+          sePasa
+            ? { etiqueta: 'Se pasa', valor: fmtMonto(-disponible), cls: 'text-red-600' }
+            : { etiqueta: 'Disponible', valor: fmtMonto(disponible), cls: 'text-green-700' },
+        ];
+        return (
+          <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-50">
+              <h2 className="text-sm font-semibold text-gray-700">
+                {servicios.length === 1 ? 'Tope del servicio' : 'Tope de los servicios'}
+              </h2>
+              {/* El tope ya trae el ajuste; se nombra cuando lo hay. */}
+              {ajuste !== 0 && (
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Con ajuste de {ajuste < 0 ? '−' : '+'}{fmtMonto(Math.abs(ajuste))}
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-3 divide-x divide-gray-100">
+              {cifras.map(c => (
+                <div key={c.etiqueta} className="px-3 py-3">
+                  <p className="text-sm text-gray-500">{c.etiqueta}</p>
+                  <p className={`text-base font-bold tabular-nums ${c.cls}`}>{c.valor}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Granel de cada servicio Por Encargo: sin elegirlo no arranca la lavadora.
           Se esconde si la nota no lleva granel. */}
       <GranelPorServicio nota={nota} puedeEditar={puedeTocarProductos} onCambio={cargarDatos} />
@@ -1348,7 +1388,7 @@ export default function Salidas() {
                       )}
                   </p>
                   {puedeTocarProductos && !cabeOtraDe(p) && (
-                    <p className="text-sm text-amber-700">Tope superado · {fmtMonto(nota.tope_nota.usado)}</p>
+                    <p className="text-sm text-amber-700">Tope alcanzado</p>
                   )}
                 </div>
 
@@ -1560,13 +1600,12 @@ export default function Salidas() {
             tono="aviso"
             titulo={porTope ? `Ya no cabe otra ${unidadDeRenglon(p)}` : `No se pudo cambiar ${tituloProducto(p)}`}
             mensaje={porTope
-              ? 'Lo servido en la nota ya llega a lo que se cobra por los servicios. '
-                + 'Para servir otra, quita algún producto o sube el precio del servicio en Ajustes.'
+              ? 'La nota llegó a su tope. Quita algo o sube el precio en Ajustes.'
               : avisoProd.error}
             detalle={porTope ? [
-              { etiqueta: 'Se cobra por los servicios', valor: fmtMonto(tope.presupuesto) },
-              { etiqueta: 'Ya servido', valor: fmtMonto(tope.usado) },
-              { etiqueta: `Otra ${unidadDeRenglon(p)}`, valor: fmtMonto(p.precio_unitario) },
+              { etiqueta: 'Tope por los servicios', valor: fmtMonto(tope.presupuesto) },
+              { etiqueta: 'En nota', valor: fmtMonto(tope.usado) },
+              { etiqueta: `Costo por ${unidadDeRenglon(p)}`, valor: fmtMonto(p.precio_unitario) },
             ] : []}
             onClose={() => setAvisoProd(null)}
           />
