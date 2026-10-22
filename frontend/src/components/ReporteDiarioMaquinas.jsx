@@ -70,7 +70,7 @@ function PasadasModal({ maquina, fecha, onClose }) {
 
 /**
  * Reporte diario de Máquinas (admin y empleados): por máquina, los ciclos del
- * día, el tiempo encendida, las veces al tope, sus notas y lo generado.
+ * día, el tiempo encendida, las veces al tope, sus notas y el total.
  */
 export default function ReporteDiarioMaquinas() {
   const [fecha, setFecha] = useState(hoyISO);
@@ -117,7 +117,7 @@ export default function ReporteDiarioMaquinas() {
                 <th className="px-4 py-3 text-left">Ciclos</th>
                 <th className="px-4 py-3 text-left">Tiempo encendida</th>
                 <th className="px-4 py-3 text-left">Al tope</th>
-                <th className="px-4 py-3 text-right">Generado</th>
+                <th className="px-4 py-3 text-right">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -222,7 +222,7 @@ export default function ReporteDiarioMaquinas() {
             {[
               ['Ciclos', totales.usos],
               ['Tiempo encendida', totales.usos ? textoDuracion(totales.segundos) : '—'],
-              ['Generado', textoMoneda(totales.generado)],
+              ['Total', textoMoneda(totales.generado)],
             ].map(([titulo, valor]) => (
               <div key={titulo} className="bg-white rounded-xl border border-gray-200 px-4 py-3 min-w-0">
                 <p className="text-sm text-gray-500 truncate">{titulo}</p>

@@ -35,7 +35,7 @@ export function hojasReporteMaquinas(data) {
         { titulo: 'Notas', tipo: 'notas', ancho: 34 },
       ] },
       { titulo: 'Dinero', color: 'azul', columnas: [
-        { titulo: 'Generado', tipo: 'moneda', ancho: 14 },
+        { titulo: 'Total', tipo: 'moneda', ancho: 14 },
       ] },
     ],
     filas: maquinas.map((m) => [
@@ -64,7 +64,7 @@ const seccion = (titulo, maquinas) => {
     <div class="seccion">${esc(titulo)}</div>
     <table class="resumen">
       <thead>
-        <tr><th>Máquina</th><th>Ciclos</th><th>Tiempo encendida</th><th>Al tope</th><th>Notas</th><th>Generado</th></tr>
+        <tr><th>Máquina</th><th>Ciclos</th><th>Tiempo encendida</th><th>Al tope</th><th>Notas</th><th>Total</th></tr>
       </thead>
       <tbody>${filas}</tbody>
     </table>`;
@@ -77,7 +77,7 @@ export function imprimirReporteMaquinas(data) {
   const cuerpo = maquinas.length === 0
     ? '<p>Sin máquinas en la sucursal.</p>'
     : `<p><strong>Ciclos:</strong> ${t.usos} · <strong>Tiempo encendida:</strong> ${esc(textoDuracion(t.segundos))}`
-      + ` · <strong>Generado:</strong> ${esc(textoMoneda(t.generado))}</p>`
+      + ` · <strong>Total:</strong> ${esc(textoMoneda(t.generado))}</p>`
       + seccion('Lavadoras', maquinas.filter((m) => !esSecadora(m)))
       + seccion('Secadoras', maquinas.filter(esSecadora));
   imprimirDocumento({
