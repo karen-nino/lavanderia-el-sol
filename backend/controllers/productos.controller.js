@@ -666,6 +666,9 @@ const VENTA_DEVUELTA_SQL = `EXISTS (
      AND ((m.nota_id    IS NOT NULL AND l.nota_id    = m.nota_id)
        OR (m.nota_folio IS NOT NULL AND l.nota_folio = m.nota_folio)))`;
 
+/** Servicios que cuentan como SPE (Por Encargo) en las Ventas del Reporte diario. */
+const SERVICIOS_SPE_SQL = `('POR_ENCARGO', 'EDREDON')`;
+
 /**
  * Tipos de movimiento por filtro del Reporte diario. Rellenar va en entradas y
  * salidas: no entra ni sale, pero explica el cambio de cada existencia.
@@ -722,9 +725,12 @@ export const getMovimientos = async (req, res) => {
   try {
     // Ventas de un día (columna Ventas del Reporte diario): lo puesto ese día en
     // notas no canceladas, con la forma de un movimiento 'venta'.
-    if (req.query.tipo === 'ventas') {
+    if (['ventas', 'ventas_auto', 'ventas_spe'].includes(req.query.tipo)) {
       // Sin día no hay ventas que listar (no se cae al historial completo).
       if (!fecha) return res.json([]);
+      // ventas_spe: solo Por Encargo; ventas_auto: lo demás (Autoservicio y mostrador).
+      const servicio = req.query.tipo === 'ventas_spe' ? `AND n.tipo_servicio IN ${SERVICIOS_SPE_SQL}`
+        : req.query.tipo === 'ventas_auto' ? `AND n.tipo_servicio NOT IN ${SERVICIOS_SPE_SQL}` : '';
       const { rows: ventas } = await pool.query(
         `SELECT 'v' || np.id AS id, np.producto_id, n.usuario_id, 'venta' AS tipo,
                 'botellas' AS destino, np.cantidad_medidas, np.nota_id, np.created_at,
@@ -733,7 +739,7 @@ export const getMovimientos = async (req, res) => {
            FROM nota_productos np
            JOIN notas n ON n.id = np.nota_id
            LEFT JOIN usuarios u ON u.id = n.usuario_id
-          WHERE np.producto_id = $1 AND n.sucursal = $2 AND n.estado <> 'CANCELADA'
+          WHERE np.producto_id = $1 AND n.sucursal = $2 AND n.estado <> 'CANCELADA' ${servicio}
             AND np.created_at >= ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City'
             AND np.created_at <  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City'
           ORDER BY np.created_at DESC, np.id DESC`,
@@ -929,6 +935,14 @@ export const getReporteDiario = async (req, res) => {
             WHERE np.producto_id = p.id AND n.sucursal = $1 AND n.estado <> 'CANCELADA'
               AND np.created_at >= bounds.inicio AND np.created_at < bounds.cierre
          ), 0) AS ventas_medidas,
+         -- Las mismas, de notas Por Encargo (SPE); lo demás es Autoservicio y mostrador.
+         COALESCE((
+           SELECT SUM(np.cantidad_medidas)
+             FROM nota_productos np JOIN notas n ON n.id = np.nota_id, bounds
+            WHERE np.producto_id = p.id AND n.sucursal = $1 AND n.estado <> 'CANCELADA'
+              AND n.tipo_servicio IN ${SERVICIOS_SPE_SQL}
+              AND np.created_at >= bounds.inicio AND np.created_at < bounds.cierre
+         ), 0) AS ventas_spe_medidas,
          COALESCE((
            SELECT SUM(np.cantidad * np.precio_unitario)
              FROM nota_productos np JOIN notas n ON n.id = np.nota_id, bounds
@@ -1013,6 +1027,8 @@ export const getReporteDiario = async (req, res) => {
         vendido_vigente_medidas: int(r.vendido_vigente_medidas),
         apartado_medidas:        int(r.apartado_medidas),
         ventas_medidas:          int(r.ventas_medidas),
+        ventas_spe_medidas:      int(r.ventas_spe_medidas),
+        ventas_auto_medidas:     int(r.ventas_medidas) - int(r.ventas_spe_medidas),
         ventas_importe:          Number(r.ventas_importe) || 0,
         entrada_botellas_medidas: int(r.entrada_botellas_medidas),
         entrada_granel_medidas:   int(r.entrada_granel_medidas),

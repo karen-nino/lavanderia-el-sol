@@ -81,9 +81,13 @@ export function textoMedidasEquivalencia(medidas, medidasPorBotella) {
   return textoBotellas(n, mpb);
 }
 
-/** Ventas del día: lo puesto en notas, "3 piezas"; sin ventas, un guion. */
-export function textoVentas(p, porUnidad) {
-  const n = Number(p?.ventas_medidas) || 0;
+/**
+ * Ventas del día: lo puesto en notas, "3 piezas"; sin ventas, un guion. Con
+ * `servicio` ('auto' o 'spe') solo las de ese servicio.
+ */
+export function textoVentas(p, porUnidad, servicio = null) {
+  const campo = servicio === 'auto' ? 'ventas_auto_medidas' : servicio === 'spe' ? 'ventas_spe_medidas' : 'ventas_medidas';
+  const n = Number(p?.[campo]) || 0;
   if (n <= 0) return '—';
   return porUnidad
     ? textoBotellas(n, p?.medidas_por_botella, { marca: true })

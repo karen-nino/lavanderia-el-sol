@@ -1513,7 +1513,10 @@ function cantidadMovimiento(m, p, esMarca, tipo) {
   return textoBotellas(n, p.medidas_por_botella);
 }
 
-const TITULO_MOVIMIENTOS = { ventas: 'Ventas', entradas: 'Entradas', salidas: 'Salidas', devueltos: 'Devuelto' };
+const TITULO_MOVIMIENTOS = {
+  ventas: 'Ventas', ventas_auto: 'Ventas · Autoservicio', ventas_spe: 'Ventas · SPE',
+  entradas: 'Entradas', salidas: 'Salidas', devueltos: 'Devuelto',
+};
 
 /** Entradas o salidas de un producto en un día: quién, a qué hora y cuánto (con enlace a su nota). */
 function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
@@ -1688,7 +1691,9 @@ function ReporteDiario() {
             <thead className="bg-gray-50 text-sm text-gray-500 uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-3 text-left">Producto</th>
-                <th className="px-4 py-3 text-left">Ventas</th>
+                {/* Ventas separadas: Autoservicio (y mostrador) y SPE (Por Encargo). */}
+                <th className="px-4 py-3 text-left">Autoservicio</th>
+                <th className="px-4 py-3 text-left">SPE</th>
                 <th className="px-4 py-3 text-left">Entradas</th>
                 <th className="px-4 py-3 text-left">Salidas</th>
                 {hayDevuelto && <th className="px-4 py-3 text-left">Devuelto</th>}
@@ -1710,11 +1715,13 @@ function ReporteDiario() {
                         ? <p className="text-sm text-gray-400">Bolsa</p>
                         : esMarca && p.marca && <p className="text-sm text-gray-400">{p.nombre}</p>}
                     </td>
-                    <td className="px-4 py-3 text-gray-700">
-                      {/* Lo puesto en notas ese día; al tocarlo, en qué notas. */}
-                      <CeldaMovimiento lineas={[textoVentas(p, esMarca)]}
-                        onClick={() => setDetalle({ producto: p, tipo: 'ventas' })} />
-                    </td>
+                    {/* Lo puesto en notas ese día, por servicio; al tocarlo, en qué notas. */}
+                    {['auto', 'spe'].map(servicio => (
+                      <td key={servicio} className="px-4 py-3 text-gray-700">
+                        <CeldaMovimiento lineas={[textoVentas(p, esMarca, servicio)]}
+                          onClick={() => setDetalle({ producto: p, tipo: `ventas_${servicio}` })} />
+                      </td>
+                    ))}
                     <td className="px-4 py-3 text-gray-700">
                       <CeldaMovimiento lineas={lineasEntradas(p, esMarca)} hayAlgo={p.rellenado_medidas > 0}
                         onClick={() => setDetalle({ producto: p, tipo: 'entradas' })} />
