@@ -1114,7 +1114,7 @@ function ModalHistorial({ producto, alto, onClose }) {
                     </div>
                     <p className="text-sm text-gray-400 mt-0.5">
                       {m.destino === 'granel' ? 'A granel' : 'Botellas'}
-                      {m.usuario_nombre ? ` · ${m.usuario_nombre}` : ''}
+                      {m.usuario_nombre ? ` · ${m.usuario_nombre}` : m.usuario_id == null ? ' · Automático' : ''}
                     </p>
                     {/* Motivo de la salida manual. */}
                     {m.nota && <p className="text-sm text-gray-500 mt-0.5 whitespace-pre-line">Nota: {m.nota}</p>}
@@ -1561,7 +1561,9 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
             const abierta = notaAbierta === m.id;
             const deNota = m.tipo === 'venta' || m.tipo === 'liberacion' || m.tipo === 'apartado';
             const irANota = m.nota_id && m.nota_folio ? () => { onClose(); navigate(`/notas/${m.nota_id}`); } : null;
-            const quienHora = `${m.usuario_nombre || 'Usuario eliminado'} · ${formatHora12(m.created_at)}`;
+            // Sin usuario lo hizo la app sola (p. ej. la máquina se finalizó al llegar al tope).
+            const quien = m.usuario_nombre || (m.usuario_id == null ? 'Automático' : 'Usuario eliminado');
+            const quienHora = `${quien} · ${formatHora12(m.created_at)}`;
             // Lo devuelto dice qué nota se anuló: si se canceló, lleva a ella; si se borró,
             // queda su folio.
             const tituloNota = m.tipo === 'liberacion'
