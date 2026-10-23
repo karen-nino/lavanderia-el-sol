@@ -3,7 +3,8 @@ import { esCronometroSql, TOPE_RELOJ } from '../db/sqlMaquina.js';
 import { terminarLavadoFinal, terminarSecado } from '../controllers/notas.controller.js';
 
 // Una máquina con nota que llega a su tope se finaliza sola, 1 s después, con la
-// misma función que el botón Finalizar (terminarLavadoFinal / terminarSecado).
+// misma función que el botón Finalizar (terminarLavadoFinal / terminarSecado), a
+// nombre de quien tiene el turno.
 // El aviso sonoro de la app suena en el tope. Solo con cronómetro; no aplica a
 // las de solo fichas (sin tope) ni a las encendidas a mano sin nota.
 const INTERVALO_MS = 2 * 1000; // una consulta chica: cabe correrla seguido
@@ -32,14 +33,19 @@ export async function finalizarMaquinasAlTope() {
 
   const finalizadas = [];
   for (const r of rows) {
-    // Request armado: sin usuario (lo hizo el sistema), en la sucursal de la nota.
+    // Request armado en la sucursal de la nota, a nombre de quien tiene el turno
+    // (la caja abierta); sin caja abierta, sin usuario (lo hizo el sistema).
+    const { rows: turno } = await pool.query(
+      `SELECT usuario_apertura_id AS id FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
+      [r.sucursal]
+    );
     let estado = 200;
     let cuerpo = null;
     const req = {
       params: { id: String(r.nota_id) },
       body: r.es_secadora ? { secadora_id: r.maquina_id } : { lavadora_id: r.maquina_id },
       sucursal: r.sucursal,
-      user: null,
+      user: turno[0] ? { id: turno[0].id } : null,
     };
     const res = {
       status(c) { estado = c; return this; },
