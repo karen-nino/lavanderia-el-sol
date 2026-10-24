@@ -60,3 +60,19 @@ export async function estado(maquina) {
   if (!tieneDispositivo(maquina)) return SIN_ENLAZAR;
   return driverDe(maquina).estado(maquina);
 }
+
+/**
+ * Antes del barrido: lee en lote las máquinas con Sonoff real (una llamada por
+ * cada 10). No lanza.
+ */
+export async function precargarEstados(maquinas = []) {
+  const reales = maquinas.filter((m) => tieneDispositivo(m) && !esSimulacion(m));
+  if (reales.length > 0) await ewelinkDriver.precargarEstados(reales);
+}
+
+/** ¿La nube de eWeLink está en pausa porque se acabó el límite de llamadas? */
+export const enPausaPorLimite = () => NOMBRE_DRIVER === 'ewelink' && ewelinkDriver.enPausaPorLimite();
+
+/** Lo leído en lote por el barrido para esta máquina, o null (no llama a la nube). */
+export const leidoEnLote = (maquina) =>
+  (tieneDispositivo(maquina) && !esSimulacion(maquina) ? ewelinkDriver.leidoEnLote(maquina) : null);

@@ -60,6 +60,7 @@ const driver = {
   encender: vi.fn(async () => ({ ok: true, estado: 'on' })),
   apagar:   vi.fn(async () => ({ ok: true, estado: 'off' })),
   estado:   vi.fn(async () => ({ ok: true, estado: 'on' })),
+  leidoEnLote: vi.fn(() => null),
   tieneDispositivo: (m) => Boolean(m?.device_id),
   esSimulacion: () => false,
 };
@@ -67,6 +68,7 @@ vi.mock('./dispositivos/index.js', () => ({
   encender: (...a) => driver.encender(...a),
   apagar:   (...a) => driver.apagar(...a),
   estado:   (...a) => driver.estado(...a),
+  leidoEnLote: (...a) => driver.leidoEnLote(...a),
   tieneDispositivo: (...a) => driver.tieneDispositivo(...a),
   esSimulacion: (...a) => driver.esSimulacion(...a),
 }));
@@ -552,5 +554,33 @@ describe('secadoras de fichas', () => {
     expect(driver.encender).toHaveBeenCalledTimes(2);
     expect(filas.maquina.sonoff_estado).toBe('error');
     expect(filas.maquina.sonoff_detalle).toMatch(/^Solo entraron 1 de 3 fichas/);
+  });
+});
+
+describe('límite de eWeLink y avisos', () => {
+  it('en el barrido no repite la orden si la lectura en lote ya la muestra como debe', async () => {
+    filas.maquina = { ...maquinaEnUso('error'), estado: 'disponible' };
+    driver.leidoEnLote.mockReturnValueOnce({ ok: true, estado: 'off' });
+
+    await sincronizarSonoff(1, { reconciliando: true });
+    expect(driver.apagar).not.toHaveBeenCalled();
+    expect(filas.maquina.sonoff_estado).toBe('enlazada');
+  });
+
+  it('si una máquina con nota no enciende, avisa en la campana', async () => {
+    filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.encender.mockResolvedValueOnce({ ok: false, estado: null, motivo: 'ewelink_limite' });
+
+    await sincronizarSonoff(1);
+    expect(notificaciones).toHaveLength(1);
+    expect(notificaciones[0][0]).toMatch(/L8 no encendió: .*límite de llamadas/);
+    expect(filas.maquina.sonoff_estado).toBe('error');
+  });
+
+  it('si enciende bien, no avisa', async () => {
+    filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+
+    await sincronizarSonoff(1);
+    expect(notificaciones).toHaveLength(0);
   });
 });

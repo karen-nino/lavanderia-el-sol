@@ -2,6 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { explicarMotivo, explicarFalla, resumirMotivo } from './mensajes.js';
 
 describe('explicarMotivo', () => {
+  it('el 412 es el límite de llamadas, no un Sonoff desconectado', () => {
+    expect(explicarMotivo('ewelink_412')).toMatch(/límite de llamadas/i);
+    expect(explicarMotivo('ewelink_limite')).toMatch(/préndela a mano/i);
+  });
+
   it('distingue los problemas que se arreglan en la app', () => {
     expect(explicarMotivo('sin_cuenta_conectada')).toMatch(/cuenta de eWeLink no está conectada/i);
     expect(explicarMotivo('sesion_expirada')).toMatch(/permiso de eWeLink venció/i);

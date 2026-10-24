@@ -317,6 +317,31 @@ async function avisarTopeCronometro(maq) {
   }
 }
 
+/**
+ * Aviso en la campana de que una máquina que debía prender para una nota no
+ * encendió (p. ej. se acabó el límite de eWeLink): el cronómetro corre aunque la
+ * máquina no tenga luz. Una vez por arranque.
+ */
+async function avisarNoEncendio(maq, motivo) {
+  try {
+    await pool.query(
+      `INSERT INTO notificaciones (tipo, mensaje, maquina_id, sucursal)
+       SELECT 'sonoff_no_encendio', $1, $2, $3
+        WHERE NOT EXISTS (
+          SELECT 1 FROM notificaciones
+           WHERE tipo = 'sonoff_no_encendio' AND maquina_id = $2
+             AND created_at >= COALESCE($4::timestamptz, NOW() - INTERVAL '1 hour')
+        )`,
+      [
+        `${maq.nombre} no encendió: ${resumirMotivo(motivo)}`,
+        maq.id, maq.sucursal, maq.en_uso_desde ?? maq.encendida_sin_iniciar_at ?? null,
+      ]
+    );
+  } catch (err) {
+    console.error('[sonoff] no se pudo avisar que la máquina no encendió:', err.message);
+  }
+}
+
 // ── Secadoras de fichas ──
 // Su Sonoff va en modo pulso: cada "on" dura 0.5 s y la secadora lo cuenta
 // como una ficha. Están siempre alimentadas: solo se mandan las fichas.
@@ -551,12 +576,22 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // Si queda encendida, se agenda su apagado.
     if (deseado === 'on') programarCorte(maq);
 
+    // En el barrido, si la lectura en lote ya lo muestra como debe estar, no se
+    // manda la orden otra vez (cada orden gasta del límite de eWeLink).
+    const leido = reconciliando ? dispositivos.leidoEnLote(maq) : null;
+    if (leido?.ok && leido.estado === deseado) return marcar(maq.id, 'enlazada');
+
     const res = deseado === 'on'
       ? await dispositivos.encender(maq)
       : await dispositivos.apagar(maq);
 
     // En simulación no se marca 'enlazada': no hay Sonoff detrás.
     if (dispositivos.esSimulacion(maq)) return maq;
+
+    // Debía prender para una nota y no prendió: se avisa (el cronómetro ya corre).
+    if (!res.ok && deseado === 'on' && maq.estado === 'en_uso' && !manualVigente(maq)) {
+      await avisarNoEncendio(maq, res.motivo);
+    }
 
     return marcar(maq.id, res.ok ? 'enlazada' : 'error', res.motivo);
   } catch (err) {

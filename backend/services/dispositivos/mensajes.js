@@ -21,6 +21,11 @@ const DETALLE_MOTIVO = {
   error_red:
     'no se pudo hablar con eWeLink. Puede ser el internet de la lavandería o que su ' +
     'servicio esté caído; espera un momento y vuelve a intentar.',
+  ewelink_limite:
+    'se acabó el límite de llamadas de la app a eWeLink, así que por un rato no puede prender ' +
+    'ni apagar máquinas. Mientras tanto préndela a mano (botón del Sonoff o app de eWeLink).',
+  fuera_de_linea:
+    'el Sonoff está fuera de línea: revisa que tenga corriente e internet.',
   estado_desconocido:
     'el Sonoff contestó algo que no se entendió. Suele pasar cuando está fuera de línea ' +
     'o cuando el canal configurado no es el suyo; revísalo en la app de eWeLink.',
@@ -40,6 +45,7 @@ export function explicarMotivo(motivo) {
     const codigo = motivo.slice('ewelink_'.length);
     // Sin código numérico ('ewelink_undefined') no se inventa un diagnóstico.
     if (!/^\d+$/.test(codigo)) return SIN_DETALLE;
+    if (codigo === '412') return DETALLE_MOTIVO.ewelink_limite;
     if (esCodigoDeAuth(codigo)) {
       return 'eWeLink no aceptó el permiso de la app. Conecta la cuenta otra vez desde el aviso ' +
              'que aparece arriba, en esta misma pantalla.';

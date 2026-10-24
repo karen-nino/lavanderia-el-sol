@@ -193,3 +193,84 @@ describe('ewelinkDriver — con configuración (fetch mockeado)', () => {
     expect(r.motivo).toBe('ewelink_40001');
   });
 });
+
+describe('ewelinkDriver — límite de llamadas (412)', () => {
+  beforeEach(() => setEnv(ENV_OK));
+
+  it('tras un 412 deja de llamar a la nube y responde ewelink_limite', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResp({ error: 412, msg: 'invoke too much' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { driver } = await cargarDriver();
+    expect((await driver.encender({ device_id: 'd1' })).motivo).toBe('ewelink_limite');
+    expect(driver.enPausaPorLimite()).toBe(true);
+
+    // Las siguientes órdenes y lecturas no gastan llamadas.
+    expect((await driver.apagar({ device_id: 'd2' })).motivo).toBe('ewelink_limite');
+    expect((await driver.estado({ device_id: 'd3' })).motivo).toBe('ewelink_limite');
+    await driver.precargarEstados([{ device_id: 'd4' }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('la pausa se acaba sola', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResp({ error: 412, msg: 'invoke too much' }))
+      .mockResolvedValueOnce(jsonResp({ error: 0, data: {} }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { driver } = await cargarDriver();
+    await driver.encender({ device_id: 'd1' });
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + (driver.LIMITE_PAUSA_MINUTOS * 60 + 1) * 1000);
+    expect(driver.enPausaPorLimite()).toBe(false);
+    expect(await driver.encender({ device_id: 'd1' })).toEqual({ ok: true, estado: 'on' });
+  });
+});
+
+describe('ewelinkDriver — lectura en lote', () => {
+  beforeEach(() => setEnv(ENV_OK));
+
+  const lote = (items) => jsonResp({
+    error: 0,
+    data: { thingList: items.map(([deviceid, sw, online = true]) => ({ itemType: 1, itemData: { deviceid, online, params: { switch: sw } } })) },
+  });
+
+  it('una sola llamada para varias máquinas; estado() usa lo leído sin volver a llamar', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(lote([['d1', 'on'], ['d2', 'off']]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { driver } = await cargarDriver();
+    await driver.precargarEstados([{ device_id: 'd1' }, { device_id: 'd2' }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://us-apia.coolkit.cc/v2/device/thing');
+    expect(JSON.parse(opts.body)).toEqual({ thingList: [{ itemType: 1, id: 'd1' }, { itemType: 1, id: 'd2' }] });
+
+    expect(driver.leidoEnLote({ device_id: 'd1' })).toEqual({ ok: true, estado: 'on' });
+    expect(await driver.estado({ device_id: 'd1' })).toEqual({ ok: true, estado: 'on' });
+    expect(await driver.estado({ device_id: 'd2' })).toEqual({ ok: true, estado: 'off' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('de 10 en 10', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(lote([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { driver } = await cargarDriver();
+    await driver.precargarEstados(Array.from({ length: 12 }, (_, i) => ({ device_id: `d${i}` })));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).thingList).toHaveLength(2);
+  });
+
+  it('fuera de línea se reporta así; lo que no vino se pregunta uno por uno', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(lote([['d1', 'on', false]]))
+      .mockResolvedValueOnce(jsonResp({ error: 0, data: { params: { switch: 'off' } } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { driver } = await cargarDriver();
+    await driver.precargarEstados([{ device_id: 'd1' }, { device_id: 'd2' }]);
+    expect((await driver.estado({ device_id: 'd1' })).motivo).toBe('fuera_de_linea');
+    expect(await driver.estado({ device_id: 'd2' })).toEqual({ ok: true, estado: 'off' });
+    expect(fetchMock.mock.calls[1][0]).toContain('/v2/device/thing/status?');
+  });
+});
