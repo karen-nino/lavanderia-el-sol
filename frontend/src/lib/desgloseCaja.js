@@ -45,7 +45,11 @@ export const CONCEPTOS = [
 export const lineasConcepto = (reparto) =>
   CONCEPTOS.map(({ key, label }) => ({ label, value: num(reparto?.[key]) }));
 
-export function desgloseCaja(t) {
+/**
+ * @param cajaAparte la caja inicial va en su propio recuadro, fuera de Ingresos,
+ *   y se suma en el Desglose (la demo; producción la deja dentro de Ingresos).
+ */
+export function desgloseCaja(t, { cajaAparte = ES_DEMO } = {}) {
   const efectivo = num(t.ventas_desglose?.efectivo);
   const transferencia = num(t.ventas_desglose?.transferencia);
   const tarjeta = num(t.ventas_desglose?.tarjeta);
@@ -60,8 +64,9 @@ export function desgloseCaja(t) {
     // Tarjeta solo si hubo cobros viejos con tarjeta.
     ...(tarjeta > 0 ? [{ label: 'Tarjeta', value: tarjeta, sign: '' }] : []),
   ];
+  const cajaInicial = num(t.monto_inicial);
   const caja = [
-    { label: 'Caja inicial', value: num(t.monto_inicial), sign: '' },
+    ...(cajaAparte ? [] : [{ label: 'Caja inicial', value: cajaInicial, sign: '' }]),
     { label: 'Entradas',     value: num(t.entradas),      sign: '+' },
   ];
 
@@ -89,7 +94,9 @@ export function desgloseCaja(t) {
         : [{ label: 'Ventas en efectivo', value: efectivo, sign: '+' }]),
     ];
   }
-  const totalIngresos = num(t.monto_inicial) + efectivo + num(t.entradas);
+  // Todo el efectivo del cajón (caja inicial, entradas y ventas en efectivo).
+  const totalEnCajon = cajaInicial + efectivo + num(t.entradas);
+  const totalIngresos = cajaAparte ? totalEnCajon - cajaInicial : totalEnCajon;
 
   const egresos = [
     // Sin dato en cortes viejos: no se inventa.
@@ -101,19 +108,23 @@ export function desgloseCaja(t) {
   const totalEgresos = num(t.salidas);
 
   return {
+    cajaAparte,
+    cajaInicial,
     ingresos,
     comoSeCobro,
     // "Cómo se cobró" ya va dentro de Ingresos: no repetirlo aparte.
     comoSeCobroDentro: hayNoEfectivo,
     totalIngresos,
+    totalEnCajon,
     // Con cobros que no son en efectivo, el total de ingresos es el del efectivo.
     totalIngresosLabel: hayNoEfectivo ? 'Total en efectivo' : 'Total ingresos',
     egresos,
     totalEgresos,
     desglose: [
-      { label: 'Ingresos', value: totalIngresos, sign: '' },
+      ...(cajaAparte ? [{ label: 'Caja inicial', value: cajaInicial, sign: '' }] : []),
+      { label: 'Ingresos', value: totalIngresos, sign: cajaAparte ? '+' : '' },
       { label: 'Egresos',  value: totalEgresos,  sign: '−' },
     ],
-    esperado: totalIngresos - totalEgresos,
+    esperado: totalEnCajon - totalEgresos,
   };
 }

@@ -62,6 +62,16 @@ export default function RecuadrosCaja({ turno, esperadoLabel = 'ESPERADO EN CAJA
   const d = desgloseCaja(turno);
   return (
     <>
+      {/* En la demo la caja inicial va primero, en su propio recuadro. */}
+      {d.cajaAparte && (
+        // A todo lo ancho donde los recuadros van en columnas (turnos de Ventas).
+        <div className="col-span-full bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-4">
+            <h2 className="text-lg font-semibold text-blue">Caja inicial</h2>
+            <span className="text-xl font-bold text-blue">{fmt(d.cajaInicial)}</span>
+          </div>
+        </div>
+      )}
       <Recuadro
         titulo="Ingresos" filas={d.ingresos} totalLabel={d.totalIngresosLabel.toUpperCase()} total={d.totalIngresos}
         aparte={d.comoSeCobroDentro ? null : { titulo: 'Cómo se cobró', filas: d.comoSeCobro }}

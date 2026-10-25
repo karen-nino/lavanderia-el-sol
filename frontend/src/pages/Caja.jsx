@@ -893,6 +893,7 @@ function Historial() {
         </button>
         {detAbiertos.has(c.id) && (
           <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3 text-base">
+            {d.cajaAparte && totalRejilla('Caja inicial', fmt(d.cajaInicial))}
             {tituloRejilla('Ingresos')}
             {filasRejilla(d.ingresos)}
             {totalRejilla(d.ingresos.some((r) => r.subtotal) ? d.totalIngresosLabel : 'Total', fmt(d.totalIngresos))}

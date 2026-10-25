@@ -95,7 +95,7 @@ const filaCorte = (c, conTarjeta) => [
   c.monto_inicial,
   c.entradas,
   c.salidas,
-  desgloseCaja(c).totalIngresos,
+  desgloseCaja(c).totalEnCajon,
   c.spe_debe,
   c.notas_apertura ?? '',
   c.notas_cierre ?? '',
@@ -250,6 +250,7 @@ export const bloqueDetalle = (c) => {
     ${resumenCorte(c)}
     <div class="dos">
       <div>
+        ${d.cajaAparte ? tablaLineas('Caja inicial', [], 'Caja inicial', d.cajaInicial) : ''}
         ${tablaLineas('Ingresos', d.ingresos, d.totalIngresosLabel, d.totalIngresos,
     d.comoSeCobroDentro ? null : { titulo: 'Cómo se cobró', lineas: d.comoSeCobro })}
       </div>

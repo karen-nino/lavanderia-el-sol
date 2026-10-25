@@ -87,4 +87,17 @@ describe('desgloseCaja', () => {
     expect(d.egresos.map((l) => l.label)).toEqual(['Gastos']);
     expect(d.esperado).toBe(465);
   });
+
+  it('con la caja inicial aparte (demo), Ingresos no la lleva y el Desglose la suma', () => {
+    for (const t of [turno, conTransferencia]) {
+      const d = desgloseCaja(t, { cajaAparte: true });
+      expect(d.cajaInicial).toBe(200);
+      expect(d.ingresos.some((l) => l.label === 'Caja inicial')).toBe(false);
+      expect(sumaRenglones(d.ingresos)).toBe(d.totalIngresos);
+      expect(d.totalIngresos).toBe(310);  // 210 + 100
+      expect(d.totalEnCajon).toBe(510);
+      expect(d.desglose.map((l) => l.label)).toEqual(['Caja inicial', 'Ingresos', 'Egresos']);
+      expect(d.esperado).toBe(desgloseCaja(t, { cajaAparte: false }).esperado);
+    }
+  });
 });
