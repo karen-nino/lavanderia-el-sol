@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 import FondoApertura from '../components/FondoApertura';
 import ConPesos from '../components/ConPesos';
+import { ES_DEMO } from '../lib/entorno';
 import RecuadrosCaja from '../components/RecuadrosCaja';
 import { desgloseCaja } from '../lib/desgloseCaja';
 import MenuExportar from '../components/MenuExportar';
@@ -157,7 +158,8 @@ function EmptyState({ children }) {
 // ── Apertura (se ve dentro de Corte con la caja cerrada) ───────
 function Apertura({ data, onAbrir }) {
   const { usuario } = useAuth();
-  const admin = esAdminFn(usuario?.rol);
+  // En la demo cualquiera captura el fondo, como un admin.
+  const admin = esAdminFn(usuario?.rol) || ES_DEMO;
   const sugerida = data?.apertura_sugerida ?? null;
   const [monto, setMonto] = useState('');
   const [notas, setNotas] = useState('');

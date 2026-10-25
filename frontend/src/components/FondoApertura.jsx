@@ -10,6 +10,7 @@
  */
 
 import ConPesos from './ConPesos';
+import { ES_DEMO } from '../lib/entorno';
 
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
@@ -51,8 +52,9 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
           />
         </ConPesos>
         <p className="mt-1.5 text-sm text-gray-500">
-          Es la primera caja de esta sucursal: cuenta el efectivo y captúralo. De aquí en
-          adelante el fondo lo trae solo del corte anterior.
+          {ES_DEMO
+            ? 'Cuenta el efectivo con que abres la caja y captúralo.'
+            : 'Es la primera caja de esta sucursal: cuenta el efectivo y captúralo. De aquí en adelante el fondo lo trae solo del corte anterior.'}
         </p>
       </div>
     );

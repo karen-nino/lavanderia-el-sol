@@ -1,6 +1,7 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 import { COBRO_APARTE_ENCARGO } from '../db/sqlProductos.js';
+import { ENTORNO_DEMO } from '../utils/entorno.js';
 
 /**
  * Lo cobrado en una caja, por forma de pago (solo el efectivo entra al cajón).
@@ -226,9 +227,10 @@ export async function totalesMovimientos(client, cajaId) {
  * Caja inicial de la próxima apertura: lo que quedó en el cajón al cerrar la
  * anterior (la caja final, o lo contado). Tras un cierre automático, lo
  * esperado (y la pantalla avisa). null si nunca se ha cerrado una caja: la
- * captura un admin.
+ * captura un admin. En la demo siempre null: quien abre captura el fondo.
  */
 async function aperturaSugerida(client, sucursal) {
+  if (ENTORNO_DEMO) return null;
   const { rows } = await client.query(
     `SELECT c.id, c.monto_inicial, c.monto_contado, c.monto_caja_final, c.cerrada_at, c.cierre_automatico,
             -- Cifras congeladas o, en cortes muy viejos, calculadas en vivo.
@@ -387,7 +389,8 @@ export async function abrirCaja(req, res) {
     }
 
     const sugerida = await aperturaSugerida(client, req.sucursal);
-    const admin = esAdmin(req.user?.rol);
+    // En la demo cualquiera captura el fondo, como un admin.
+    const admin = esAdmin(req.user?.rol) || ENTORNO_DEMO;
 
     let monto;
     if (admin) {

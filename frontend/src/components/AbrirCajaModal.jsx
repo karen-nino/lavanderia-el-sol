@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import FondoApertura from './FondoApertura';
+import { ES_DEMO } from '../lib/entorno';
 
 /**
  * Modal para abrir la caja (fondo y nota), el mismo en Dashboard y Nueva Nota.
@@ -20,7 +21,8 @@ export default function AbrirCajaModal({ open, onClose, onAbierta }) {
 function ContenidoAbrirCaja({ onClose, onAbierta }) {
   // `?? {}`: la tarjeta del Dashboard se renderiza en pruebas sin AuthProvider.
   const { usuario } = useAuth() ?? {};
-  const admin = esAdminFn(usuario?.rol);
+  // En la demo cualquiera captura el fondo, como un admin.
+  const admin = esAdminFn(usuario?.rol) || ES_DEMO;
   const [monto, setMonto] = useState('');
   const [notas, setNotas] = useState('');
   const [saving, setSaving] = useState(false);
