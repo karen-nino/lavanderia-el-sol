@@ -205,13 +205,18 @@ export default function Login() {
 
           {ES_DEMO && (
             <>
-              <p className="text-sm text-gray-600 leading-relaxed mb-5">
-                Esto es una copia del sistema con datos inventados, para
-                enseñarlo: no hay ningún negocio detrás. Como administrador
-                ves todo, incluida la configuración y los reportes; como
-                empleado, lo del día a día: notas, clientes, máquinas,
-                inventario y caja.
-              </p>
+              <div className="text-sm text-gray-600 leading-relaxed mb-5 space-y-2">
+                <p>
+                  Demo con datos de ejemplo.
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-800">Administrador:</span>{' '}
+                  ventas, reportes, empleados y ajustes, además de las funciones del empleado.
+                  <br />
+                  <span className="font-semibold text-gray-800">Empleado:</span>{' '}
+                  atención de servicios: notas, clientes, máquinas, inventario y caja.
+                </p>
+              </div>
 
               {error && (
                 <div className="bg-red-50 border border-red-300 text-red-700 text-sm font-medium rounded-lg px-3 py-2.5 mb-4">
