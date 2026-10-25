@@ -160,7 +160,8 @@ async function sembrar(db) {
     [['chico', t[0].tope_carga_chico], ['mediano', t[0].tope_carga_mediano], ['grande', t[0].tope_carga_grande]]
       .filter(([, v]) => v != null).map(([k, v]) => [k, Number(v)]));
   const tamanosServicio = Object.keys(servicios);
-  const { rows: edredones } = await db.query(
+  // En la demo no hay edredón: ni notas ni servicios.
+  const { rows: edredones } = MODO_DEMO ? { rows: [] } : await db.query(
     'SELECT nombre, precio FROM tamanos_edredon WHERE activo AND precio IS NOT NULL ORDER BY orden NULLS LAST, nombre');
 
   const { rows: productos } = await db.query(
@@ -241,7 +242,7 @@ async function sembrar(db) {
       const conServicios = tamanosServicio.length > 0;
       const servicio = conServicios
         ? pesado([['AUTOSERVICIO', 60], ['POR_ENCARGO', 40]])
-        : pesado([['AUTOSERVICIO', 60], ['POR_ENCARGO', 32], ['EDREDON', 8]]);
+        : pesado([['AUTOSERVICIO', 60], ['POR_ENCARGO', MODO_DEMO ? 40 : 32], ['EDREDON', MODO_DEMO ? 0 : 8]]);
       const porServicio = conServicios && servicio === 'POR_ENCARGO';
       const edredon = porServicio && edredones.length && rnd() < 0.2 ? elige(edredones) : null;
       const esEdredon = servicio === 'EDREDON' || Boolean(edredon);

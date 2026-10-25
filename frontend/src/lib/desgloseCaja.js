@@ -22,6 +22,8 @@
  * - TOTAL INGRESOS (el de efectivo) − TOTAL EGRESOS = ESPERADO EN CAJA.
  */
 
+import { CON_EDREDON } from './entorno';
+
 const num = (v) => Number(v ?? 0) || 0;
 
 /**
@@ -36,7 +38,7 @@ export const CONCEPTOS = [
   // Servicios Por Encargo de Edredón, con sus tamaños (incluye Cubre Colchón).
   { key: 'edredon',            label: 'Edredón' },
   { key: 'productos',          label: 'Productos' },
-];
+].filter(c => CON_EDREDON || c.key !== 'edredon');
 
 // Renglones { label, value } de un reparto por concepto.
 export const lineasConcepto = (reparto) =>

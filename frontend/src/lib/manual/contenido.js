@@ -7,6 +7,11 @@
  * - claves: palabras con que se buscaría aunque no estén escritas.
  */
 
+import { CON_EDREDON } from '../entorno';
+
+/** Texto que solo va donde hay servicio de edredón (la demo no lo tiene). */
+const E = (texto, sinEdredon = '') => (CON_EDREDON ? texto : sinEdredon);
+
 export const SECCIONES_MANUAL = [
   {
     id: 'empezar',
@@ -82,13 +87,13 @@ El cliente no se identifica: la nota queda a nombre de Mostrador. Si quieres man
       {
         id: 'nota-por-encargo',
         titulo: 'Crear una nota por encargo',
-        claves: ['encargo', 'dejar ropa', 'servicio completo', 'edredon'],
+        claves: ['encargo', 'dejar ropa', 'servicio completo', ...(CON_EDREDON ? ['edredon'] : [])],
         cuerpo: `Por encargo es cuando el cliente deja su ropa y el negocio la lava, la seca y la entrega.
 
 1. Toca Nueva nota y elige Por Encargo.
 2. Elige el cliente, dalo de alta ahí mismo, o toca Mostrador si no lo vas a registrar. Con Mostrador la nota queda a ese nombre: si luego quieres mandarle el ticket o avisarle que ya está, la app te pide su teléfono en ese momento, igual que en autoservicio.
-3. Di cuántos servicios son de cada tamaño: Chico, Mediano, Grande y Edredón. Cada servicio ya incluye su lavado, su secado, el jabón, el suavizante y la bolsa.
-4. Si quieres, captura el detalle de cada servicio: el tipo de tela, o el tamaño del edredón. Los dos son opcionales.
+3. Di cuántos servicios son de cada tamaño: Chico, Mediano, Grande${E(' y Edredón')}. Cada servicio ya incluye su lavado, su secado, el jabón, el suavizante y la bolsa.
+4. Si quieres, captura el detalle de cada servicio: el tipo de tela${E(', o el tamaño del edredón. Los dos son opcionales', '. Es opcional')}.
 5. Lo que el servicio trae dentro sale en "Incluido en los servicios": ahí puedes servir más jabón o quitar la bolsa. Eso NO se cobra aparte.
 6. Si el cliente compra algo (un suavizante de marca, bolsas de más), agrégalo en Productos: eso SÍ se cobra encima del servicio.
 7. Pon la fecha de entrega y elige si te paga ahora o al entregar.
@@ -139,7 +144,7 @@ LAVANDO — al menos una lavadora de la nota está corriendo.
 
 SECANDO — ya no hay lavadoras corriendo, pero sí una secadora.
 
-POR ENTREGAR — la ropa está lista y espera al cliente. En POR ENCARGO la nota NO llega sola: llega cuando tocas Procesado (ya doblada y empacada). En EDREDÓN llega sola al terminar su última carga.
+POR ENTREGAR — la ropa está lista y espera al cliente. En POR ENCARGO la nota NO llega sola: llega cuando tocas Procesado (ya doblada y empacada).${E(' En EDREDÓN llega sola al terminar su última carga.')}
 
 FINALIZADA — se acabó. En AUTOSERVICIO la nota llega aquí SOLA en cuanto termina su última carga, si ya está pagada: el cliente está en el local y se lleva su ropa él mismo. Si todavía debe, se queda en Por Entregar hasta que la cobras, y al cobrarla se finaliza sola. Una venta de PRODUCTOS nace directamente aquí: no hay nada que lavar ni que esperar.
 
@@ -172,7 +177,7 @@ Los filtros se quedan puestos: si entras a una nota y regresas con la flecha, la
         claves: ['salidas', 'poner lavadora', 'secadora', 'que maquina'],
         cuerpo: `EN AUTOSERVICIO la máquina ya se eligió al hacer la nota: aquí solo se inicia. Lo que sigue es meter la ropa y darle a Encender / Iniciar.
 
-EN POR ENCARGO la nota vende SERVICIOS (Chico, Mediano, Grande, Edredón) y las máquinas son cosa de esta pantalla: se ponen con + Agregar, las que te acomoden, y van sin cobro porque lo cobrado es el servicio.
+EN POR ENCARGO la nota vende SERVICIOS (Chico, Mediano, Grande${E(', Edredón')}) y las máquinas son cosa de esta pantalla: se ponen con + Agregar, las que te acomoden, y van sin cobro porque lo cobrado es el servicio.
 
 Abre la nota y entra a Salidas (o entra desde la lista de máquinas). Si ves botones Asignar Lav. / Asignar Sec., es una nota vieja de autoservicio que se quedó con el tipo apuntado y sin máquina: ésa se pone por ahí.
 
@@ -197,8 +202,7 @@ Todas las máquinas que cumplen su ciclo se ven igual, sean de autoservicio o de
 
 Cuando terminas la ÚLTIMA carga de la nota:
 · AUTOSERVICIO — pasa sola a Finalizada si ya pagó; si debe, espera a que la cobres.
-· EDREDÓN — pasa sola a Por Entregar.
-· POR ENCARGO — se queda como está hasta que toques Procesado en la nota (ver "Marcar como procesada y avisar").
+${E('· EDREDÓN — pasa sola a Por Entregar.\n')}· POR ENCARGO — se queda como está hasta que toques Procesado en la nota (ver "Marcar como procesada y avisar").
 
 Si una máquina se queda encendida y nadie la libera, el cierre automático de medianoche la suelta.`,
       },
@@ -225,7 +229,7 @@ En los selectores, las máquinas que otra nota tiene apuntadas salen marcadas co
         id: 'entregar-la-ropa',
         titulo: 'Entregar la ropa',
         claves: ['finalizar', 'dar la ropa', 'recoger', 'terminar nota'],
-        cuerpo: `Cuando el cliente viene por su ropa, abre su nota y toca Entregar (el botón verde; en Edredón dice Finalizar).
+        cuerpo: `Cuando el cliente viene por su ropa, abre su nota y toca Entregar (el botón verde${E('; en Edredón dice Finalizar')}).
 
 NO SE PUEDE ENTREGAR UNA NOTA QUE DEBE DINERO. Si está pendiente, la app te muestra Cobrar en vez de Entregar: cobra primero.
 
@@ -233,7 +237,7 @@ El jabón y el suavizante a granel de los servicios ya salieron del inventario c
 
 Si un administrador entregó una nota por error, la puede volver a abrir con Abrir.
 
-Esto aplica a Por Encargo y Edredón. Las de autoservicio ya se cerraron solas cuando terminó su última carga.`,
+Esto aplica a Por Encargo${E(' y Edredón')}. Las de autoservicio ya se cerraron solas cuando terminó su última carga.`,
       },
       {
         id: 'procesado-y-aviso',
@@ -261,7 +265,7 @@ Como es imagen, no se puede dejar el chat preseleccionado: hay que elegir el con
 
 Si la nota no tiene teléfono, la pantalla del ticket te deja capturarlo ahí mismo.
 
-Lo que sale impreso (el R.F.C. del negocio y la nota en letra chica del pie) lo configura el administrador en Ajustes → Ticket. Hay TRES notas al pie y cada ticket lleva la suya: una para Autoservicio, otra para Por Encargo y Edredón, y otra para las ventas de Productos. La que se deje vacía no se imprime.`,
+Lo que sale impreso (el R.F.C. del negocio y la nota en letra chica del pie) lo configura el administrador en Ajustes → Ticket. Hay TRES notas al pie y cada ticket lleva la suya: una para Autoservicio, otra para Por Encargo${E(' y Edredón')}, y otra para las ventas de Productos. La que se deje vacía no se imprime.`,
       },
     ],
   },

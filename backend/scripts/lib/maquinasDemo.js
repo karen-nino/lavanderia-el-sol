@@ -54,13 +54,7 @@ export async function sembrarMaquinasDemo(db, sucursal) {
   return creadas;
 }
 
-/** Precios de los tamaños de edredón que existan (sin precio no se vende el servicio). */
-export const PRECIOS_EDREDON_DEMO = {
-  'cubre colchón': 120, individual: 150, matrimonial: 180, king: 220, queen: 200,
-};
-
-export async function preciosEdredonDemo(db) {
-  for (const [nombre, precio] of Object.entries(PRECIOS_EDREDON_DEMO)) {
-    await db.query('UPDATE tamanos_edredon SET precio = $2 WHERE lower(nombre) = $1', [nombre, precio]);
-  }
+/** La demo no ofrece el servicio de edredón: sus tamaños quedan inactivos. */
+export async function sinEdredonDemo(db) {
+  await db.query('UPDATE tamanos_edredon SET activo = false');
 }

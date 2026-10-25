@@ -7,7 +7,7 @@ import MiPerfil from './MiPerfil';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin, esAdminMain as esAdminMainFn } from '../lib/roles';
-import { ES_DEMO } from '../lib/entorno';
+import { ES_DEMO, CON_EDREDON } from '../lib/entorno';
 import { almacenSesion } from '../lib/sesion';
 import { COMODINES_WHATSAPP, armarMensajeWhatsapp } from '../lib/mensajeWhatsapp';
 import Selector from '../components/Selector';
@@ -195,7 +195,7 @@ const MOBILE_SECTIONS = [
   { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.maquinas, detalle: 'Precio y tiempo de lavadoras y secadoras, marcas y modelos' },
   { id: 'cargas',   label: 'Servicios Por Encargo',      subtitle: 'Precio de cada servicio',   icon: SectionIcon.cargas, detalle: 'Precio y lo que incluye cada servicio' },
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas, detalle: 'Qué avisos y sonidos salen' },
-  { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas, detalle: 'Tipos de tela y tamaños de edredón' },
+  { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: CON_EDREDON ? 'Tipos de tela y tamaños de edredón' : 'Tipos de tela', icon: SectionIcon.etiquetas, detalle: CON_EDREDON ? 'Tipos de tela y tamaños de edredón' : 'Tipos de tela' },
   { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario, detalle: 'Marcas, envases, granel y bolsas' },
   { id: 'whatsapp', label: 'WhatsApp',                 subtitle: 'Mensaje para Por Encargo', icon: SectionIcon.whatsapp, detalle: 'Mensajes que se mandan a los clientes' },
   { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket, detalle: 'Notas al pie del ticket' },
@@ -1764,7 +1764,7 @@ function AjustesAdmin() {
   // Precios de servicio que se capturan: los fijos y uno por tamaño de edredón activo.
   const preciosServicio = [
     ...PRECIOS_SERVICIO,
-    ...edredones.filter(e => e.activo).map(e => [
+    ...edredones.filter(e => e.activo && CON_EDREDON).map(e => [
       claveEdredon(e), `Servicio Edredón ${e.nombre}`, `de edredón ${e.nombre}`,
       claveEdredonMedidas(e), claveEdredonBolsas(e),
     ]),
@@ -2141,11 +2141,14 @@ function AjustesAdmin() {
       {campoTiempo('tiempo_carga_jumbo', ayudaTiempoGeneral('lavadoras jumbo'))}
       {camposTiempoMarca('lavadora', 'jumbo')}
 
-      <div className="border-t border-gray-100" />
-
       {/* Tarifa propia del edredón en lavadora (sin tiempo propio). */}
-      {subTitulo('Edredón')}
-      {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
+      {CON_EDREDON && (
+        <>
+          <div className="border-t border-gray-100" />
+          {subTitulo('Edredón')}
+          {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
+        </>
+      )}
     </Section>
 
     {/* Secadora: Mediana y Jumbo. El precio es de la carga; el tiempo, de la máquina. */}
@@ -2482,11 +2485,13 @@ function AjustesAdmin() {
       <Field label="Tipos de tela" hint="Se ofrecen al crear un encargo de Ropa. Solo son etiquetas internas; no cambian el precio.">
         <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
       </Field>
-      <div className="border-t border-gray-100 pt-4">
-        <Field label="Tamaños de edredón" hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo.">
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
-        </Field>
-      </div>
+      {CON_EDREDON && (
+        <div className="border-t border-gray-100 pt-4">
+          <Field label="Tamaños de edredón" hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo.">
+            <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
+          </Field>
+        </div>
+      )}
     </Section>
   );
 
@@ -2540,7 +2545,7 @@ function AjustesAdmin() {
       </Field>
       <div className="border-t border-gray-100 pt-4">
         <Field
-          label="Nota para Por Encargo y Edredón"
+          label={CON_EDREDON ? 'Nota para Por Encargo y Edredón' : 'Nota para Por Encargo'}
           hint="Se imprime en letra chica al final del ticket que se manda al cliente."
         >
           <textarea
@@ -2905,9 +2910,11 @@ function AjustesAdmin() {
           {camposTiempoMarcaM('lavadora', 'jumbo')}
         </TarjetaMobile>
         {/* Tarifa propia del edredón en lavadora. */}
-        <TarjetaMobile titulo="Edredón">
-          {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
-        </TarjetaMobile>
+        {CON_EDREDON && (
+          <TarjetaMobile titulo="Edredón">
+            {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
+          </TarjetaMobile>
+        )}
         </div>
       </div>
 
@@ -3015,14 +3022,16 @@ function AjustesAdmin() {
         <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
       </MobileField>
 
-      <div className="border-t border-light-blue/60 pt-5">
-        <MobileField
-          label="Tamaños de edredón"
-          hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo."
-        >
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
-        </MobileField>
-      </div>
+      {CON_EDREDON && (
+        <div className="border-t border-light-blue/60 pt-5">
+          <MobileField
+            label="Tamaños de edredón"
+            hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo."
+          >
+            <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
+          </MobileField>
+        </div>
+      )}
     </div>
   );
 
@@ -3148,7 +3157,7 @@ function AjustesAdmin() {
       </MobileField>
 
       <MobileField
-        label="Nota para Por Encargo y Edredón"
+        label={CON_EDREDON ? 'Nota para Por Encargo y Edredón' : 'Nota para Por Encargo'}
         hint="Se imprime en letra chica al final del ticket que se manda al cliente."
       >
         <textarea

@@ -18,7 +18,7 @@ import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { limpiarOperacion, borrarUsuariosDeVisitantes, borrarCatalogos } from './lib/limpiarDemo.js';
-import { sembrarMaquinasDemo, preciosEdredonDemo } from './lib/maquinasDemo.js';
+import { sembrarMaquinasDemo, sinEdredonDemo } from './lib/maquinasDemo.js';
 import { sembrarProductosMarcaDemo } from './lib/productosDemo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -111,8 +111,8 @@ try {
   await borrarCatalogos(db);
   // Máquinas de la demo (Speed Queen jumbo), antes que seed_pruebas.js.
   await sembrarMaquinasDemo(db, SUCURSAL);
-  // Y los servicios de edredón con precio: sin él no se puede vender ninguno.
-  await preciosEdredonDemo(db);
+  // Sin servicio de edredón en la demo.
+  await sinEdredonDemo(db);
   // Productos de marca de exhibición.
   await sembrarProductosMarcaDemo(db, SUCURSAL);
   // Al final: las sucursales que un visitante creara solo se sueltan cuando ya

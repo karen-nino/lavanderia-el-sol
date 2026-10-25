@@ -9,6 +9,7 @@ import { fechaLarga } from '../lib/exportUtils';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import SucursalBar from '../components/SucursalBar';
 import Selector from '../components/Selector';
+import { CON_EDREDON } from '../lib/entorno';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -218,7 +219,7 @@ const FORM_VACIO = {
 };
 
 /** Servicios Por Encargo a los que se puede ligar una bolsa: [valor, etiqueta]. */
-const SERVICIOS_BOLSA = [['chico', 'Chico'], ['mediano', 'Mediano'], ['grande', 'Grande'], ['edredon', 'Edredón']];
+const SERVICIOS_BOLSA = [['chico', 'Chico'], ['mediano', 'Mediano'], ['grande', 'Grande'], ...(CON_EDREDON ? [['edredon', 'Edredón']] : [])];
 
 // ── Modal crear / editar ────────────────────────────────────────
 function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = [], tamanosBolsa = [], tiposGranel = [] }) {

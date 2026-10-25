@@ -9,6 +9,7 @@ import ModalCobrar from '../components/ModalCobrar';
 import ElegirMaquinasModal, { SELECCION_EDREDON } from '../components/ElegirMaquinasModal';
 import Selector from '../components/Selector';
 import { cobraPorPrograma } from '../lib/tiemposModelo';
+import { CON_EDREDON } from '../lib/entorno';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -439,7 +440,7 @@ export default function NuevaNota() {
       .then((resultados) => {
         const [prod, cfg, cli, telasCat, tamanosCat, tiposCat, extra] = resultados;
         setTelas(telasCat || []);
-        setTamanosEdredon(tamanosCat || []);
+        setTamanosEdredon(CON_EDREDON ? (tamanosCat || []) : []);
         setTiposGranel(tiposCat || []);
         setFolio(extra?.folio ?? '');
         // La lista de máquinas la pide el modal al abrirse.
@@ -2384,7 +2385,7 @@ export default function NuevaNota() {
         onToggle={toggleMaquinaSel}
         onConfirmar={confirmarMaquinas}
         onCancelar={() => { setMaqModalOpen(false); setMaqModalSel([]); }}
-        ofrecerEdredon
+        ofrecerEdredon={CON_EDREDON}
       />
 
       {/* Modal — cobro al momento (Autoservicio y venta de Productos) */}
