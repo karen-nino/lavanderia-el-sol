@@ -22,7 +22,7 @@
  * - TOTAL INGRESOS (el de efectivo) − TOTAL EGRESOS = ESPERADO EN CAJA.
  */
 
-import { CON_EDREDON } from './entorno';
+import { ES_DEMO, CON_EDREDON } from './entorno';
 
 const num = (v) => Number(v ?? 0) || 0;
 
@@ -34,7 +34,8 @@ export const CONCEPTOS = [
   { key: 'lavadoras_medianas', label: 'Lav. Medianas' },
   { key: 'lavadoras_jumbo',    label: 'Lav. Jumbo' },
   { key: 'secadoras',          label: 'Secadoras' },
-  { key: 'por_encargo',        label: 'SPE' },     // Servicios Por Encargo
+  // Servicios Por Encargo; en la demo, con el nombre más a la vista.
+  { key: 'por_encargo',        label: ES_DEMO ? 'S. Por Encargo' : 'SPE' },
   // Servicios Por Encargo de Edredón, con sus tamaños (incluye Cubre Colchón).
   { key: 'edredon',            label: 'Edredón' },
   { key: 'productos',          label: 'Productos' },
