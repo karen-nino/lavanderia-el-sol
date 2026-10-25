@@ -9,6 +9,8 @@
  * @param monto, onMonto el valor del campo (string).
  */
 
+import ConPesos from './ConPesos';
+
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
 
@@ -39,13 +41,15 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
         <label htmlFor="fondo-apertura" className="block text-sm font-medium text-gray-700 mb-1">
           Caja inicial
         </label>
-        <input
-          id="fondo-apertura"
-          type="number" inputMode="decimal" min="0" step="0.01" required autoFocus
-          value={monto} onChange={(e) => onMonto(e.target.value)}
-          placeholder="0.00"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
-        />
+        <ConPesos valor={monto}>
+          <input
+            id="fondo-apertura"
+            type="number" inputMode="decimal" min="0" step="0.01" required autoFocus
+            value={monto} onChange={(e) => onMonto(e.target.value)}
+            placeholder="$ 0.00"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
+          />
+        </ConPesos>
         <p className="mt-1.5 text-sm text-gray-500">
           Es la primera caja de esta sucursal: cuenta el efectivo y captúralo. De aquí en
           adelante el fondo lo trae solo del corte anterior.
@@ -83,16 +87,18 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
         <label htmlFor="fondo-apertura" className="block text-sm font-medium text-gray-700 mb-1">
           Caja inicial
         </label>
-        <input
-          id="fondo-apertura"
-          type="number" inputMode="decimal" min="0" step="0.01" required placeholder="0.00"
-          value={monto} onChange={(e) => onMonto(e.target.value)}
-          readOnly={!admin}
-          // Bloqueado para el empleado.
-          className={`w-full border rounded-lg px-3 py-2.5 text-base ${
-            admin ? 'border-gray-300' : 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed'
-          }`}
-        />
+        <ConPesos valor={monto}>
+          <input
+            id="fondo-apertura"
+            type="number" inputMode="decimal" min="0" step="0.01" required placeholder="$ 0.00"
+            value={monto} onChange={(e) => onMonto(e.target.value)}
+            readOnly={!admin}
+            // Bloqueado para el empleado.
+            className={`w-full border rounded-lg px-3 py-2.5 text-base ${
+              admin ? 'border-gray-300' : 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed'
+            }`}
+          />
+        </ConPesos>
         {admin ? (
           ajustado ? (
             <p className="mt-1.5 text-sm text-amber-700">

@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 import FondoApertura from '../components/FondoApertura';
+import ConPesos from '../components/ConPesos';
 import RecuadrosCaja from '../components/RecuadrosCaja';
 import { desgloseCaja } from '../lib/desgloseCaja';
 import MenuExportar from '../components/MenuExportar';
@@ -131,19 +132,6 @@ const ICONO_TAB = {
   movimientos: 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4',
   corte:       'M9 6a3 3 0 11-6 0 3 3 0 016 0zm0 12a3 3 0 11-6 0 3 3 0 016 0zM20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12',
 };
-
-/** Campo de dinero: en cuanto tiene un número, lleva el $ a la izquierda. */
-function ConPesos({ valor, children }) {
-  const conValor = valor !== '' && valor != null;
-  return (
-    <div className={`relative ${conValor ? '[&>input]:pl-7' : ''}`}>
-      {conValor && (
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base font-medium text-gray-500">$</span>
-      )}
-      {children}
-    </div>
-  );
-}
 
 function Spinner() {
   return (

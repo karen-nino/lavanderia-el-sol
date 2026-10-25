@@ -38,7 +38,7 @@ describe('CashCutCard', () => {
     await userEvent.click(abrir);
 
     // El modal pide el fondo inicial.
-    const monto = await screen.findByPlaceholderText('0.00');
+    const monto = await screen.findByPlaceholderText('$ 0.00');
     await userEvent.type(monto, '500');
 
     // Enviar el formulario (el segundo botón "Abrir caja" es el submit del modal).
