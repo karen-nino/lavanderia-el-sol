@@ -253,7 +253,9 @@ async function sembrar(db) {
       const cancelada = rnd() < 0.04;
       const pendiente = !cancelada && d <= 3 && rnd() < 0.18;
       const pagado = !cancelada && !pendiente;
+      // Sin cobrar no se entrega: la pendiente se queda en Por Entregar.
       const estado = cancelada ? 'CANCELADA'
+        : pendiente ? 'LISTA'
         : (servicio !== 'AUTOSERVICIO' && d <= 1 && rnd() < 0.5) ? 'LISTA'
         : 'FINALIZADA';
       const formaPago = pagado ? pesado([['EFECTIVO', 70], ['TRANSFERENCIA', 20], ['TARJETA', 10]]) : null;

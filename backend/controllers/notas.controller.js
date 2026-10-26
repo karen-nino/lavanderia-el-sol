@@ -3997,6 +3997,13 @@ export const cambiarEstadoPago = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
     }
+    // Una nota entregada tiene que estar pagada: primero se abre (vuelve a Por Entregar).
+    if (esReversion && actual.estado === 'FINALIZADA') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: 'Esta nota ya se entregó: ábrela primero (Abrir nota) para revertir el pago.',
+      });
+    }
     // Revertir un cobro exige motivo, que va al aviso de la campana.
     const motivoReversion = String(req.body?.motivo ?? '').trim().slice(0, 200);
     if (esReversion && !motivoReversion) {
@@ -4730,8 +4737,8 @@ export const revertirAbono = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      `SELECT ab.id, ab.monto, ab.caja_id, ab.revertido_at, n.estado_pago, n.id AS nota_id,
-              n.caja_id AS nota_caja_id
+      `SELECT ab.id, ab.monto, ab.caja_id, ab.revertido_at, n.estado_pago, n.estado AS nota_estado,
+              n.id AS nota_id, n.caja_id AS nota_caja_id
          FROM nota_abonos ab
          JOIN notas n ON n.id = ab.nota_id
         WHERE ab.id = $1 AND ab.nota_id = $2 AND n.sucursal = $3
@@ -4746,6 +4753,13 @@ export const revertirAbono = async (req, res) => {
     if (abono.revertido_at) {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: 'Ese abono ya estaba revertido.' });
+    }
+    // Una nota entregada tiene que estar pagada: primero se abre (vuelve a Por Entregar).
+    if (abono.nota_estado === 'FINALIZADA') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: 'Esta nota ya se entregó: ábrela primero (Abrir nota) para revertir el abono.',
+      });
     }
     if (abono.caja_id) {
       const { rows: cj } = await client.query(
