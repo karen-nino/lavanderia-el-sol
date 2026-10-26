@@ -782,6 +782,8 @@ export default function DetalleNota() {
   const mensajeProcesado = armarMensajeWhatsapp(plantillaAviso, nota);
   // Teléfono del aviso: el del cliente o el capturado en la nota.
   const telefonoAviso = telefonoWhatsapp(nota.cliente_telefono || nota.telefono);
+  // Mostrador sin teléfono: no hay a quién avisar, así que el modal no enseña el mensaje.
+  const mostradorSinTelefono = !nota.cliente_nombre && !nota.telefono;
   // Aparece cuando terminó al menos una lavadora.
   const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota)
     && (yaProcesada || nota.lavadora_terminada) && (
@@ -1788,11 +1790,11 @@ export default function DetalleNota() {
                       {nota.cliente_telefono ? ` (${nota.cliente_telefono})` : ''}.</>
                   : nota.telefono
                     ? <>Es una nota de <span className="font-medium text-gray-700">Mostrador</span>: se le avisa al {nota.telefono}, el teléfono que se capturó para el ticket.</>
-                    : <>Es una nota de <span className="font-medium text-gray-700">Mostrador</span>, sin teléfono capturado.</>}
+                    : <>Es una nota de <span className="font-medium text-gray-700">Mostrador</span>, sin teléfono capturado, así que no se manda aviso por WhatsApp.</>}
               </p>
             </div>
 
-            {!hayMensajeWhatsapp(plantillaAviso) ? (
+            {mostradorSinTelefono ? null : !hayMensajeWhatsapp(plantillaAviso) ? (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                 <p className="text-sm font-semibold text-amber-900">Todavía no hay mensaje escrito</p>
                 <p className="mt-0.5 text-sm text-amber-800">
@@ -1815,7 +1817,7 @@ export default function DetalleNota() {
               </div>
             )}
 
-            {hayMensajeWhatsapp(plantillaAviso) && !telefonoAviso && (
+            {!mostradorSinTelefono && hayMensajeWhatsapp(plantillaAviso) && !telefonoAviso && (
               <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
                 {nota.cliente_nombre
                   ? 'El cliente no tiene teléfono capturado, así que no hay a dónde mandarlo.'
@@ -1844,7 +1846,7 @@ export default function DetalleNota() {
                 disabled={loadingAccion || (yaProcesada && (!mensajeProcesado.trim() || !telefonoAviso))}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {loadingAccion ? 'Guardando...' : yaProcesada ? 'Enviar' : 'Marcar procesada'}
+                {loadingAccion ? 'Guardando...' : yaProcesada ? 'Enviar' : nota.cliente_nombre ? 'Marcar procesada' : 'Procesar'}
               </button>
             </div>
           </div>
