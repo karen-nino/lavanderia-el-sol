@@ -784,12 +784,12 @@ export default function DetalleNota() {
   const telefonoAviso = telefonoWhatsapp(nota.cliente_telefono || nota.telefono);
   // Mostrador sin teléfono: no hay a quién avisar, así que el modal no enseña el mensaje.
   const mostradorSinTelefono = !nota.cliente_nombre && !nota.telefono;
-  // Aparece cuando terminó al menos una lavadora.
+  // Aparece cuando terminó al menos una lavadora. Avisar no sale en Mostrador sin teléfono.
   const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota)
-    && (yaProcesada || nota.lavadora_terminada) && (
+    && (yaProcesada ? !mostradorSinTelefono : nota.lavadora_terminada) && (
     <AccionCircular
       label={yaProcesada ? 'Avisar' : 'Procesado'}
-      title={yaProcesada ? 'Volver a avisarle al cliente' : 'Marcar la nota como procesada'}
+      title={yaProcesada ? 'Volver a avisarle al cliente' : 'Procesar nota'}
       icono={yaProcesada ? IconoAvisar : IconoProcesado}
       // Procesado en verde, como Entregar; Avisar en azul.
       color={yaProcesada ? 'bg-blue group-hover:bg-blue-700' : 'bg-green-500 group-hover:bg-green-600'}
@@ -1780,13 +1780,14 @@ export default function DetalleNota() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
               <h3 className="text-base font-bold text-gray-900">
-                {yaProcesada ? 'Volver a avisar al cliente' : 'Marcar la nota como procesada'}
+                {yaProcesada ? 'Volver a avisar al cliente' : 'Procesar nota'}
               </h3>
               <p className="text-sm text-gray-500 mt-0.5">
                 {/* Primero lo que hace (la nota avanza); el aviso puede no tener a quién. */}
                 {!yaProcesada && <>La nota pasa a <span className="font-medium text-gray-700">Por Entregar</span> y suelta sus máquinas. </>}
+                {/* Al procesar no se nombra al cliente; al volver a avisar, sí. */}
                 {nota.cliente_nombre
-                  ? <>Se le avisa por WhatsApp a <span className="font-medium text-gray-700">{nota.cliente_nombre}</span>
+                  ? yaProcesada && <>Se le avisa por WhatsApp a <span className="font-medium text-gray-700">{nota.cliente_nombre}</span>
                       {nota.cliente_telefono ? ` (${nota.cliente_telefono})` : ''}.</>
                   : nota.telefono
                     ? <>Es una nota de <span className="font-medium text-gray-700">Mostrador</span>: se le avisa al {nota.telefono}, el teléfono que se capturó para el ticket.</>
@@ -1846,7 +1847,7 @@ export default function DetalleNota() {
                 disabled={loadingAccion || (yaProcesada && (!mensajeProcesado.trim() || !telefonoAviso))}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {loadingAccion ? 'Guardando...' : yaProcesada ? 'Enviar' : nota.cliente_nombre ? 'Marcar procesada' : 'Procesar'}
+                {loadingAccion ? 'Guardando...' : yaProcesada ? 'Enviar' : mostradorSinTelefono ? 'Procesar' : 'Marcar procesada'}
               </button>
             </div>
           </div>
