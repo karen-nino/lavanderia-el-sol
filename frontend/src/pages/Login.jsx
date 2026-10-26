@@ -206,15 +206,15 @@ export default function Login() {
           {ES_DEMO && (
             <>
               <div className="text-sm text-gray-600 leading-relaxed mb-5 space-y-4">
-                <p>
-                  <span className="text-base font-semibold text-gray-800 mb-6"> Demo </span> con datos de ejemplo.
+                <p className="text-base font-semibold text-gray-800 mb-6">
+                   Demo con datos de ejemplo.
                 </p>
                   <p>
-                    <span className="font-semibold text-gray-800">Administrador:</span>
+                    <span className="font-semibold text-gray-800">Administrador: </span>
                     ventas, reportes, empleados y ajustes, además de las funciones del empleado.
                   </p>
                   <p>
-                    <span className="font-semibold text-gray-800">Empleado:</span>
+                    <span className="font-semibold text-gray-800">Empleado: </span>
                     atención de servicios: notas, clientes, máquinas, inventario y caja.
                   </p>
               </div>
