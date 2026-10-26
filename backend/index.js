@@ -4,6 +4,7 @@ import { iniciarLimpiezaNotificaciones } from './jobs/limpiezaNotificaciones.js'
 import { iniciarFinalizarAlTope } from './jobs/finalizarAlTope.js';
 import { iniciarListenerSonoff } from './jobs/listenerSonoff.js';
 import { iniciarReconciliadorSonoff } from './jobs/reconciliarSonoff.js';
+import { iniciarGuardadoLlamadas } from './services/dispositivos/ewelinkLlamadas.js';
 import { ENTORNO_DEMO, verificarEntornoDemo } from './utils/entorno.js';
 
 // Antes de escuchar: si ENTORNO_DEMO está encendido sobre una base con
@@ -24,5 +25,6 @@ app.listen(PORT, () => {
   if (!ENTORNO_DEMO) {
     iniciarListenerSonoff();
     iniciarReconciliadorSonoff();
+    iniciarGuardadoLlamadas();
   }
 });

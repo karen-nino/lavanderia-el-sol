@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { api, mensajeDeError } from '../lib/api';
 import InstalarApp from '../components/InstalarApp';
 import ActualizarApp from '../components/ActualizarApp';
+import LlamadasSonoff from '../components/LlamadasSonoff';
 import MiPerfil from './MiPerfil';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
@@ -104,6 +105,12 @@ const SectionIcon = {
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  ),
+  // Rayo: la corriente que manda cada Sonoff.
+  sonoffs: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
     </svg>
   ),
   instalar: (
@@ -256,8 +263,14 @@ const fotoTiempo = (t) => [
 /** Lo editable de una sucursal, para compararla con lo guardado. */
 const huellaSucursal = (s) => JSON.stringify([s.nombre ?? '', s.direccion ?? '', s.telefono ?? '', s.horario_semana ?? null]);
 
+/** Llamadas a la nube de eWeLink contra el límite del mes; solo consulta. */
+const SECCION_SONOFFS = {
+  id: 'sonoffs', label: 'Sonoffs', subtitle: 'Llamadas a eWeLink',
+  detalle: 'Cuántas llamadas van y cuántas quedan en el mes', icon: SectionIcon.sonoffs,
+};
+
 /** Todas las secciones de Ajustes, en el orden del menú del celular. */
-const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_INSTALAR, SECCION_ACTUALIZAR];
+const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_SONOFFS, SECCION_INSTALAR, SECCION_ACTUALIZAR];
 const seccionPorId = (id) => SECCIONES_AJUSTES.find(s => s.id === id);
 
 /** Secciones de Ajustes agrupadas por intención; igual en celular y escritorio. */
@@ -265,7 +278,7 @@ const GRUPOS_AJUSTES = [
   { titulo: 'Cuenta',    ids: ['perfil'] },
   { titulo: 'Negocio',   ids: ['negocio', 'ticket', 'whatsapp'] },
   { titulo: 'Operación', ids: ['maquinas', 'cargas', 'etiquetas', 'inventario'] },
-  { titulo: 'Sistema',   ids: ['alertas', 'manual', 'actualizar', 'instalar'] },
+  { titulo: 'Sistema',   ids: ['alertas', 'sonoffs', 'manual', 'actualizar', 'instalar'] },
 ];
 
 /**
@@ -302,7 +315,7 @@ const ALERTAS_APAGABLES = [
 ];
 
 /** Secciones sin nada que guardar con el botón general. */
-const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'manual', 'instalar', 'actualizar'];
+const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'manual', 'sonoffs', 'instalar', 'actualizar'];
 
 /** Encabezado de un grupo de campos (por encima de las etiquetas, que son bold). */
 function TituloGrupo({ children }) {
@@ -3229,6 +3242,7 @@ function AjustesAdmin() {
     ticket: seccionTicketMobile,
     whatsapp: seccionWhatsappMobile,
     manual: <TarjetaManual onAbrir={() => navigate('/manual')} />,
+    sonoffs: <LlamadasSonoff />,
     instalar: <InstalarApp variant="mobile" />,
     actualizar: <ActualizarApp variant="mobile" />,
   };
@@ -3274,7 +3288,7 @@ function AjustesAdmin() {
 
   // En pruebas, toda sección salvo Mi Perfil es de consulta: sin Cancelar/Guardar.
   const seccionDeConsulta = soloConsultaPruebas
-    && activeSection && !['instalar', 'actualizar'].includes(activeSection.id);
+    && activeSection && !['instalar', 'actualizar', 'sonoffs'].includes(activeSection.id);
 
   // Aviso fijo del entorno de pruebas, arriba de la lista de ajustes.
   const avisoPruebas = soloConsultaPruebas && (
@@ -3454,6 +3468,7 @@ function AjustesAdmin() {
               whatsapp:   seccionWhatsappDesktop,
               ticket:     seccionTicketDesktop,
               manual:     <TarjetaManual onAbrir={() => navigate('/manual')} />,
+              sonoffs:    <LlamadasSonoff />,
               instalar:   <InstalarApp />,
               actualizar: <ActualizarApp />,
             }[seccionVista]}

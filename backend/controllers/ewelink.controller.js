@@ -4,11 +4,14 @@
 //   POST /api/ewelink/conectar     URL de autorización (admin)
 //   GET  /api/ewelink/callback     vuelta de eWeLink (público)
 //   POST /api/ewelink/desconectar  olvida los tokens (admin)
+//   GET  /api/ewelink/llamadas     llamadas del mes contra el límite (admin)
 
 import * as oauth from '../services/dispositivos/ewelinkOAuth.js';
 import * as cuentaStore from '../services/dispositivos/ewelinkCuenta.js';
 import { _reset as resetDriver } from '../services/dispositivos/ewelinkDriver.js';
 import * as dispositivos from '../services/dispositivos/index.js';
+import { LIMITE_MENSUAL, llamadasDelMes } from '../services/dispositivos/ewelinkLlamadas.js';
+import pool from '../db/pool.js';
 
 /** Página HTML del callback (sin estilos ni scripts: helmet aplica CSP). */
 const paginaCallback = (titulo, detalle) => `<!doctype html>
@@ -119,5 +122,39 @@ export const desconectar = async (req, res) => {
   } catch (err) {
     console.error('ewelink desconectar error:', err);
     res.status(500).json({ message: 'No se pudo desconectar la cuenta de eWeLink. Intenta de nuevo.' });
+  }
+};
+
+// ── GET /ewelink/llamadas ─────────────────────────────────────
+/**
+ * Llamadas a eWeLink del mes (hora de México) contra el límite del plan, que es
+ * uno para toda la cuenta; por sucursal, para ver cuál gasta más. Se supone que
+ * eWeLink reinicia el conteo el día 1 (no lo publica).
+ */
+export const getLlamadas = async (req, res) => {
+  try {
+    const { mes, porSucursal } = await llamadasDelMes();
+    const { rows: sucursales } = await pool.query(
+      `SELECT slug, nombre FROM sucursales WHERE oculta = FALSE ORDER BY activa DESC, orden ASC, nombre ASC`
+    );
+    const conocidas = new Set(sucursales.map(s => s.slug));
+    const filas = sucursales.map(s => ({ slug: s.slug, nombre: s.nombre, llamadas: porSucursal.get(s.slug) ?? 0 }));
+    // Lo que no es de una sucursal existente (renovar la sesión, sucursales ocultas o borradas).
+    const otras = [...porSucursal].filter(([s]) => !conocidas.has(s)).reduce((t, [, n]) => t + n, 0);
+    const usadas = [...porSucursal.values()].reduce((t, n) => t + n, 0);
+    const [anio, m] = mes.split('-').map(Number);
+    res.json({
+      mes,
+      limite: LIMITE_MENSUAL,
+      usadas,
+      disponibles: Math.max(0, LIMITE_MENSUAL - usadas),
+      reinicia: `${m === 12 ? anio + 1 : anio}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`,
+      en_pausa_por_limite: dispositivos.enPausaPorLimite(),
+      sucursales: filas,
+      otras,
+    });
+  } catch (err) {
+    console.error('getLlamadas error:', err);
+    res.status(500).json({ message: 'No se pudo cargar el contador de llamadas. Intenta de nuevo.' });
   }
 };

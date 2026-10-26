@@ -146,6 +146,7 @@ async function setSwitch(maquina, on) {
     const data = await llamarAuth('/v2/device/thing/status', {
       method: 'POST',
       bodyStr: JSON.stringify({ type: 1, id: maquina.device_id, params: paramsSwitch(maquina, on) }),
+      sucursal: maquina.sucursal,
     });
     if (data?.error !== 0) {
       console.warn(`[dispositivos:ewelink] set switch device=${maquina.device_id} error ${data?.error}: ${data?.msg}`);
@@ -181,18 +182,29 @@ function valorSwitch(maquina, p = {}) {
 /**
  * Lee de una vez el estado de varios Sonoff (de 10 en 10) para que el barrido no
  * haga una llamada por máquina. Lo que no llegue se pregunta uno por uno después.
- * No lanza.
+ * Los lotes van por sucursal para contar las llamadas de cada una. No lanza.
  */
 export async function precargarEstados(maquinas) {
   if (!configCompleta() || enPausaPorLimite()) return;
-  const ids = [...new Set(maquinas.map((m) => m.device_id).filter(Boolean))];
-  for (let i = 0; i < ids.length; i += 10) {
+  const idsPorSucursal = new Map();
+  for (const m of maquinas) {
+    if (!m.device_id) continue;
+    const s = String(m.sucursal ?? '');
+    if (!idsPorSucursal.has(s)) idsPorSucursal.set(s, new Set());
+    idsPorSucursal.get(s).add(m.device_id);
+  }
+  const lotes = [];
+  for (const [sucursal, set] of idsPorSucursal) {
+    const ids = [...set];
+    for (let i = 0; i < ids.length; i += 10) lotes.push({ sucursal, lote: ids.slice(i, i + 10) });
+  }
+  for (const { sucursal, lote } of lotes) {
     if (enPausaPorLimite()) return;
-    const lote = ids.slice(i, i + 10);
     try {
       const data = await llamarAuth('/v2/device/thing', {
         method: 'POST',
         bodyStr: JSON.stringify({ thingList: lote.map((id) => ({ itemType: 1, id })) }),
+        sucursal: sucursal || undefined,
       });
       if (data?.error !== 0) {
         console.warn(`[dispositivos:ewelink] lectura en lote error ${data?.error}: ${data?.msg}`);
@@ -239,6 +251,7 @@ export async function estado(maquina) {
     const data = await llamarAuth('/v2/device/thing/status', {
       method: 'GET',
       query: { type: '1', id: maquina.device_id, params: multi ? 'switches' : 'switch' },
+      sucursal: maquina.sucursal,
     });
     if (data?.error !== 0) {
       console.warn(`[dispositivos:ewelink] get status device=${maquina.device_id} error ${data?.error}: ${data?.msg}`);

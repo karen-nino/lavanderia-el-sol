@@ -14,6 +14,7 @@
  */
 
 import crypto from 'crypto';
+import { registrarLlamada } from './ewelinkLlamadas.js';
 
 export const BASES = {
   cn: 'https://cn-apia.coolkit.cn',
@@ -45,8 +46,9 @@ export const firmar = (texto) =>
 /**
  * Petición a la API de eWeLink. Ojo: el Content-Type tiene que ser exactamente
  * "application/json" o "application/json; charset=utf-8"; otra forma da 400.
+ * Cada petición cuenta contra el límite del mes, a nombre de `sucursal`.
  */
-export async function apiFetch(base, path, { method = 'GET', headers = {}, bodyStr, query } = {}) {
+export async function apiFetch(base, path, { method = 'GET', headers = {}, bodyStr, query, sucursal } = {}) {
   let url = `${base}${path}`;
   if (query) url += `?${new URLSearchParams(query).toString()}`;
   const resp = await fetch(url, {
@@ -54,6 +56,7 @@ export async function apiFetch(base, path, { method = 'GET', headers = {}, bodyS
     headers: { 'Content-Type': 'application/json', 'X-CK-Appid': cfg.appId, ...headers },
     body: bodyStr,
   });
+  registrarLlamada(sucursal);
   return resp.json();
 }
 
