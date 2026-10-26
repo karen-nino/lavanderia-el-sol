@@ -56,10 +56,15 @@ export async function guardarPendientes() {
   }
 }
 
-/** Guarda el contador cada minuto. */
+/** Guarda el contador cada minuto y al apagarse el servidor (cada deploy de Fly lo reinicia). */
 export function iniciarGuardadoLlamadas() {
   const t = setInterval(guardarPendientes, GUARDAR_CADA_MS);
   t.unref?.();
+  for (const senal of ['SIGTERM', 'SIGINT']) {
+    process.once(senal, () => {
+      guardarPendientes().finally(() => process.exit(0));
+    });
+  }
 }
 
 /**

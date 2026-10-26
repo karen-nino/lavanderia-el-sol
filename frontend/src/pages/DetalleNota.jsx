@@ -1848,7 +1848,7 @@ export default function DetalleNota() {
                 disabled={loadingAccion || (yaProcesada && (!mensajeProcesado.trim() || !telefonoAviso))}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {loadingAccion ? 'Guardando...' : (yaProcesada || telefonoAviso) ? 'Enviar' : mostradorSinTelefono ? 'Procesar' : 'Marcar procesada'}
+                {loadingAccion ? 'Guardando...' : (yaProcesada || (telefonoAviso && hayMensajeWhatsapp(plantillaAviso))) ? 'Enviar' : mostradorSinTelefono ? 'Procesar' : 'Marcar procesada'}
               </button>
             </div>
           </div>

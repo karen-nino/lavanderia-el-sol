@@ -44,16 +44,23 @@ export default function LlamadasSonoff() {
     api.get('/ewelink/llamadas').then(setDatos).catch(err => setError(err.message));
   }, []);
 
-  if (error) {
-    return <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>;
-  }
-  if (!datos) return <p className="text-sm text-gray-400">Cargando…</p>;
+  const avisoError = error && (
+    <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex items-center justify-between gap-3">
+      <span>{error}</span>
+      <button type="button" onClick={cargar} disabled={cargando}
+        className="flex-shrink-0 font-medium text-red-700 underline disabled:opacity-60">
+        Reintentar
+      </button>
+    </div>
+  );
+  if (!datos) return avisoError || <p className="text-sm text-gray-400">Cargando…</p>;
 
   const pct = Math.min(100, (datos.usadas / datos.limite) * 100);
   const sinLlamadas = datos.en_pausa_por_limite || datos.disponibles === 0;
 
   return (
     <div className="space-y-6">
+      {avisoError}
       {sinLlamadas && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
           Se acabaron las llamadas: eWeLink no deja prender ni apagar los Sonoff hasta que se reinicie el conteo.
