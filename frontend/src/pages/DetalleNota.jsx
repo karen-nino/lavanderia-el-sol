@@ -13,6 +13,7 @@ import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
 import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar } from '../lib/accionesNota';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ModalCobrar from '../components/ModalCobrar';
+import TopeServicios from '../components/TopeServicios';
 import { ES_DEMO } from '../lib/entorno';
 import { armarMensajeWhatsapp, hayMensajeWhatsapp, telefonoWhatsapp } from '../lib/mensajeWhatsapp';
 import { cobroAparteEncargo } from '../lib/cobroProductos';
@@ -1171,6 +1172,9 @@ export default function DetalleNota() {
           </p>
         </div>
       )}
+
+      {/* Por Encargo: cuánto del precio de los servicios ya se usó. */}
+      <TopeServicios nota={nota} />
 
       {/* Productos: en la venta de productos siempre; en los demás servicios, si llevan. */}
       {(nota.tipo_servicio === 'PRODUCTOS' || productosNota.length > 0) && (
