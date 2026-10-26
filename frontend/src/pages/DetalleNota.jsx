@@ -974,7 +974,7 @@ export default function DetalleNota() {
           {/* Deshacer la entrega (admin): vuelve a Por Entregar. */}
           {puedeReabrir && (
             <AccionCircular
-              label="Abrir"
+              label={<>Abrir<br />nota</>}
               title="Deshacer la entrega"
               icono={IconoAbrirNota}
               color="bg-amber-600 group-hover:bg-amber-700"
