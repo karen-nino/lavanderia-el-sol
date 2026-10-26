@@ -791,8 +791,8 @@ export default function DetalleNota() {
       label={yaProcesada ? 'Avisar' : 'Procesado'}
       title={yaProcesada ? 'Volver a avisarle al cliente' : 'Procesar nota'}
       icono={yaProcesada ? IconoAvisar : IconoProcesado}
-      // Procesado y Avisar en verde, como Entregar.
-      color="bg-green-500 group-hover:bg-green-600"
+      // Procesado en verde, como Entregar; Avisar en azul.
+      color={yaProcesada ? 'bg-blue group-hover:bg-blue-700' : 'bg-green-500 group-hover:bg-green-600'}
       onClick={() => { setErrorAccion(''); setProcesadoOpen(true); }}
       disabled={loadingAccion}
     />
@@ -809,7 +809,8 @@ export default function DetalleNota() {
     <AccionCircular
       label="Cobrar"
       icono={IconoCobrar}
-      color="bg-blue group-hover:bg-green-600"
+      // Ya procesada, en verde.
+      color={yaProcesada ? 'bg-green-500 group-hover:bg-green-600' : 'bg-blue group-hover:bg-green-600'}
       onClick={abrirCobro}
       disabled={loadingAccion}
     />
