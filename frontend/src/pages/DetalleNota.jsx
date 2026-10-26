@@ -1077,7 +1077,8 @@ export default function DetalleNota() {
             </svg>
           </div>
         ) : (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 mt-12">
+          // Cerrada y sin botones arriba: sin margen, queda pegada al encabezado.
+          <div className={`rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 ${terminal && !hayAccionesCerrada ? '' : 'mt-12'}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-emerald-700 uppercase tracking-wide">
