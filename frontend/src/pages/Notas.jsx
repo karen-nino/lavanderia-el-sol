@@ -866,7 +866,7 @@ export default function Notas() {
           </div>
 
           {/* Tarjetas abajo de lg, agrupadas por día. */}
-          <div className="lg:hidden pt-8 space-y-16">
+          <div className="lg:hidden space-y-16">
             {gruposMobile.map((grupo) => (
               <div key={grupo.clave} className="space-y-4">
                 <h3 className="text-sm font-bold text-dark-blue px-1">{grupo.fecha}</h3>
