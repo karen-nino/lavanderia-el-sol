@@ -5,12 +5,12 @@ import { api } from '../lib/api';
 
 /**
  * Barra con el nombre de la sucursal activa, bajo la cabecera de cada página
- * (salvo el Dashboard). La ven los admins y los usuarios de prueba.
+ * (salvo el Dashboard). Solo la ven los admins (también el admin de prueba).
  */
 export default function SucursalBar() {
   const { usuario, sucursalActiva } = useAuth();
   const [nombre, setNombre] = useState('');
-  const puedeVer = esAdmin(usuario?.rol) || usuario?.es_prueba === true;
+  const puedeVer = esAdmin(usuario?.rol);
 
   useEffect(() => {
     if (!puedeVer) return;
@@ -23,7 +23,7 @@ export default function SucursalBar() {
       })
       .catch(() => {});
     return () => { activo = false; };
-  }, [puedeVer, sucursalActiva, usuario?.sucursal, usuario?.es_prueba]);
+  }, [puedeVer, sucursalActiva, usuario?.sucursal]);
 
   if (!puedeVer || !nombre) return null;
   return (
