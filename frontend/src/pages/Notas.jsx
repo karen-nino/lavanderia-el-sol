@@ -374,8 +374,9 @@ export default function Notas() {
       || referencia.includes(q);
   });
 
+  const hayFiltros = filtro !== 'TODOS' || rangoFecha !== 'TODAS';
   // Chips de los filtros activos, bajo la búsqueda y a la derecha; se quitan con su ✕.
-  const chipsFiltros = (filtro !== 'TODOS' || rangoFecha !== 'TODAS') && (
+  const chipsFiltros = hayFiltros && (
     <div className="flex flex-wrap justify-end gap-2">
       {filtro !== 'TODOS' && (
         <ChipFiltro
@@ -866,7 +867,8 @@ export default function Notas() {
           </div>
 
           {/* Tarjetas abajo de lg, agrupadas por día. */}
-          <div className="lg:hidden space-y-16">
+          {/* Con filtros, los chips ya separan la lista del encabezado. */}
+          <div className={`lg:hidden space-y-16 ${hayFiltros ? '' : 'pt-8'}`}>
             {gruposMobile.map((grupo) => (
               <div key={grupo.clave} className="space-y-4">
                 <h3 className="text-sm font-bold text-dark-blue px-1">{grupo.fecha}</h3>
