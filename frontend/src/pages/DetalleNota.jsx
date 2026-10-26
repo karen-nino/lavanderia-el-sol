@@ -1265,9 +1265,6 @@ export default function DetalleNota() {
             </span>
             {nota.tamano && <span className="ml-2 text-sm text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
-          <FilaDetalle label="# Nota">
-            <span className="text-sm font-medium text-gray-800">{nota.folio ?? `#${nota.id}`}</span>
-          </FilaDetalle>
           <FilaDetalle label="Cliente">
             {nota.cliente_nombre
               ? (
@@ -1281,8 +1278,11 @@ export default function DetalleNota() {
               // Mostrador se lee como un cliente más; antes va la referencia del Autoservicio.
               : (nota.referencia || 'Mostrador')}
           </FilaDetalle>
-          {/* El ID interno solo le sirve al admin main (soporte y base de datos). */}
-          {esAdminMain && (
+          <FilaDetalle label="# Nota">
+            <span className="text-sm font-medium text-gray-800">{nota.folio ?? `#${nota.id}`}</span>
+          </FilaDetalle>
+          {/* El ID interno solo le sirve a los admins (soporte y base de datos). */}
+          {esAdmin && (
             <FilaDetalle label="ID">
               <span className="text-sm font-medium text-gray-800">{nota.id}</span>
             </FilaDetalle>

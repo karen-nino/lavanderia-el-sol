@@ -1732,7 +1732,7 @@ export const getNextFolio = async (req, res) => {
       'SELECT COALESCE((SELECT ultimo FROM folios_sucursal WHERE sucursal = $1), 0) + 1 AS siguiente',
       [req.sucursal]
     );
-    const folio = generarFolio(rows[0].siguiente, new Date());
+    const folio = generarFolio(rows[0].siguiente);
     res.json({ folio });
   } catch (err) {
     console.error('getNextFolio error:', err);
@@ -2184,7 +2184,7 @@ export const createNota = async (req, res) => {
     );
     const nota = notaRows[0];
 
-    const folio = generarFolio(await tomarNumeroFolio(client, req.sucursal), nota.created_at);
+    const folio = generarFolio(await tomarNumeroFolio(client, req.sucursal));
     await client.query('UPDATE notas SET folio = $1 WHERE id = $2', [folio, nota.id]);
     nota.folio = folio;
 

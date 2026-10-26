@@ -1,5 +1,4 @@
 // Cálculos puros de notas (sin BD ni req), para probarlos sin Postgres.
-import { fechaLocal } from './tz.js';
 
 /**
  * Precio del secado: uno solo (Ajustes → Secadora). Tamaño y prenda se ignoran;
@@ -47,13 +46,7 @@ export function precioProductoEnNota(art, tipo_servicio) {
     : (art.precio_unitario ?? 0);
 }
 
-/**
- * Folio "0041-121026": consecutivo de la sucursal a 4 dígitos + fecha DDMMYY del
- * negocio (no la del servidor en UTC).
- */
-export function generarFolio(id, fecha) {
-  const d = fecha instanceof Date ? fecha : new Date(fecha);
-  const [yyyy, mm, dd] = fechaLocal(d).split('-');
-  const seq = String(id).padStart(4, '0');
-  return `${seq}-${dd}${mm}${yyyy.slice(-2)}`;
+/** Folio "0041": consecutivo de la sucursal a 4 dígitos (sin la fecha desde la mig. 169). */
+export function generarFolio(id) {
+  return String(id).padStart(4, '0');
 }

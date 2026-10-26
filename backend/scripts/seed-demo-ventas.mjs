@@ -236,7 +236,7 @@ async function sembrar(db) {
     for (let i = 0; i < cuantas; i++) {
       const hora = entre(8, 19), minuto = entre(0, 59);
       const stamp = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')} ${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}:00`;
-      const folio = `${String(consecutivo++).padStart(4, '0')}-${String(dia.getDate()).padStart(2, '0')}${String(dia.getMonth() + 1).padStart(2, '0')}${String(dia.getFullYear()).slice(-2)}`;
+      const folio = String(consecutivo++).padStart(4, '0');
 
       // Por Encargo cobra el servicio; las máquinas van sin cobro.
       const conServicios = tamanosServicio.length > 0;
