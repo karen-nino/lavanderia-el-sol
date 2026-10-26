@@ -11,7 +11,8 @@
  * @param textoConfirmar el verbo del botón.
  * @param procesando deshabilita los botones mientras corre.
  * @param error respuesta del servidor si falló; va dentro del modal para que se vea.
- * @param onConfirm sin él, el modal solo avisa: un único botón "Entendido" que cierra.
+ * @param onConfirm sin él, el modal solo avisa: un único botón que cierra.
+ * @param textoCerrar el texto de ese único botón.
  */
 const TONOS = {
   peligro: {
@@ -34,6 +35,7 @@ export default function ConfirmacionModal({
   detalle = [],
   children,
   textoConfirmar = 'Continuar',
+  textoCerrar = 'Entendido',
   procesando = false,
   error = '',
   onClose,
@@ -85,7 +87,7 @@ export default function ConfirmacionModal({
           {!onConfirm ? (
             <button type="button" onClick={onClose}
               className={`w-full ${t.boton} text-white font-medium py-3.5 rounded-lg text-base transition-colors`}>
-              Entendido
+              {textoCerrar}
             </button>
           ) : (
           <div className="flex gap-3">

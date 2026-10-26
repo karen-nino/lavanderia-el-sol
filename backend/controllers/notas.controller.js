@@ -2750,7 +2750,7 @@ export const encenderMaquinaDeNota = async (req, res) => {
     const faltaGranel = await granelSinElegir(client, id, [maquina_id]);
     if (faltaGranel) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ message: faltaGranel });
+      return res.status(409).json({ message: faltaGranel, code: 'GRANEL_SIN_ELEGIR' });
     }
 
     // FOR UPDATE: dos clics simultáneos sobre la misma máquina se serializan.
@@ -2954,7 +2954,7 @@ export const activarMaquinasPendientes = async (req, res) => {
     const faltaGranel = await granelSinElegir(client, id, maquina_id ? [maquina_id] : ids);
     if (faltaGranel) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ message: faltaGranel });
+      return res.status(409).json({ message: faltaGranel, code: 'GRANEL_SIN_ELEGIR' });
     }
     const { rows: maqs } = await client.query(
       `SELECT id, estado, en_uso_desde, encendida_para_nota_id

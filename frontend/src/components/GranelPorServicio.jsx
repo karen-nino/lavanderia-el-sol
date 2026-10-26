@@ -76,8 +76,6 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
 
   if (nota?.tipo_servicio !== 'POR_ENCARGO' || conGranel.length === 0) return null;
 
-  const porElegir = conGranel.some(s => s.renglones.some(r => !r.producto && !r.delCliente));
-
   // Graneles de ese tipo, más el ya puesto aunque haya cambiado de tipo.
   const opcionesDe = (tipoId, actual) => {
     const lista = catalogo.filter(p => p.tipo_granel_id === tipoId);
@@ -154,11 +152,6 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
     <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-50">
         <h2 className="text-sm font-semibold text-gray-700">Granel de cada servicio</h2>
-        {porElegir && (
-          <p className="text-sm text-amber-700 mt-0.5">
-            Elige qué usa cada servicio. Mientras falte alguno no se puede iniciar la lavadora.
-          </p>
-        )}
       </div>
       {error && (
         <div className="mx-4 mt-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
@@ -182,7 +175,11 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                   {/* Sin producto: "Elegir" a la derecha. Elegido: el nombre y "Cambiar"
                       abajo, y las medidas a la derecha. */}
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-800">{nombreTipo(r.tipoId)}</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {nombreTipo(r.tipoId)}
+                      {/* Asterisco mientras falte elegir. */}
+                      {!resuelto && <span className="text-red-600 font-normal ml-0.5">* (Falta elegir)</span>}
+                    </p>
                     {opciones.length === 0 && !resuelto && (
                       <p className="text-sm text-gray-400 mt-0.5">
                         No hay {nombreTipo(r.tipoId).toLowerCase()} en Inventario: dalo de alta o asígnale su tipo al producto.

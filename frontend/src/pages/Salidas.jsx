@@ -87,6 +87,8 @@ export default function Salidas() {
 
   const [confirmQuitarCarga, setConfirmQuitarCarga] = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
+  // Lavadora que no arranca porque falta elegir el granel: va en modal, no arriba.
+  const [avisoGranel,      setAvisoGranel]      = useState('');
   // Con la caja cerrada no se agregan ni encienden máquinas ni se cambian
   // productos (el servidor responde 409); Finalizar y Detener sí se pueden.
   const [cajaAbierta,      setCajaAbierta]      = useState(null);
@@ -96,11 +98,6 @@ export default function Salidas() {
       .then(r => setCajaAbierta(Boolean(r?.abierta)))
       .catch(() => setCajaAbierta(null)); // si falla la consulta, no se avisa nada
   }, []);
-  /** Error de una acción; si fue por la caja cerrada, además sale el aviso de arriba. */
-  const fallaAccion = (err, texto = err.message) => {
-    if (err?.data?.code === 'CAJA_CERRADA') setCajaAbierta(false);
-    setErrorAccion(texto);
-  };
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
   // Máquina del modal de arranque. Se guarda el id: el paso (encender o iniciar)
   // sale del estado vivo de la máquina, que cambia sin cerrar el modal.
@@ -109,6 +106,19 @@ export default function Salidas() {
   // Máquina esperando que se elija su programa: { maquina, paso } ('encender' o
   // 'iniciar'), porque al elegir se hace algo distinto en cada paso.
   const [eligiendoTiempo,  setEligiendoTiempo]  = useState(null);
+  /** Error de una acción; si fue por la caja cerrada, además sale el aviso de arriba; si falta el granel, va en modal. */
+  const fallaAccion = (err, texto = err.message) => {
+    if (err?.data?.code === 'CAJA_CERRADA') setCajaAbierta(false);
+    if (err?.data?.code === 'GRANEL_SIN_ELEGIR') {
+      /* Se cierran los modales de arranque: sin granel no hay nada que hacer ahí. */
+      setEligiendoTiempo(null);
+      setMaquinaModalId(null);
+      setErrorAccion('');
+      setAvisoGranel(texto);
+      return;
+    }
+    setErrorAccion(texto);
+  };
   // Programa elegido al encender, hasta que se inicie. Solo en memoria: si la
   // pantalla se recarga, se vuelve a preguntar.
   const [minutosPorMaquina, setMinutosPorMaquina] = useState({});
@@ -1323,7 +1333,7 @@ export default function Salidas() {
           { etiqueta: 'Usado', valor: fmtMonto(t.usado), cls: 'text-gray-700' },
           sePasa
             ? { etiqueta: 'Se pasa', valor: fmtMonto(-disponible), cls: 'text-red-600' }
-            : { etiqueta: 'Disponible', valor: fmtMonto(disponible), cls: 'text-green-700' },
+            : { etiqueta: 'Disponible', valor: fmtMonto(disponible), cls: 'text-orange-500' },
         ];
         return (
           <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
@@ -1712,6 +1722,17 @@ export default function Salidas() {
       {encendiendo && <MaquinaCicloOverlay modo="encender" tipo={encendiendo.tipo} nombre={encendiendo.nombre} />}
       {iniciando && <MaquinaCicloOverlay modo="iniciar" tipo={iniciando.tipo} nombre={iniciando.nombre} />}
       {deteniendo && <MaquinaCicloOverlay modo="detener" tipo={deteniendo.tipo} nombre={deteniendo.nombre} />}
+
+      {/* La lavadora no arrancó: falta elegir el granel de algún servicio. */}
+      {avisoGranel && (
+        <ConfirmacionModal
+          tono="aviso"
+          titulo="Falta elegir el granel"
+          mensaje={avisoGranel}
+          textoCerrar="Aceptar"
+          onClose={() => setAvisoGranel('')}
+        />
+      )}
 
       {/* Modal de arranque: encender e iniciar en la misma ventana. Se esconde
           durante la animación y vuelve con el paso siguiente. */}
