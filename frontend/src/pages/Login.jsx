@@ -193,7 +193,7 @@ export default function Login() {
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-base font-semibold text-gray-800 mb-6">
-            {ES_DEMO ? 'Demostración' : 'Iniciar sesión'}
+            {ES_DEMO ? 'DEMO' : 'Iniciar sesión'}
           </h2>
 
           {/* Por qué se cerró la sesión (en la demo el token caduca en una hora). */}
@@ -205,17 +205,20 @@ export default function Login() {
 
           {ES_DEMO && (
             <>
-              <div className="text-sm text-gray-600 leading-relaxed mb-5 space-y-2">
+              <div className="text-sm text-gray-600 leading-relaxed mb-5">
                 <p>
                   Demo con datos de ejemplo.
                 </p>
-                <p>
-                  <span className="font-semibold text-gray-800">Administrador:</span>{' '}
-                  ventas, reportes, empleados y ajustes, además de las funciones del empleado.
-                  <br />
-                  <span className="font-semibold text-gray-800">Empleado:</span>{' '}
-                  atención de servicios: notas, clientes, máquinas, inventario y caja.
-                </p>
+                <div className="space-y-4">
+                  <p>
+                    <span className="font-semibold text-gray-800">Administrador:</span>
+                    ventas, reportes, empleados y ajustes, además de las funciones del empleado.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-gray-800">Empleado:</span>
+                    atención de servicios: notas, clientes, máquinas, inventario y caja.
+                  </p>
+                </div>
               </div>
 
               {error && (
