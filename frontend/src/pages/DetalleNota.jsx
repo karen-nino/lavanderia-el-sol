@@ -809,8 +809,7 @@ export default function DetalleNota() {
     <AccionCircular
       label="Cobrar"
       icono={IconoCobrar}
-      // Ya procesada, en verde.
-      color={yaProcesada ? 'bg-green-500 group-hover:bg-green-600' : 'bg-blue group-hover:bg-green-600'}
+      color="bg-blue group-hover:bg-green-600"
       onClick={abrirCobro}
       disabled={loadingAccion}
     />
