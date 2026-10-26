@@ -233,8 +233,11 @@ async function sembrar(db) {
     await checarDia(admin, dia, { conSalida: !esHoy });
     if (empleado !== admin && rnd() < 0.8) await checarDia(empleado, dia, { conSalida: !esHoy });
 
+    // Horas del día en orden, para que el folio más alto sea también el más tarde.
+    const horas = Array.from({ length: cuantas }, () => [entre(8, 19), entre(0, 59)])
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     for (let i = 0; i < cuantas; i++) {
-      const hora = entre(8, 19), minuto = entre(0, 59);
+      const [hora, minuto] = horas[i];
       const stamp = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')} ${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}:00`;
       const folio = String(consecutivo++).padStart(4, '0');
 

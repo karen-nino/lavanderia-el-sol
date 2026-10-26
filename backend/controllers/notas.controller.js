@@ -1850,7 +1850,8 @@ export const getNotas = async (req, res) => {
        LEFT JOIN sucursales su ON su.slug = n.sucursal
        WHERE n.sucursal = $1
          AND ($2::int IS NULL OR n.cliente_id = $2)
-       ORDER BY n.created_at DESC`,
+       -- La más nueva arriba: el id crece con cada alta, igual que el folio.
+       ORDER BY n.id DESC`,
       [req.sucursal, clienteId]
     );
     res.json(rows);
