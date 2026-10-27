@@ -108,6 +108,12 @@ export default function Salidas() {
   // Máquina esperando que se elija su programa: { maquina, paso } ('encender' o
   // 'iniciar'), porque al elegir se hace algo distinto en cada paso.
   const [eligiendoTiempo,  setEligiendoTiempo]  = useState(null);
+  /** Modal de caja cerrada (✕ y "Abrir caja"), el mismo que sale si el servidor la rechaza. */
+  const avisarCajaCerrada = () => setAvisoBloqueo({
+    titulo: 'La caja está cerrada', mensaje: 'Ábrela para poder mover máquinas o productos.', caja: true,
+  });
+  /** Con la caja cerrada, "Agregar" avisa en lugar de abrir su ventana. */
+  const conCajaAbierta = (accion) => () => (cajaAbierta === false ? avisarCajaCerrada() : accion());
   /** Error de una acción; la caja cerrada y el granel sin elegir van en modal (la caja, además, en el aviso de arriba). */
   const fallaAccion = (err, texto = err.message) => {
     const code = err?.data?.code;
@@ -1052,7 +1058,7 @@ export default function Salidas() {
             && !['FINALIZADA', 'CANCELADA'].includes(nota.estado)
             && (esAutoservicio || cargasDestino.length > 0) && (
             <button
-              onClick={() => iniciarAsignar()}
+              onClick={conCajaAbierta(() => iniciarAsignar())}
               disabled={loadingMaquina}
               className="flex items-center gap-1 text-sm font-medium text-blue hover:underline disabled:opacity-60"
             >
@@ -1337,7 +1343,7 @@ export default function Salidas() {
           <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
           {puedeTocarProductos && (
             <button
-              onClick={iniciarAgregarProducto}
+              onClick={conCajaAbierta(iniciarAgregarProducto)}
               disabled={loadingProducto != null}
               className="flex items-center gap-1 text-sm font-medium text-blue hover:underline disabled:opacity-60"
             >
