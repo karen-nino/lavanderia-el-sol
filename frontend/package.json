@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.136.9",
+  "version": "1.137.0",
   "versionMinima": "1.121.0",
   "type": "module",
   "scripts": {

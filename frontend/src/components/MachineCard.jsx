@@ -127,14 +127,17 @@ export default function MachineCard({
     const ofreceOtroCiclo = Boolean(maquina.puede_otro_ciclo);
     const enPausa = ofreceOtroCiclo && maquina.espera_otro_ciclo > 0;
     // El siguiente ciclo empieza encendiendo la máquina; "Iniciar ciclo" viene después.
-    const etiquetaBoton = otroCicloEnCurso ? 'ENCENDIENDO…'
-      : enPausa            ? `ENCENDER EN ${maquina.espera_otro_ciclo}s`
-      : ofreceOtroCiclo    ? 'ENCENDER MÁQUINA'
+    // Las de botón Iniciar (Speed Queen en la demo) lo arrancan en un paso.
+    const iniciaDirecto = ofreceOtroCiclo && Boolean(maquina.con_iniciar);
+    const verbo = iniciaDirecto ? 'INICIAR' : 'ENCENDER';
+    const etiquetaBoton = otroCicloEnCurso ? (iniciaDirecto ? 'INICIANDO…' : 'ENCENDIENDO…')
+      : enPausa            ? `${verbo} EN ${maquina.espera_otro_ciclo}s`
+      : ofreceOtroCiclo    ? (iniciaDirecto ? 'INICIAR CICLO' : 'ENCENDER MÁQUINA')
       : finalizaCarga      ? 'FINALIZAR CARGA'
       : 'INICIAR SECADO';
     // El color va con lo que pide el botón: ámbar si falta darle corriente, verde
     // si toca arrancar o cerrar la carga.
-    const c = ofreceOtroCiclo
+    const c = ofreceOtroCiclo && !iniciaDirecto
       ? { fondo: 'bg-amber-50', aro: 'ring-amber-400', cabecera: 'bg-amber-500',
           titulo: 'text-amber-700', boton: 'bg-amber-500 ring-amber-600' }
       : { fondo: 'bg-light-green', aro: 'ring-green', cabecera: 'bg-green',
@@ -156,7 +159,8 @@ export default function MachineCard({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              if (ofreceOtroCiclo) onEncender?.(maquina);
+              if (iniciaDirecto) onOtroCiclo?.(maquina);
+              else if (ofreceOtroCiclo) onEncender?.(maquina);
               else onTerminarCiclo?.(maquina);
             }}
             disabled={otroCicloEnCurso || enPausa}

@@ -87,8 +87,14 @@ export const soloFichasSql = (alias) => `COALESCE((
      AND mof.nombre = ${alias}.modelo
 ), FALSE)`;
 
-/** SQL: ¿la máquina usa el botón "Iniciar"? (ver MARCA_CON_INICIAR). */
-export const conIniciarSql = (alias) => (cronometroActivo() ? `(
+/**
+ * SQL: ¿la máquina usa el botón "Iniciar"? (ver MARCA_CON_INICIAR). Con
+ * temporizador no, salvo en la demo (ENTORNO_DEMO=1): sus Speed Queen también
+ * arrancan con "Iniciar", sin "Encender".
+ */
+export const conIniciarSql = (alias) => (!cronometroActivo() && process.env.ENTORNO_DEMO === '1'
+  ? `(COALESCE(LOWER(TRIM(${alias}.marca)), '') = '${MARCA_CON_INICIAR}')`
+  : cronometroActivo() ? `(
   COALESCE(LOWER(TRIM(${alias}.marca)), '') = '${MARCA_CON_INICIAR}'
   OR EXISTS (
     SELECT 1

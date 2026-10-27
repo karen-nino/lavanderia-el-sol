@@ -713,8 +713,8 @@ export default function Salidas() {
   // pantalla de la máquina y luego se inicia; arrancar el cronómetro al dar
   // corriente contaría de más.
   const preguntaSuTiempo = preguntaTiempo(maqModal);
-  // Con cronómetro se entra por "Encender", salvo las de botón "Iniciar".
-  const pasoModal = maqModal?.cronometro && maqModal?.con_iniciar ? 'iniciar'
+  // Se entra por "Encender", salvo las de botón "Iniciar" (con temporizador solo en la demo).
+  const pasoModal = maqModal?.con_iniciar ? 'iniciar'
     : !maqModal?.cronometro && maqModal?.esperandoArranque ? 'iniciar' : 'encender';
   // Lo que se eligió al encender esta máquina.
   const minutosDeMaquina = (maq) => (maq ? minutosPorMaquina[maq.id] ?? null : null);
@@ -1180,7 +1180,7 @@ export default function Salidas() {
                     {/* Speed Queen y Sec49 no llevan "Encender": su "Iniciar" da corriente y arranca. */}
                     {(m.estado === 'disponible' || m.esperandoArranque) && (
                     <div className="flex items-center gap-2">
-                    {m.estado === 'disponible' && !(m.cronometro && m.con_iniciar) && (
+                    {m.estado === 'disponible' && !m.con_iniciar && (
                       <button
                         onClick={() => encenderDesdeModal(m)}
                         disabled={loadingMaquina || Boolean(encendiendo)}
@@ -1190,7 +1190,7 @@ export default function Salidas() {
                       </button>
                     )}
                     {(m.esperandoArranque
-                      || (m.estado === 'disponible' && m.cronometro && m.con_iniciar)) && (
+                      || (m.estado === 'disponible' && m.con_iniciar)) && (
                       <button
                         onClick={() => iniciarMaquina(m)}
                         disabled={loadingMaquina}
