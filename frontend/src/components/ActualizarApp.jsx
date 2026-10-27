@@ -10,7 +10,7 @@ const IconoActualizar = (
 );
 
 /**
- * Actualizar la app desde Ajustes: la versión de este equipo, la publicada y el
+ * Actualizar App desde Ajustes: la versión de este equipo, la publicada y el
  * botón. Sin versión nueva el botón igual recarga (por si algo quedó atorado).
  */
 export default function ActualizarApp({ variant = 'desktop' }) {
@@ -67,7 +67,7 @@ export default function ActualizarApp({ variant = 'desktop' }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="text-base font-bold text-dark-blue">Actualizar la app</h2>
+        <h2 className="text-base font-bold text-dark-blue">Actualizar App</h2>
       </div>
       <div className="px-5 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1 max-w-md">

@@ -239,17 +239,17 @@ const SECCION_MANUAL = {
 };
 
 /**
- * Instalar la app es una acción del equipo, no un ajuste: va aparte y también
+ * Instalar App es una acción del equipo, no un ajuste: va aparte y también
  * en pruebas. La sección explica qué hacer en cada caso.
  */
 const SECCION_INSTALAR = {
-  id: 'instalar', label: 'Instalar la app', subtitle: 'Tenerla en la pantalla de inicio',
+  id: 'instalar', label: 'Instalar App', subtitle: 'Tenerla en la pantalla de inicio',
   detalle: 'Tenerla en la pantalla de inicio', icon: SectionIcon.instalar,
 };
 
 /** Traer la versión nueva de la app; también la tienen los empleados. */
 const SECCION_ACTUALIZAR = {
-  id: 'actualizar', label: 'Actualizar la app', subtitle: 'Versión de la app',
+  id: 'actualizar', label: 'Actualizar App', subtitle: 'Versión de la app',
   detalle: 'Tu versión y traer la más nueva', icon: SectionIcon.actualizar,
 };
 
@@ -1128,7 +1128,7 @@ function SucursalesOrden({ sucursales, setSucursales, onMensaje }) {
   );
 }
 
-/** Ajustes según el rol: el empleado solo tiene Mi Perfil y Actualizar la app. */
+/** Ajustes según el rol: el empleado solo tiene Mi Perfil y Actualizar App. */
 export default function Ajustes() {
   const { usuario } = useAuth();
   return esAdmin(usuario?.rol) ? <AjustesAdmin /> : <AjustesEmpleado />;
@@ -1189,7 +1189,7 @@ function SeccionEmpleado({ seccion, grupo, mobile, desktop }) {
 
 /**
  * Ajustes del empleado: el mismo inicio con tarjetas que el del admin, con su
- * Mi Perfil (solo cambia la contraseña) y Actualizar la app.
+ * Mi Perfil (solo cambia la contraseña) y Actualizar App.
  */
 function AjustesEmpleado() {
   const { seccion } = useParams();
