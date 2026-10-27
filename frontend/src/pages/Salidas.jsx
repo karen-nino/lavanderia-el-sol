@@ -121,6 +121,7 @@ export default function Salidas() {
         titulo: code === 'CAJA_CERRADA' ? 'La caja está cerrada' : 'Falta elegir el granel',
         /* El título ya dice que está cerrada; el mensaje queda con lo que hay que hacer. */
         mensaje: code === 'CAJA_CERRADA' ? texto.replace(/^La caja está cerrada\.\s*/, '') : texto,
+        caja: code === 'CAJA_CERRADA',
       });
       return;
     }
@@ -1701,6 +1702,12 @@ export default function Salidas() {
           mensaje={avisoBloqueo.mensaje}
           textoCerrar="Aceptar"
           onClose={() => setAvisoBloqueo(null)}
+          /* Caja cerrada: se cierra con la ✕ y el botón lleva directo a abrirla. */
+          {...(avisoBloqueo.caja && {
+            cerrarArriba: true,
+            textoConfirmar: 'Abrir caja',
+            onConfirm: () => { setAvisoBloqueo(null); setModalCajaOpen(true); },
+          })}
         />
       )}
 

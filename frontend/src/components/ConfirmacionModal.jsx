@@ -13,6 +13,8 @@
  * @param error respuesta del servidor si falló; va dentro del modal para que se vea.
  * @param onConfirm sin él, el modal solo avisa: un único botón que cierra.
  * @param textoCerrar el texto de ese único botón.
+ * @param cerrarArriba cierra con una ✕ arriba a la derecha en vez de "Cancelar":
+ *   el botón de abajo queda solo, a todo lo ancho.
  */
 const TONOS = {
   peligro: {
@@ -36,6 +38,7 @@ export default function ConfirmacionModal({
   children,
   textoConfirmar = 'Continuar',
   textoCerrar = 'Entendido',
+  cerrarArriba = false,
   procesando = false,
   error = '',
   onClose,
@@ -46,7 +49,15 @@ export default function ConfirmacionModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+        {cerrarArriba && (
+          <button type="button" onClick={onClose} disabled={procesando} aria-label="Cerrar"
+            className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-60 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
         <div className="p-6">
           <div className={`flex items-center justify-center w-12 h-12 rounded-full ${t.circulo} mx-auto mb-4`}>
             <svg className={`w-6 h-6 ${t.icono}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,6 +99,11 @@ export default function ConfirmacionModal({
             <button type="button" onClick={onClose}
               className={`w-full ${t.boton} text-white font-medium py-3.5 rounded-lg text-base transition-colors`}>
               {textoCerrar}
+            </button>
+          ) : cerrarArriba ? (
+            <button type="button" onClick={onConfirm} disabled={procesando}
+              className={`w-full ${t.boton} disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors`}>
+              {textoConfirmar}
             </button>
           ) : (
           <div className="flex gap-3">
