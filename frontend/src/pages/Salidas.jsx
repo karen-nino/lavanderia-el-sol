@@ -88,8 +88,9 @@ export default function Salidas() {
 
   const [confirmQuitarCarga, setConfirmQuitarCarga] = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
-  // Lavadora que no arranca porque falta elegir el granel: va en modal, no arriba.
-  const [avisoGranel,      setAvisoGranel]      = useState('');
+  // Acción rechazada por falta de granel o por la caja cerrada: va en modal, no
+  // arriba. { titulo, mensaje }.
+  const [avisoBloqueo,     setAvisoBloqueo]     = useState(null);
   // Con la caja cerrada no se agregan ni encienden máquinas ni se cambian
   // productos (el servidor responde 409); Finalizar y Detener sí se pueden.
   const [cajaAbierta,      setCajaAbierta]      = useState(null);
@@ -107,15 +108,20 @@ export default function Salidas() {
   // Máquina esperando que se elija su programa: { maquina, paso } ('encender' o
   // 'iniciar'), porque al elegir se hace algo distinto en cada paso.
   const [eligiendoTiempo,  setEligiendoTiempo]  = useState(null);
-  /** Error de una acción; si fue por la caja cerrada, además sale el aviso de arriba; si falta el granel, va en modal. */
+  /** Error de una acción; la caja cerrada y el granel sin elegir van en modal (la caja, además, en el aviso de arriba). */
   const fallaAccion = (err, texto = err.message) => {
-    if (err?.data?.code === 'CAJA_CERRADA') setCajaAbierta(false);
-    if (err?.data?.code === 'GRANEL_SIN_ELEGIR') {
-      /* Se cierran los modales de arranque: sin granel no hay nada que hacer ahí. */
+    const code = err?.data?.code;
+    if (code === 'CAJA_CERRADA') setCajaAbierta(false);
+    if (code === 'GRANEL_SIN_ELEGIR' || code === 'CAJA_CERRADA') {
+      /* Se cierran los modales de arranque: así no hay nada que hacer ahí. */
       setEligiendoTiempo(null);
       setMaquinaModalId(null);
       setErrorAccion('');
-      setAvisoGranel(texto);
+      setAvisoBloqueo({
+        titulo: code === 'CAJA_CERRADA' ? 'La caja está cerrada' : 'Falta elegir el granel',
+        /* El título ya dice que está cerrada; el mensaje queda con lo que hay que hacer. */
+        mensaje: code === 'CAJA_CERRADA' ? texto.replace(/^La caja está cerrada\.\s*/, '') : texto,
+      });
       return;
     }
     setErrorAccion(texto);
@@ -1687,14 +1693,14 @@ export default function Salidas() {
       {iniciando && <MaquinaCicloOverlay modo="iniciar" tipo={iniciando.tipo} nombre={iniciando.nombre} />}
       {deteniendo && <MaquinaCicloOverlay modo="detener" tipo={deteniendo.tipo} nombre={deteniendo.nombre} />}
 
-      {/* La lavadora no arrancó: falta elegir el granel de algún servicio. */}
-      {avisoGranel && (
+      {/* No se pudo: falta elegir el granel de algún servicio o la caja está cerrada. */}
+      {avisoBloqueo && (
         <ConfirmacionModal
           tono="aviso"
-          titulo="Falta elegir el granel"
-          mensaje={avisoGranel}
+          titulo={avisoBloqueo.titulo}
+          mensaje={avisoBloqueo.mensaje}
           textoCerrar="Aceptar"
-          onClose={() => setAvisoGranel('')}
+          onClose={() => setAvisoBloqueo(null)}
         />
       )}
 
