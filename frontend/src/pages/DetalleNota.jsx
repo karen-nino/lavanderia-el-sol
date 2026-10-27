@@ -1177,7 +1177,7 @@ export default function DetalleNota() {
       )}
 
       {/* Por Encargo: cuánto del precio de los servicios ya se usó. */}
-      <TopeServicios nota={nota} colorDisponible="text-blue" />
+      <TopeServicios nota={nota} />
 
       {/* Productos: en la venta de productos siempre; en los demás servicios, si llevan. */}
       {(nota.tipo_servicio === 'PRODUCTOS' || productosNota.length > 0) && (

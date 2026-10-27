@@ -3,11 +3,10 @@
  * Disponible o Se pasa). Se usa en Salidas y en el detalle de la nota.
  *
  * @param nota la nota con `tope_nota` (sin él no se muestra) y `ajuste`.
- * @param colorDisponible clase del monto Disponible (naranja en Salidas, azul en el detalle).
  */
 const fmtMonto = (n) => `$${Number(n).toFixed(2)}`;
 
-export default function TopeServicios({ nota, colorDisponible = 'text-orange-500' }) {
+export default function TopeServicios({ nota }) {
   const t = nota?.tope_nota;
   if (!t) return null;
   const servicios = t.servicios ?? [];
@@ -20,7 +19,7 @@ export default function TopeServicios({ nota, colorDisponible = 'text-orange-500
     { etiqueta: 'Usado', valor: fmtMonto(t.usado), cls: 'text-gray-700' },
     sePasa
       ? { etiqueta: 'Se pasa', valor: fmtMonto(-disponible), cls: 'text-red-600' }
-      : { etiqueta: 'Disponible', valor: fmtMonto(disponible), cls: colorDisponible },
+      : { etiqueta: 'Disponible', valor: fmtMonto(disponible), cls: 'text-blue' },
   ];
   return (
     <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
