@@ -273,13 +273,18 @@ const SECCION_SONOFFS = {
 const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_SONOFFS, SECCION_INSTALAR, SECCION_ACTUALIZAR];
 const seccionPorId = (id) => SECCIONES_AJUSTES.find(s => s.id === id);
 
+/** Secciones del admin que la demo no enseña: sin Sonoff y sin app que instalar. */
+const OCULTAS_DEMO = ES_DEMO ? ['sonoffs', 'instalar'] : [];
+/** Sección del admin por id, salvo las ocultas en la demo. */
+const seccionAdminPorId = (id) => (OCULTAS_DEMO.includes(id) ? undefined : seccionPorId(id));
+
 /** Secciones de Ajustes agrupadas por intención; igual en celular y escritorio. */
 const GRUPOS_AJUSTES = [
   { titulo: 'Cuenta',    ids: ['perfil'] },
   { titulo: 'Negocio',   ids: ['negocio', 'ticket', 'whatsapp'] },
   { titulo: 'Operación', ids: ['maquinas', 'cargas', 'etiquetas', 'inventario'] },
   { titulo: 'Sistema',   ids: ['alertas', 'sonoffs', 'manual', 'actualizar', 'instalar'] },
-];
+].map(g => ({ ...g, ids: g.ids.filter(id => !OCULTAS_DEMO.includes(id)) }));
 
 /**
  * Alertas que se pueden apagar en Ajustes → Alertas (además de "ciclo
@@ -1265,8 +1270,12 @@ function AjustesAdmin() {
   const navigate = useNavigate();
   /* La sección vive en la dirección: atrás y recargar la respetan. */
   const { seccion: seccionUrl } = useParams();
-  const mobileSection = seccionPorId(seccionUrl) ? seccionUrl : null;
+  const mobileSection = seccionAdminPorId(seccionUrl) ? seccionUrl : null;
   const setMobileSection = (id) => navigate(id ? `/ajustes/${id}` : '/ajustes');
+  /* Una sección que no existe (o que la demo oculta) regresa al inicio de Ajustes. */
+  useEffect(() => {
+    if (seccionUrl && !seccionAdminPorId(seccionUrl)) navigate('/ajustes', { replace: true });
+  }, [seccionUrl, navigate]);
   const [perfilForm,    setPerfilForm]    = useState(() => ({
     nombre: usuario?.nombre ?? '',
     apellido: usuario?.apellido ?? '',
@@ -1946,7 +1955,7 @@ function AjustesAdmin() {
   };
 
   /* ── Cambios sin guardar (escritorio) ── */
-  const seccionVista = seccionPorId(seccionUrl)?.id ?? 'perfil';
+  const seccionVista = seccionAdminPorId(seccionUrl)?.id ?? 'perfil';
   const huella = config && catalogosListos >= 2 ? JSON.stringify([
     buildConfigPayload(),
     edredones.map(e => camposEdredon(e).map(([k]) => String(config[k] ?? ''))),
