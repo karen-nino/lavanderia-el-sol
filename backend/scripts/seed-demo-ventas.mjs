@@ -345,9 +345,9 @@ async function sembrar(db) {
                aStamp(reloj), aStamp(inicio), aStamp(fin)]);
             reloj = fin;
           };
-          const minLav = maquinaPorId.get(lavId)?.tipo === 'lavadora_jumbo' ? 45 : 35;
+          const minLav = MODO_DEMO ? 30 : maquinaPorId.get(lavId)?.tipo === 'lavadora_jumbo' ? 45 : 35;
           await pasada('lavadora', lavId, minLav);
-          if (secId) await pasada('secadora', secId, 40);
+          if (secId) await pasada('secadora', secId, MODO_DEMO ? 30 : 40);
         }
       }
 

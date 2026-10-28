@@ -39,8 +39,8 @@ describe('sembrarMaquinasDemo', () => {
       const l1 = res.body.find((m) => m.nombre === 'L1');
       const s1 = res.body.find((m) => m.nombre === 'S1');
       expect(l1.cronometro).toBe(false);
-      expect(l1.minutos_ciclo).toBe(45);
-      expect(s1.minutos_ciclo).toBe(40);
+      expect(l1.minutos_ciclo).toBe(30);
+      expect(s1.minutos_ciclo).toBe(30);
     } finally {
       if (antes === undefined) delete process.env.MAQUINAS_CRONOMETRO;
       else process.env.MAQUINAS_CRONOMETRO = antes;

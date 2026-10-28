@@ -6,8 +6,8 @@ export const MARCA_DEMO = 'Speed Queen';
 
 /** Un modelo por tipo, con su tiempo de ciclo. */
 export const MODELOS_DEMO = [
-  { nombre: 'Lavadora Jumbo', tipo: 'lavadora', tamano: 'jumbo', minutos: 45 },
-  { nombre: 'Secadora Jumbo', tipo: 'secadora', tamano: 'jumbo', minutos: 40 },
+  { nombre: 'Lavadora Jumbo', tipo: 'lavadora', tamano: 'jumbo', minutos: 30 },
+  { nombre: 'Secadora Jumbo', tipo: 'secadora', tamano: 'jumbo', minutos: 30 },
 ];
 
 export const MAQUINAS_DEMO = [
