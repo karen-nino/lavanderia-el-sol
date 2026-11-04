@@ -873,6 +873,11 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const unidadTxt = esBolsa
     ? (unidadBolsa === 'rollo' ? 'rollos' : 'bolsas')
     : (destino === 'granel' ? 'bidones' : unidadVenta(producto));
+  // Botellas de granel: la cantidad en medidas (null si no aplica o aún no hay cantidad).
+  const tpb = medidasPorBotella(producto);
+  const medidasEq = esGranel && destino === 'botellas' && tpb > 0 && Number(cantidad) > 0
+    ? Math.round(Number(cantidad) * tpb * 1e6) / 1e6
+    : null;
 
   const enviar = async () => {
     setError('');
@@ -943,6 +948,14 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
             type="number" inputMode="decimal" min="0" step="any" value={cantidad} placeholder="0"
             onChange={(e) => setCantidad(e.target.value)} className={NUM_CLS}
           />
+          {/* Botellas de granel: a cuántas medidas equivale (.5 = 1 medida con 2 por botella). */}
+          {medidasEq != null && (
+            <p className={`mt-1.5 text-sm ${Number.isInteger(medidasEq) ? 'text-gray-500' : 'text-red-600'}`}>
+              {Number.isInteger(medidasEq)
+                ? `= ${medidasEq} ${medidasEq === 1 ? 'medida' : 'medidas'}`
+                : `No da medidas completas: cada botella son ${tpb} medidas.`}
+            </p>
+          )}
         </div>
 
         {!esEntrada && (
@@ -968,7 +981,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
             Cancelar
           </button>
           <button
-            type="button" onClick={enviar} disabled={loading || !(Number(cantidad) > 0)}
+            type="button" onClick={enviar} disabled={loading || !(Number(cantidad) > 0) || (medidasEq != null && !Number.isInteger(medidasEq))}
             className={`flex-1 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 ${
               esEntrada ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
             }`}

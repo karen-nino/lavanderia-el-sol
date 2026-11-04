@@ -133,6 +133,30 @@ describe('movimientos de stock (rellenar / entrada / salida / historial)', () =>
     expect(excede.body.message).toMatch(/no hay suficiente/i);
   });
 
+  it('media botella (.5) cuenta como 1 medida en entradas y salidas', async () => {
+    // Como el granel real: 800/400 = 2 medidas por botella.
+    const p = await crearGranel({ medida_ml: 400, stock_bidones: 0, stock_botellas: 1 }); // 2 rellenadas
+
+    const entrada = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'entrada', destino: 'botellas', cantidad: 0.5, unidad: 'botella' });
+    expect(entrada.status).toBe(200);
+    expect(Number(entrada.body.stock_actual)).toBe(3);
+
+    const salida = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'salida', destino: 'botellas', cantidad: 0.5, unidad: 'botella' });
+    expect(salida.status).toBe(200);
+    expect(Number(salida.body.stock_actual)).toBe(2);
+
+    const hist = await request(app).get(`/api/productos/${p.id}/movimientos`).set(auth(admin.token));
+    expect(hist.body[0].cantidad_medidas).toBe(1);
+
+    // .3 no da medidas completas: no se redondea a escondidas.
+    const parcial = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'entrada', destino: 'botellas', cantidad: 0.3, unidad: 'botella' });
+    expect(parcial.status).toBe(400);
+    expect(parcial.body.message).toMatch(/medidas completas/);
+  });
+
   it('la salida manual guarda su nota, que es opcional', async () => {
     const p = await crearGranel({ stock_bidones: 0, stock_botellas: 5 });
 

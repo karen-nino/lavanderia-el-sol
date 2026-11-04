@@ -602,6 +602,15 @@ export const crearMovimiento = async (req, res) => {
       return res.status(400).json({ message: 'Faltan datos del producto (tamaños o bolsas por rollo) para registrar el movimiento. Revísalos en su edición.' });
     }
     const medidas = Math.round(cant * medidasPorUnidad);
+    // Solo medidas completas: con 2 por botella, .5 = 1 medida; .3 no.
+    if (Math.abs(cant * medidasPorUnidad - medidas) > 1e-9) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: medidasPorUnidad > 1
+          ? `La cantidad no da medidas completas: cada ${unidad === 'bidon' ? 'bidón' : unidad} son ${medidasPorUnidad} medidas.`
+          : 'La cantidad tiene que ser un número entero.',
+      });
+    }
     const columna = destino === 'granel' ? 'stock_granel_medidas' : 'stock_actual';
     const delta = tipo === 'entrada' ? medidas : -medidas;
 
