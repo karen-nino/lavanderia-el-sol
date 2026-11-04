@@ -241,6 +241,14 @@ describe('POST /api/caja/cerrar', () => {
       await request(app).post('/api/caja/abrir').set(auth(ana.token)).send({ monto_inicial: 100 }).expect(201);
       await request(app).post('/api/caja/cerrar').set(auth(admin.token)).send({ monto_contado: 100 }).expect(200);
     });
+
+    it('un empleado puede cerrar el turno que abrió un administrador', async () => {
+      const ana = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Ana' });
+      await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 100 }).expect(201);
+      const actual = await request(app).get('/api/caja/actual').set(auth(ana.token));
+      expect(actual.body.caja.usuario_apertura_rol).toMatch(/^admin/);
+      await request(app).post('/api/caja/cerrar').set(auth(ana.token)).send({ monto_contado: 100 }).expect(200);
+    });
   });
 
   it('cerrar sin caja abierta responde 409', async () => {

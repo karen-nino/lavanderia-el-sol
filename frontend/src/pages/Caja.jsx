@@ -414,9 +414,10 @@ function Corte({ data, onCerrar, onAbrir }) {
   };
   const sufijoExport = `turno-${fmtFechaCorta(caja.abierta_at)}`;
 
-  // El corte lo hace quien abrió el turno o un admin (también lo exige el servidor).
+  // El corte lo hace quien abrió el turno o un admin; el que abrió un admin lo
+  // cierra cualquiera (también lo exige el servidor).
   const esMiTurno = String(caja.usuario_apertura_id) === String(usuario?.id);
-  const puedeCerrar = esMiTurno || esAdminFn(usuario?.rol);
+  const puedeCerrar = esMiTurno || esAdminFn(usuario?.rol) || esAdminFn(caja.usuario_apertura_rol);
   // El empleado escribe lo contado y la caja final; el sobre se calcula (solo un
   // admin lo escribe).
   const sobreEditable = esAdminFn(usuario?.rol);

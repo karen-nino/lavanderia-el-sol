@@ -300,7 +300,8 @@ export async function getCajaActual(req, res) {
   try {
     const mi_caja_abierta = await miCajaAbierta(client, req.user.id);
     const cajaRes = await client.query(
-      `SELECT c.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_apertura
+      `SELECT c.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_apertura,
+              u.rol AS usuario_apertura_rol
          FROM cajas c
          JOIN usuarios u ON u.id = c.usuario_apertura_id
         WHERE c.estado = 'abierta' AND c.sucursal = $1
@@ -341,6 +342,7 @@ export async function getCajaActual(req, res) {
         id:               caja.id,
         usuario_apertura_id: caja.usuario_apertura_id,
         usuario_apertura: caja.usuario_apertura,
+        usuario_apertura_rol: caja.usuario_apertura_rol,
         monto_inicial,
         notas_apertura:   caja.notas_apertura,
         abierta_at:       caja.abierta_at,
@@ -519,13 +521,14 @@ export async function cerrarCaja(req, res) {
     const caja = cajaRes.rows[0];
 
     // Cada caja es el turno de quien la abrió: el corte lo hace esa persona o
-    // un administrador.
-    if (String(caja.usuario_apertura_id) !== String(req.user.id) && !esAdmin(req.user.rol)) {
+    // un administrador; si la abrió un admin, cualquiera puede cerrarla.
+    const { rows: ab } = await client.query(
+      `SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre, rol FROM usuarios WHERE id = $1`,
+      [caja.usuario_apertura_id]
+    );
+    const esMiTurno = String(caja.usuario_apertura_id) === String(req.user.id);
+    if (!esMiTurno && !esAdmin(req.user.rol) && !esAdmin(ab[0]?.rol)) {
       await client.query('ROLLBACK');
-      const { rows: ab } = await client.query(
-        `SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1`,
-        [caja.usuario_apertura_id]
-      );
       const quien = ab[0]?.nombre || 'otra persona';
       return res.status(403).json({
         message: `Este turno lo abrió ${quien}: solo esa persona o un administrador puede hacer el corte.`,
