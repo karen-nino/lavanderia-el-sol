@@ -35,8 +35,9 @@ router.get('/reporte-diario', getReporteDiarioMaquinas);
 // Antes de las rutas con :id (si no, 'revisar-sonoff' se tomaría por un id).
 router.post('/revisar-sonoff', revisarSonoff);
 router.get('/:id/uso', requireAdmin, getUsoMaquina);
-router.post('/', createMaquina);
-router.put('/:id', updateMaquina);
+// Dar de alta y editar es de admin (la pantalla solo se lo enseña a ellos).
+router.post('/', requireAdmin, createMaquina);
+router.put('/:id', requireAdmin, updateMaquina);
 router.delete('/:id', requireAdmin, deleteMaquina);
 router.patch('/:id/estado', cambiarEstadoMaquina);
 router.patch('/:id/detener-ciclo', detenerCiclo);

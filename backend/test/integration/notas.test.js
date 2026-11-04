@@ -98,7 +98,7 @@ describe('POST /api/notas — Autoservicio (happy path)', () => {
     expect(res.body.tipo_servicio).toBe('AUTOSERVICIO');
     // Nace En Espera SIN máquina: la física se asigna después en Salidas.
     expect(res.body.estado).toBe('EN_ESPERA');
-    expect(res.body.folio).toMatch(/^\d{4}-\d{6}$/);
+    expect(res.body.folio).toMatch(/^\d{4}$/);
     expect(res.body.cargas).toHaveLength(1);
     expect(res.body.cargas[0].lavadora_id).toBeNull();
     expect(res.body.cargas[0].lavadora_tipo).toBe('mediana');
@@ -2040,7 +2040,8 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(consumido).toBeLessThan(100);
     expect(Number(tras[0].stock_reservado)).toBe(0);
 
-    // Se revierte el cobro (la nota sigue FINALIZADA) y se vuelve a cobrar.
+    // Se abre la nota entregada, se revierte el cobro y se vuelve a cobrar.
+    await request(app).patch(`/api/notas/${crea.body.id}/reabrir`).set(auth(admin.token)).expect(200);
     await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`).set(auth(admin.token))
       .send({ estado_pago: 'PENDIENTE', motivo: 'se cobró de más' }).expect(200);
     const segunda = await pagar();

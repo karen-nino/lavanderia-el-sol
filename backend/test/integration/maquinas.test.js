@@ -55,6 +55,23 @@ describe('POST /api/maquinas — validaciones', () => {
   });
 });
 
+describe('alta y edición de máquinas: solo admin', () => {
+  it('un empleado no crea ni edita máquinas (403)', async () => {
+    const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro' });
+    const id = await seedMaquina({ nombre: 'L1' });
+
+    const alta = await request(app).post('/api/maquinas').set(auth(emp.token))
+      .send({ nombre: 'L9', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    expect(alta.status).toBe(403);
+
+    const edicion = await request(app).put(`/api/maquinas/${id}`).set(auth(emp.token))
+      .send({ nombre: 'Otra', tipo: 'lavadora_mediana', device_id: 'abc123' });
+    expect(edicion.status).toBe(403);
+    const { rows } = await pool.query('SELECT nombre, device_id FROM maquinas WHERE id = $1', [id]);
+    expect(rows[0]).toMatchObject({ nombre: 'L1', device_id: null });
+  });
+});
+
 describe('PATCH /api/maquinas/:id/estado', () => {
   it('cambia el estado a mantenimiento', async () => {
     const id = await seedMaquina({ nombre: 'L1' });

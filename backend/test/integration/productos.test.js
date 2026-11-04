@@ -283,6 +283,17 @@ describe('PATCH /api/productos/:id/archivar', () => {
     expect(rest.body.archivado).toBe(false);
   });
 
+  it('un empleado no puede dar de alta un producto (403)', async () => {
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+    const res = await request(app).post('/api/productos').set(auth(empleado.token)).send({
+      nombre: 'Suavizante', tipo_liquido: 'granel', precio_unitario: 5, precio_botella: 40,
+      volumen_envase_ml: 20000, botella_ml: 800, medida_ml: 400, stock_bidones: 1,
+    });
+    expect(res.status).toBe(403);
+    const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM productos');
+    expect(rows[0].n).toBe(0);
+  });
+
   it('un empleado no puede archivar (403)', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
     const id = await seedProducto();

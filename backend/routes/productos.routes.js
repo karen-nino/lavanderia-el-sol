@@ -19,7 +19,8 @@ router.use(verifyToken, sucursalActiva);
 router.get('/',        getProductos);
 // Reporte diario (entradas, salidas y existencia del día): admin y empleados.
 router.get('/reporte-diario', getReporteDiario);
-router.post('/',       createProducto);
+// Dar de alta es de admin (la pantalla solo se lo enseña a ellos).
+router.post('/',       requireAdmin, createProducto);
 router.post('/eliminar-multiples', requireAdmin, deleteProductosMultiples);
 router.patch('/:id/archivar', requireAdmin, archivarProducto);
 // Movimientos de stock (entrada/salida/rellenar): operativos, no requieren admin.
