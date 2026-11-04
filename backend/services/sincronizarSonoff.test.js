@@ -185,6 +185,34 @@ describe('el barrido no apaga una máquina que alguien prendió', () => {
   });
 });
 
+// Cada llamada a eWeLink gasta del límite de 50,000 al mes.
+describe('el barrido no gasta llamadas de más', () => {
+  it('usa lo leído en lote en vez de preguntar al Sonoff', async () => {
+    filas.maquina = { ...maquinaEnUso('enlazada'), estado: 'disponible' };
+    driver.leidoEnLote.mockReturnValueOnce({ ok: true, estado: 'off' });
+
+    await sincronizarSonoff(1, { reconciliando: true });
+    expect(driver.estado).not.toHaveBeenCalled();
+    expect(driver.apagar).not.toHaveBeenCalled();
+  });
+
+  it('Sonoff fuera de línea con la orden fallida: no reintenta en cada vuelta', async () => {
+    filas.maquina = { ...maquinaEnUso('error'), estado: 'disponible' };
+    driver.leidoEnLote.mockReturnValueOnce({ ok: false, estado: null, motivo: 'fuera_de_linea' });
+
+    await sincronizarSonoff(1, { reconciliando: true });
+    expect(driver.apagar).not.toHaveBeenCalled();
+    expect(filas.maquina.sonoff_estado).toBe('error');
+  });
+
+  it('sin lectura en lote sí reintenta la orden fallida', async () => {
+    filas.maquina = { ...maquinaEnUso('error'), estado: 'disponible' };
+
+    await sincronizarSonoff(1, { reconciliando: true });
+    expect(driver.apagar).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('el encendido manual caduca', () => {
   it('vigente: la máquina se mantiene encendida aunque no tenga nota', async () => {
     filas.maquina = {

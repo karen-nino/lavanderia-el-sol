@@ -213,6 +213,14 @@ async function notaEnCurso(maquinaId) {
   return rows.length > 0;
 }
 
+/**
+ * Estado del relé en el barrido: primero lo leído en lote (no gasta llamadas,
+ * aunque varias máquinas compartan Sonoff) y solo si no está, se pregunta.
+ */
+async function leerEnBarrido(maq) {
+  return dispositivos.leidoEnLote(maq) ?? dispositivos.estado(maq);
+}
+
 /** Guarda el estado del Sonoff y, si falló, el motivo para la tarjeta. */
 async function marcar(id, sonoffEstado, motivo = null) {
   const { rows } = await pool.query(
@@ -525,7 +533,7 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
         }
         return maq;
       }
-      const real = await dispositivos.estado(maq);
+      const real = await leerEnBarrido(maq);
       if (dispositivos.esSimulacion(maq)) return maq;
       // El aviso de fichas incompletas se queda mientras siga su carga.
       if (real.ok && maq.estado === 'en_uso'
@@ -537,7 +545,7 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // apagado, alguien la apagó a mano: no se reenciende. Si la orden había
     // fallado ('error'), sí se reintenta.
     if (deseado === 'on' && reconciliando && maq.sonoff_estado === 'enlazada') {
-      const real = await dispositivos.estado(maq);
+      const real = await leerEnBarrido(maq);
       if (dispositivos.esSimulacion(maq)) return maq;
       if (real.ok && real.estado === 'off') {
         // Un encendido manual que ya apagaron se suelta en el acto (con una nota
@@ -565,7 +573,7 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // adoptarla impediría apagarla. Si la orden había fallado, se reintenta.
     if (deseado === 'off' && reconciliando && !liberadaPorCaducidad && !esperaCaducada
         && !cicloVencido(maq) && maq.sonoff_estado === 'enlazada') {
-      const real = await dispositivos.estado(maq);
+      const real = await leerEnBarrido(maq);
       if (dispositivos.esSimulacion(maq)) return maq;
       if (real.ok && real.estado === 'on') {
         return adoptarEncendidoManual(maq);
@@ -580,6 +588,8 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // manda la orden otra vez (cada orden gasta del límite de eWeLink).
     const leido = reconciliando ? dispositivos.leidoEnLote(maq) : null;
     if (leido?.ok && leido.estado === deseado) return marcar(maq.id, 'enlazada');
+    /* Fuera de línea según el lote: la orden fallaría igual y gastaría una llamada por vuelta. */
+    if (leido && !leido.ok) return marcar(maq.id, 'error', leido.motivo);
 
     const res = deseado === 'on'
       ? await dispositivos.encender(maq)
