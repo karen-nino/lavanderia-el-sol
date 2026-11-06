@@ -76,7 +76,9 @@ vi.mock('./dispositivos/index.js', () => ({
 // Sin pausa entre fichas: las pruebas no esperan los 2 s del relé.
 process.env.SONOFF_PAUSA_ENTRE_FICHAS_MS = '0';
 process.env.SONOFF_PAUSA_REINTENTO_MS = '0';
-const { sincronizarSonoff, HORAS_ENCENDIDO_MANUAL, fichasParaArranque } = await import('./sincronizarSonoff.js');
+const {
+  sincronizarSonoff, HORAS_ENCENDIDO_MANUAL, fichasParaArranque, cancelarCortesProgramados,
+} = await import('./sincronizarSonoff.js');
 
 const maquinaEnUso = (sonoff_estado) => ({
   id: 1, nombre: 'L8', estado: 'en_uso', sucursal: 'centro',
@@ -90,10 +92,15 @@ beforeEach(() => {
   notificaciones.length = 0;
   hayNotaEnCurso = false;
   vi.clearAllMocks();
+  driver.encender.mockReset().mockImplementation(async () => ({ ok: true, estado: 'on' }));
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'log').mockImplementation(() => {});
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  cancelarCortesProgramados();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe('el barrido no revive una máquina que alguien apagó', () => {
   it('máquina en uso, última orden aplicada y ahora apagada → NO la enciende', async () => {
@@ -615,17 +622,78 @@ describe('límite de eWeLink y avisos', () => {
     expect(filas.maquina.sonoff_estado).toBe('enlazada');
   });
 
-  it('si tampoco enciende al reintentar, avisa en la campana', async () => {
+  it('reintenta cada 10 s y, si prende dentro del minuto, no avisa', async () => {
+    vi.useFakeTimers();
     filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
     driver.encender
-      .mockResolvedValueOnce({ ok: false, estado: null, motivo: 'ewelink_limite' })
-      .mockResolvedValueOnce({ ok: false, estado: null, motivo: 'ewelink_limite' });
+      .mockResolvedValueOnce({ ok: false, estado: null, motivo: 'error_red' })
+      .mockResolvedValueOnce({ ok: false, estado: null, motivo: 'error_red' });
+
+    await sincronizarSonoff(1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(driver.encender).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(driver.encender).toHaveBeenCalledTimes(3);
+    expect(filas.maquina.sonoff_estado).toBe('enlazada');
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(driver.encender).toHaveBeenCalledTimes(3);
+    expect(notificaciones).toHaveLength(0);
+  });
+
+  it('si sigue sin prender al acabarse el minuto, avisa una vez', async () => {
+    vi.useFakeTimers();
+    filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.encender.mockResolvedValue({ ok: false, estado: null, motivo: 'ewelink_limite' });
+
+    await sincronizarSonoff(1);
+    await vi.advanceTimersByTimeAsync(50_000);
+    expect(notificaciones).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(notificaciones).toHaveLength(1);
+    expect(notificaciones[0][0]).toMatch(/L8 no encendió: .*límite de llamadas/);
+
+    /* Se acabó la ventana: no sigue reintentando cada 10 s. */
+    const llamadas = driver.encender.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(driver.encender.mock.calls.length).toBe(llamadas);
+  });
+
+  it('el barrido no avisa mientras corre la ventana de reintentos', async () => {
+    filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.encender.mockResolvedValue({ ok: false, estado: null, motivo: 'error_red' });
 
     await sincronizarSonoff(1);
     await sincronizarSonoff(1, { reconciliando: true });
+    expect(notificaciones).toHaveLength(0);
+  });
+
+  it('si un reintento se cae a medias, el barrido avisa al vencer la ventana', async () => {
+    vi.useFakeTimers();
+    filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.encender.mockResolvedValueOnce({ ok: false, estado: null, motivo: 'error_red' });
+    await sincronizarSonoff(1);
+
+    /* El reintento agendado sale antes de llegar al final y no agenda otro. */
+    const esSimulacion = driver.esSimulacion;
+    driver.esSimulacion = () => true;
+    await vi.advanceTimersByTimeAsync(10_000);
+    driver.esSimulacion = esSimulacion;
+
+    driver.encender.mockResolvedValueOnce({ ok: false, estado: null, motivo: 'error_red' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    filas.maquina.sonoff_estado = 'error';
+    await sincronizarSonoff(1, { reconciliando: true });
     expect(notificaciones).toHaveLength(1);
-    expect(notificaciones[0][0]).toMatch(/L8 no encendió: .*límite de llamadas/);
-    expect(filas.maquina.sonoff_estado).toBe('error');
+  });
+
+  it('una falla vieja sin ventana (tras un reinicio) avisa en el barrido', async () => {
+    filas.maquina = { ...maquinaEnUso('error'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.encender.mockResolvedValueOnce({ ok: false, estado: null, motivo: 'error_red' });
+
+    await sincronizarSonoff(1, { reconciliando: true });
+    expect(notificaciones).toHaveLength(1);
   });
 
   it('si al reintentar el lote la muestra fuera de línea, avisa', async () => {

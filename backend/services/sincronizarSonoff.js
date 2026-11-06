@@ -183,10 +183,58 @@ export function programarCorte(maq) {
   cortesProgramados.set(id, t);
 }
 
-/** Vacía la agenda de apagados (pruebas y apagado limpio). */
+/** Vacía la agenda de apagados y de reintentos (pruebas y apagado limpio). */
 export function cancelarCortesProgramados() {
   for (const t of cortesProgramados.values()) clearTimeout(t);
   cortesProgramados.clear();
+  for (const r of reintentosRapidos.values()) clearTimeout(r.timer);
+  reintentosRapidos.clear();
+}
+
+const segundosEnv = (nombre, porDefecto) => {
+  const n = Number(process.env[nombre]);
+  return (Number.isFinite(n) && n >= 0 ? n : porDefecto) * 1000;
+};
+
+/** Cada cuánto se reintenta un encendido fallido mientras dura la ventana. */
+export const REINTENTO_RAPIDO_MS = segundosEnv('SONOFF_REINTENTO_RAPIDO_SEG', 10);
+/** Cuánto se insiste antes de avisar en la campana. */
+export const VENTANA_REINTENTO_MS = segundosEnv('SONOFF_VENTANA_REINTENTO_SEG', 60);
+
+/**
+ * Encendidos fallidos que se reintentan cada pocos segundos, sin esperar al
+ * barrido: id → { hasta, timer }. Solo gasta llamadas cuando algo falló.
+ */
+const reintentosRapidos = new Map();
+
+/** ¿Sigue abierta su ventana de reintentos? Una vencida no cuenta aunque quede en el mapa. */
+const enVentana = (id) => {
+  const r = reintentosRapidos.get(id);
+  return r != null && Date.now() < r.hasta;
+};
+
+const soltarReintento = (id) => {
+  const r = reintentosRapidos.get(id);
+  if (r) clearTimeout(r.timer);
+  reintentosRapidos.delete(id);
+};
+
+/**
+ * Tras un encendido fallido: agenda el siguiente intento mientras dure la
+ * ventana y devuelve true; si la ventana ya se acabó, la suelta y devuelve
+ * false (toca avisar).
+ */
+function reintentarPronto(id) {
+  const previo = reintentosRapidos.get(id);
+  const hasta = previo?.hasta ?? Date.now() + VENTANA_REINTENTO_MS;
+  if (Date.now() >= hasta) {
+    soltarReintento(id);
+    return false;
+  }
+  const timer = setTimeout(() => sincronizarSonoff(id), REINTENTO_RAPIDO_MS);
+  timer.unref?.();
+  reintentosRapidos.set(id, { hasta, timer });
+  return true;
 }
 
 /**
@@ -600,7 +648,8 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     if (leido?.ok && leido.estado === deseado) return marcar(maq.id, 'enlazada');
     /* Fuera de línea según el lote: la orden fallaría igual y gastaría una llamada por vuelta. */
     if (leido && !leido.ok) {
-      if (debiaEncenderParaNota(maq, deseado) && maq.sonoff_estado === 'error') {
+      if (debiaEncenderParaNota(maq, deseado) && maq.sonoff_estado === 'error'
+          && !enVentana(maq.id)) {
         await avisarNoEncendio(maq, leido.motivo);
       }
       return marcar(maq.id, 'error', leido.motivo);
@@ -618,13 +667,19 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // En simulación no se marca 'enlazada': no hay Sonoff detrás.
     if (dispositivos.esSimulacion(maq)) return maq;
 
-    // Debía prender para una nota y no prendió. El primer tropiezo solo se anota:
-    // el barrido reintenta en un minuto y se avisa si vuelve a fallar.
-    if (!res.ok && debiaEncenderParaNota(maq, deseado)) {
-      if (maq.sonoff_estado === 'error') {
-        await avisarNoEncendio(maq, res.motivo);
+    // Debía prender para una nota y no prendió: se reintenta cada pocos segundos
+    // y solo se avisa si sigue sin prender al acabarse la ventana.
+    if (res.ok || !debiaEncenderParaNota(maq, deseado)) {
+      soltarReintento(maq.id);
+    } else if (reconciliando && maq.sonoff_estado === 'error' && !enVentana(maq.id)) {
+      /* Falla vieja (p. ej. tras un reinicio) o ventana vencida: no hay nada que esperar. */
+      soltarReintento(maq.id);
+      await avisarNoEncendio(maq, res.motivo);
+    } else if (!reconciliando) {
+      if (reintentarPronto(maq.id)) {
+        console.warn(`[sonoff] ${maq.nombre ?? maq.id}: no encendió (${res.motivo}); se reintenta en ${REINTENTO_RAPIDO_MS / 1000} s.`);
       } else {
-        console.warn(`[sonoff] ${maq.nombre ?? maq.id}: falló el primer intento de encender (${res.motivo}); se reintenta en el barrido.`);
+        await avisarNoEncendio(maq, res.motivo);
       }
     }
 
