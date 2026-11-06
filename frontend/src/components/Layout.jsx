@@ -365,6 +365,10 @@ const sevCls = (sev) =>
   : sev === 'cancelada' ? 'bg-light-red text-red'
   : sev === 'eliminada' ? 'bg-light-red text-red'
   : sev === 'pago'      ? 'bg-light-red text-red'
+  : sev === 'cobro'     ? 'bg-light-red text-red'
+  : sev === 'noencendio' ? 'bg-light-red text-red'
+  : sev === 'tope'      ? 'bg-light-blue text-blue'
+  : sev === 'manual'    ? 'bg-light-blue text-blue'
   : 'bg-light-bronce text-bronce';
 const sevBadge = (sev) =>
     sev === 'agotado'   ? 'Agotado'
@@ -372,6 +376,10 @@ const sevBadge = (sev) =>
   : sev === 'cancelada' ? 'Nota cancelada'
   : sev === 'eliminada' ? 'Nota eliminada'
   : sev === 'pago'      ? 'Pago revertido'
+  : sev === 'cobro'     ? 'Cobro pendiente'
+  : sev === 'noencendio' ? 'No encendió'
+  : sev === 'tope'      ? 'Tope alcanzado'
+  : sev === 'manual'    ? 'Encendida a mano'
   : 'Por agotarse';
 const AlertTriangle = (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -816,6 +824,21 @@ export default function Layout() {
                 detalles: [
                   { label: 'Revertido por', value: n.usuario_nombre ?? '—' },
                   { label: 'Fecha y hora',  value: fechaHora },
+                ] }
+        : n.tipo === 'pago_desmarcado'
+            ? { title: 'Cobro pendiente', severity: 'cobro', to: '/notas', accionLabel: 'Ver notas',
+                detalles: [
+                  { label: 'Cambio por',   value: n.usuario_nombre ?? '—' },
+                  { label: 'Fecha y hora', value: fechaHora },
+                ] }
+        : n.tipo === 'sonoff_no_encendio' || n.tipo === 'tope_cronometro' || n.tipo === 'encendido_manual'
+            ? { ...(n.tipo === 'sonoff_no_encendio' ? { title: 'Máquina no encendió', severity: 'noencendio' }
+                  : n.tipo === 'tope_cronometro'    ? { title: 'Tope alcanzado',      severity: 'tope' }
+                  :                                   { title: 'Encendida a mano',    severity: 'manual' }),
+                to: '/maquinas', accionLabel: 'Ver máquinas',
+                detalles: [
+                  { label: 'Máquina',      value: n.maquina_nombre ?? '—' },
+                  { label: 'Fecha y hora', value: fechaHora },
                 ] }
         : { title: 'Ciclo detenido', severity: 'ciclo', to: '/maquinas', accionLabel: 'Ver máquinas',
             detalles: [

@@ -595,14 +595,46 @@ describe('límite de eWeLink y avisos', () => {
     expect(filas.maquina.sonoff_estado).toBe('enlazada');
   });
 
-  it('si una máquina con nota no enciende, avisa en la campana', async () => {
+  it('si una máquina con nota no enciende al primer intento, no avisa todavía', async () => {
     filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
     driver.encender.mockResolvedValueOnce({ ok: false, estado: null, motivo: 'ewelink_limite' });
 
     await sincronizarSonoff(1);
+    expect(notificaciones).toHaveLength(0);
+    expect(filas.maquina.sonoff_estado).toBe('error');
+  });
+
+  it('si el reintento del barrido enciende, no avisa', async () => {
+    filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.encender.mockResolvedValueOnce({ ok: false, estado: null, motivo: 'error_red' });
+
+    await sincronizarSonoff(1);
+    await sincronizarSonoff(1, { reconciliando: true });
+    expect(notificaciones).toHaveLength(0);
+    expect(filas.maquina.sonoff_estado).toBe('enlazada');
+  });
+
+  it('si tampoco enciende al reintentar, avisa en la campana', async () => {
+    filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.encender
+      .mockResolvedValueOnce({ ok: false, estado: null, motivo: 'ewelink_limite' })
+      .mockResolvedValueOnce({ ok: false, estado: null, motivo: 'ewelink_limite' });
+
+    await sincronizarSonoff(1);
+    await sincronizarSonoff(1, { reconciliando: true });
     expect(notificaciones).toHaveLength(1);
     expect(notificaciones[0][0]).toMatch(/L8 no encendió: .*límite de llamadas/);
     expect(filas.maquina.sonoff_estado).toBe('error');
+  });
+
+  it('si al reintentar el lote la muestra fuera de línea, avisa', async () => {
+    filas.maquina = { ...maquinaEnUso('error'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.leidoEnLote.mockReturnValueOnce({ ok: false, estado: null, motivo: 'fuera_de_linea' });
+
+    await sincronizarSonoff(1, { reconciliando: true });
+    expect(driver.encender).not.toHaveBeenCalled();
+    expect(notificaciones).toHaveLength(1);
+    expect(notificaciones[0][0]).toMatch(/L8 no encendió: .*fuera de línea/);
   });
 
   it('si enciende bien, no avisa', async () => {

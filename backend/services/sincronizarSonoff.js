@@ -325,10 +325,14 @@ async function avisarTopeCronometro(maq) {
   }
 }
 
+/** ¿Debía prender para una nota (no por un encendido manual)? */
+const debiaEncenderParaNota = (maq, deseado) =>
+  deseado === 'on' && maq.estado === 'en_uso' && !manualVigente(maq);
+
 /**
  * Aviso en la campana de que una máquina que debía prender para una nota no
- * encendió (p. ej. se acabó el límite de eWeLink): el cronómetro corre aunque la
- * máquina no tenga luz. Una vez por arranque.
+ * encendió ni al reintentar (p. ej. se acabó el límite de eWeLink): el cronómetro
+ * corre aunque la máquina no tenga luz. Una vez por arranque.
  */
 async function avisarNoEncendio(maq, motivo) {
   try {
@@ -589,7 +593,12 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     const leido = reconciliando ? dispositivos.leidoEnLote(maq) : null;
     if (leido?.ok && leido.estado === deseado) return marcar(maq.id, 'enlazada');
     /* Fuera de línea según el lote: la orden fallaría igual y gastaría una llamada por vuelta. */
-    if (leido && !leido.ok) return marcar(maq.id, 'error', leido.motivo);
+    if (leido && !leido.ok) {
+      if (debiaEncenderParaNota(maq, deseado) && maq.sonoff_estado === 'error') {
+        await avisarNoEncendio(maq, leido.motivo);
+      }
+      return marcar(maq.id, 'error', leido.motivo);
+    }
 
     const res = deseado === 'on'
       ? await dispositivos.encender(maq)
@@ -598,9 +607,14 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // En simulación no se marca 'enlazada': no hay Sonoff detrás.
     if (dispositivos.esSimulacion(maq)) return maq;
 
-    // Debía prender para una nota y no prendió: se avisa (el cronómetro ya corre).
-    if (!res.ok && deseado === 'on' && maq.estado === 'en_uso' && !manualVigente(maq)) {
-      await avisarNoEncendio(maq, res.motivo);
+    // Debía prender para una nota y no prendió. El primer tropiezo solo se anota:
+    // el barrido reintenta en un minuto y se avisa si vuelve a fallar.
+    if (!res.ok && debiaEncenderParaNota(maq, deseado)) {
+      if (maq.sonoff_estado === 'error') {
+        await avisarNoEncendio(maq, res.motivo);
+      } else {
+        console.warn(`[sonoff] ${maq.nombre ?? maq.id}: falló el primer intento de encender (${res.motivo}); se reintenta en el barrido.`);
+      }
     }
 
     return marcar(maq.id, res.ok ? 'enlazada' : 'error', res.motivo);
