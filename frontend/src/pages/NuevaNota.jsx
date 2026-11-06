@@ -195,6 +195,8 @@ export default function NuevaNota() {
   const [anticipoForma, setAnticipoForma] = useState('');
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
+  // Cambiar bolsa incluida: { productoId, elegidas: { idxCarga: bolsaId } }.
+  const [cambioBolsa, setCambioBolsa] = useState(null);
   const [error,             setError]             = useState('');
   const [loading,           setLoading]           = useState(false);
   const [tipoServicio,      setTipoServicio]      = useState('');
@@ -388,8 +390,11 @@ export default function NuevaNota() {
         const sv = serviciosDe(tamanosEdredon).find(x => x.v === c.servicio);
         const clave = String(c.tipo_prenda).toUpperCase() === 'EDREDON' ? 'edredon'
           : ['chico', 'mediano', 'grande'].includes(c.tamano) ? c.tamano : null;
-        if (!sv || !clave || !(prod.servicios_bolsa ?? []).includes(clave)) return s;
-        return s + precargaDeServicio(sv).bolsas;
+        if (!sv || !clave) return s;
+        const suya = c.bolsa_id
+          ? String(c.bolsa_id) === String(prod.id)
+          : (prod.servicios_bolsa ?? []).includes(clave);
+        return suya ? s + precargaDeServicio(sv).bolsas : s;
       }, 0)
     : 0);
   /** Piezas de un renglón que se cobran: todas, salvo el material (y la bolsa, solo las de más). */
@@ -648,7 +653,59 @@ export default function NuevaNota() {
         ...juntos.filter(c => !SERVICIO_POR_V[c.servicio]),
       ];
     });
-    ajustarMaterial(serv, objetivo - actuales);
+    if (objetivo > actuales) {
+      ajustarMaterial(serv, objetivo - actuales);
+      return;
+    }
+    // Los que se quitan devuelven su bolsa: la elegida con Cambiar o la ligada.
+    const quitados = encargoCargas.filter(c => c.servicio === serv).slice(objetivo);
+    for (const c of quitados) {
+      if (c.bolsa_id) moverBolsas(c.bolsa_id, null, precargaDeServicio(SERVICIO_POR_V[serv]).bolsas);
+      else ajustarMaterial(serv, -1);
+    }
+  };
+
+  /** Pasa `n` bolsas de un renglón a otro (`a` null = solo las quita); un renglón en cero desaparece. */
+  const moverBolsas = (de, a, n) => {
+    if (!(n > 0)) return;
+    setProductosLista(prev => {
+      const lista = prev.map(p => ({ ...p }));
+      const origen = lista.find(p => String(p.producto_id) === String(de));
+      if (origen) origen.cantidad = String(Math.max(0, (Number(origen.cantidad) || 0) - n));
+      if (a != null) {
+        const destino = lista.find(p => String(p.producto_id) === String(a));
+        if (destino) destino.cantidad = String((Number(destino.cantidad) || 0) + n);
+        else lista.push({ producto_id: String(a), cantidad: String(n) });
+      }
+      return lista.filter(p => (Number(p.cantidad) || 0) > 0);
+    });
+  };
+
+  /** Servicios que incluyen bolsa, con su etiqueta ("E. King 2" si se repite). */
+  const serviciosConBolsa = () => {
+    const con = encargoCargas
+      .map((c, idx) => ({ c, idx, sv: SERVICIO_POR_V[c.servicio] }))
+      .filter(({ c, sv }) => sv && servicioBolsa(c) && precargaDeServicio(sv).bolsas > 0);
+    return con.map(x => {
+      const mismos = con.filter(y => y.c.servicio === x.c.servicio);
+      const etiqueta = mismos.length > 1 ? `${x.sv.label} ${mismos.indexOf(x) + 1}` : x.sv.label;
+      return { ...x, etiqueta, bolsa: bolsaDeCarga(x.c), bolsas: precargaDeServicio(x.sv).bolsas };
+    });
+  };
+
+  /** Aplica el modal Cambiar bolsa: mueve las bolsas en la lista y anota la de cada servicio. */
+  const aceptarCambioBolsa = () => {
+    const cambios = serviciosConBolsa().filter(x =>
+      cambioBolsa.elegidas[x.idx] != null && String(cambioBolsa.elegidas[x.idx]) !== String(x.bolsa?.id));
+    for (const x of cambios) moverBolsas(x.bolsa?.id, cambioBolsa.elegidas[x.idx], x.bolsas);
+    setEncargoCargas(prev => prev.map((c, idx) => {
+      const nueva = cambios.find(x => x.idx === idx) && cambioBolsa.elegidas[idx];
+      if (!nueva) return c;
+      // Si vuelve a la ligada, deja de ser una elección.
+      const ligada = bolsasCatalogo.find(b => (b.servicios_bolsa ?? []).includes(servicioBolsa(c)));
+      return { ...c, bolsa_id: String(nueva) === String(ligada?.id) ? '' : String(nueva) };
+    }));
+    setCambioBolsa(null);
   };
 
   const actualizarCargaEncargo = (i, cambios) =>
@@ -749,6 +806,7 @@ export default function NuevaNota() {
   const bolsaDeCarga = (c) => {
     const servicio = servicioBolsa(c);
     if (!servicio) return null;
+    if (c.bolsa_id) return bolsasCatalogo.find(b => String(b.id) === String(c.bolsa_id)) ?? null;
     return bolsasCatalogo.find(b => (b.servicios_bolsa ?? []).includes(servicio)) ?? null;
   };
   // Existencia de una bolsa (piezas); sin existencia no se incluye y se avisa.
@@ -939,6 +997,8 @@ export default function NuevaNota() {
         productos:      (c.productos ?? [])
           .filter(p => p.producto_id && p.cantidad)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
+        // Bolsa elegida con Cambiar; sin ella, la ligada al servicio.
+        bolsa_producto_id: c.bolsa_id ? Number(c.bolsa_id) : null,
         // Medidas de cada tipo de granel; el producto se elige en Salidas.
         granel:         llevaGranel(c)
           ? [...granelPorTipo().keys()].map(t => ({ tipo_granel_id: t, cantidad: medidasGranel(c, t) }))
@@ -1318,9 +1378,20 @@ export default function NuevaNota() {
               <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                 {/* El producto no se cambia: se borra el renglón y se agrega otro. */}
                 <div className="flex-1 min-w-[10rem]">
-                  <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
-                    {prod ? etiquetaProducto(prod) : 'Producto no disponible'}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
+                      {prod ? etiquetaProducto(prod) : 'Producto no disponible'}
+                    </p>
+                    {prod?.clase === 'bolsa' && bolsasIncluidasNota(prod) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setCambioBolsa({ productoId: String(prod.id), elegidas: {} })}
+                        className="text-sm font-medium text-blue hover:underline"
+                      >
+                        Cambiar
+                      </button>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500 tabular-nums">
                     {prod ? precioProductoTexto(prod, ambitoProductosNota) : '—'}
                     {prod && esMaterial && (
@@ -1398,6 +1469,74 @@ export default function NuevaNota() {
         </div>
       </div>
       )}
+
+      {/* Cambiar bolsa: un renglón por servicio que la incluye; la elegida sigue incluida. */}
+      {cambioBolsa && (() => {
+        const servicios = serviciosConBolsa().filter(x => String(x.bolsa?.id) === cambioBolsa.productoId);
+        const cerrar = () => setCambioBolsa(null);
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={cerrar}>
+            <div
+              className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+                <h2 className="text-base font-semibold text-gray-900">Cambiar bolsa</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Elige la bolsa de cada servicio; sigue incluida.</p>
+              </div>
+
+              <div className="p-5 overflow-y-auto space-y-4">
+                {servicios.map(x => {
+                  const elegida = cambioBolsa.elegidas[x.idx] ?? String(x.bolsa?.id ?? '');
+                  return (
+                    <div key={x.idx}>
+                      <p className="text-sm font-semibold text-gray-900 mb-1.5">
+                        {x.etiqueta}
+                        <span className="font-normal text-gray-500">
+                          {` · ${x.bolsas} ${x.bolsas === 1 ? 'bolsa' : 'bolsas'}`}
+                        </span>
+                      </p>
+                      <Selector
+                        valor={elegida}
+                        onChange={v => setCambioBolsa(prev => ({ ...prev, elegidas: { ...prev.elegidas, [x.idx]: v } }))}
+                        titulo={`Bolsa para ${x.etiqueta}`}
+                        etiquetaAria={`Bolsa para ${x.etiqueta}`}
+                        opciones={bolsasCatalogo.map(b => {
+                          const quedan = Number(b.stock_disponible ?? b.stock_actual) || 0;
+                          const esLaActual = String(b.id) === String(x.bolsa?.id);
+                          return {
+                            valor: String(b.id),
+                            etiqueta: etiquetaProducto(b),
+                            detalle: esLaActual ? 'Actual' : `Quedan ${quedan}`,
+                            deshabilitado: !esLaActual && quedan < x.bolsas,
+                          };
+                        })}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="px-5 py-4 border-t border-gray-100 flex gap-3 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={cerrar}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={aceptarCambioBolsa}
+                  className="flex-1 bg-blue text-white font-medium py-3.5 rounded-lg text-base hover:opacity-90 transition-colors"
+                >
+                  Aceptar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 

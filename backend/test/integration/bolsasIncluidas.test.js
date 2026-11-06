@@ -156,7 +156,7 @@ describe('el tope del servicio sigue funcionando', () => {
   });
 });
 
-describe('cambiar la bolsa incluida', () => {
+describe('cambiar la bolsa incluida de un servicio (Salidas)', () => {
   /** Otra bolsa con 100 piezas, sin servicio ligado. */
   async function otraBolsa(nombre = 'Bolsa Edredón', precio = 5) {
     const { body } = await api('post', '/api/productos', {
@@ -168,22 +168,25 @@ describe('cambiar la bolsa incluida', () => {
   }
   const stock = async (id) => (await pool.query(
     'SELECT stock_actual::float AS actual, stock_reservado::float AS reservado FROM productos WHERE id = $1', [id])).rows[0];
+  const cargasDe = async (notaId) => (await pool.query(
+    'SELECT id, bolsa_producto_id FROM nota_cargas WHERE nota_id = $1 ORDER BY orden', [notaId])).rows;
+  const renglones = async (notaId) => (await pool.query(
+    'SELECT producto_id, cantidad FROM nota_productos WHERE nota_id = $1 ORDER BY producto_id', [notaId])).rows;
 
-  it('la nueva queda incluida, la vieja vuelve al inventario y el total no cambia', async () => {
+  it('cambia solo el servicio elegido; las dos siguen incluidas', async () => {
     const vieja = await bolsaChico();
     const nueva = await otraBolsa();
-    const { body } = await notaChico(vieja, 1);
+    const { body } = await notaChico(vieja, 2, 2);
+    const [c1] = await cargasDe(body.id);
 
-    await api('post', `/api/notas/${body.id}/productos/${vieja}/cambiar-bolsa`, { producto_id: nueva }).expect(200);
+    await api('post', `/api/notas/${body.id}/bolsas-servicio`,
+      { cambios: [{ carga_id: c1.id, producto_id: nueva }] }).expect(204);
 
-    expect(await total(body.id)).toBe(120);
-    const { rows: np } = await pool.query(
-      'SELECT producto_id, cantidad FROM nota_productos WHERE nota_id = $1', [body.id]);
-    expect(np).toEqual([{ producto_id: nueva, cantidad: 1 }]);
-    const { rows: nc } = await pool.query(
-      'SELECT bolsa_producto_id FROM nota_cargas WHERE nota_id = $1', [body.id]);
-    expect(nc[0].bolsa_producto_id).toBe(nueva);
-    expect(await stock(vieja)).toEqual({ actual: 100, reservado: 0 });
+    expect(await total(body.id)).toBe(240);
+    expect((await cargasDe(body.id)).map(c => c.bolsa_producto_id)).toEqual([nueva, vieja]);
+    expect(await renglones(body.id)).toEqual(
+      [{ producto_id: vieja, cantidad: 1 }, { producto_id: nueva, cantidad: 1 }].sort((a, b) => a.producto_id - b.producto_id));
+    expect(await stock(vieja)).toEqual({ actual: 100, reservado: 1 });
     expect(await stock(nueva)).toEqual({ actual: 100, reservado: 1 });
   });
 
@@ -193,31 +196,69 @@ describe('cambiar la bolsa incluida', () => {
     const nueva = await otraBolsa();
     const { body } = await notaChico(vieja, 1);
     await api('patch', `/api/notas/${body.id}/estado-pago`, { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+    const [c1] = await cargasDe(body.id);
 
-    await api('post', `/api/notas/${body.id}/productos/${vieja}/cambiar-bolsa`, { producto_id: nueva }).expect(200);
+    await api('post', `/api/notas/${body.id}/bolsas-servicio`,
+      { cambios: [{ carga_id: c1.id, producto_id: nueva }] }).expect(204);
     const { rows } = await pool.query('SELECT estado_pago FROM notas WHERE id = $1', [body.id]);
     expect(rows[0].estado_pago).toBe('PAGADO');
+    expect(await stock(vieja)).toEqual({ actual: 100, reservado: 0 });
   });
 
-  it('una bolsa que no es la incluida no se cambia', async () => {
-    const incluida = await bolsaChico();
-    const suelta = await otraBolsa('Bolsa Jumbo');
-    const nueva = await otraBolsa();
-    const { body } = await notaChico(incluida, 1);
-    await api('post', `/api/notas/${body.id}/productos`, { producto_id: suelta, cantidad: 1 }).expect(201);
-
-    const res = await api('post', `/api/notas/${body.id}/productos/${suelta}/cambiar-bolsa`, { producto_id: nueva });
-    expect(res.status).toBe(400);
-  });
-
-  it('si la nota ya lleva la nueva, se rechaza', async () => {
+  it('si la nueva ya está en la nota, se suma a su renglón', async () => {
     const vieja = await bolsaChico();
     const nueva = await otraBolsa();
     const { body } = await notaChico(vieja, 1);
     await api('post', `/api/notas/${body.id}/productos`, { producto_id: nueva, cantidad: 1 }).expect(201);
+    const [c1] = await cargasDe(body.id);
 
-    const res = await api('post', `/api/notas/${body.id}/productos/${vieja}/cambiar-bolsa`, { producto_id: nueva });
+    await api('post', `/api/notas/${body.id}/bolsas-servicio`,
+      { cambios: [{ carga_id: c1.id, producto_id: nueva }] }).expect(204);
+    expect(await renglones(body.id)).toEqual([{ producto_id: nueva, cantidad: 2 }]);
+    /* Una incluida y la otra se cobra, como antes del cambio. */
+    expect(await total(body.id)).toBe(125);
+  });
+
+  it('una bolsa que no existe se rechaza', async () => {
+    const vieja = await bolsaChico();
+    const { body } = await notaChico(vieja, 1);
+    const [c1] = await cargasDe(body.id);
+    const res = await api('post', `/api/notas/${body.id}/bolsas-servicio`,
+      { cambios: [{ carga_id: c1.id, producto_id: 999999 }] });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/ya lleva/);
+  });
+});
+
+describe('bolsa elegida por servicio al crear la nota', () => {
+  it('el servicio incluye la bolsa elegida en vez de la ligada', async () => {
+    const ligada = await bolsaChico();
+    const { body: otra } = await api('post', '/api/productos', {
+      clase: 'bolsa', nombre: 'Bolsa SPE 2', tamano_bolsa: 'grande', bolsas_por_rollo: 100, precio_unitario: 5,
+    });
+    await api('post', `/api/productos/${otra.id}/movimiento`,
+      { tipo: 'entrada', destino: 'piezas', unidad: 'rollo', cantidad: 1 }).expect(200);
+
+    const res = await api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [
+        { tamano: 'chico', tipo_prenda: 'ROPA', bolsa_producto_id: otra.id },
+        { tamano: 'chico', tipo_prenda: 'ROPA' },
+      ],
+      productos: [{ producto_id: otra.id, cantidad: 1 }, { producto_id: ligada, cantidad: 1 }],
+    });
+    expect(res.status).toBe(201);
+    expect(await total(res.body.id)).toBe(240);
+    const { rows } = await pool.query(
+      'SELECT bolsa_producto_id FROM nota_cargas WHERE nota_id = $1 ORDER BY orden', [res.body.id]);
+    expect(rows.map(r => r.bolsa_producto_id)).toEqual([otra.id, ligada]);
+  });
+
+  it('una bolsa elegida que no existe se rechaza', async () => {
+    await bolsaChico();
+    const res = await api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA', bolsa_producto_id: 999999 }],
+    });
+    expect(res.status).toBe(400);
   });
 });

@@ -1241,6 +1241,9 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       productos,
       // Medidas de granel capturadas; sin ellas, las de Ajustes.
       granel:          tipo_servicio === 'POR_ENCARGO' ? leerGranelDeCarga(c.granel, i) : null,
+      // Bolsa elegida para el servicio en vez de la ligada (botón Cambiar).
+      bolsa_producto_id: tipo_servicio === 'POR_ENCARGO' && c.bolsa_producto_id != null
+        ? Number(c.bolsa_producto_id) : null,
     };
   });
 }
@@ -1510,6 +1513,16 @@ async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
     const bolsas = tipo_servicio === 'POR_ENCARGO' && f.precio_tope != null
       ? await bolsasDeServicio(client, f.tipo_prenda, f.tamano, f.tamano_edredon, sucursal)
       : { productoId: null, incluidas: 0 };
+    if (f.bolsa_producto_id != null && bolsas.incluidas > 0) {
+      if (!Number.isInteger(f.bolsa_producto_id)) throw new Error(`La bolsa del servicio ${f.orden} no es válida.`);
+      const { rows: b } = await client.query(
+        `SELECT id FROM productos
+          WHERE id = $1 AND sucursal = $2 AND clase = 'bolsa' AND archivado = FALSE`,
+        [f.bolsa_producto_id, sucursal]
+      );
+      if (b.length === 0) throw new Error(`La bolsa elegida para el servicio ${f.orden} no existe en esta sucursal.`);
+      bolsas.productoId = b[0].id;
+    }
     const { rows } = await client.query(
       `INSERT INTO nota_cargas
          (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
@@ -4592,22 +4605,21 @@ export const cambiarCantidadProducto = async (req, res) => {
   }
 };
 
-// ── POST /notas/:id/productos/:productoId/cambiar-bolsa ─────
+// ── POST /notas/:id/bolsas-servicio ─────────────────────────
 /**
- * Cambia la bolsa incluida de una nota Por Encargo por otra (p. ej. Edredón por
- * SPE) con la misma cantidad. Los servicios que la incluían pasan a incluir la
- * nueva, así que sigue sin cobrarse. La vieja vuelve al inventario y la nueva
- * queda apartada.
+ * Cambia la bolsa incluida de uno o más servicios Por Encargo (p. ej. el
+ * Individual a SPE y el King se queda con Edredón). Sus bolsas pasan del
+ * renglón de la vieja al de la nueva y siguen incluidas: la vieja vuelve al
+ * inventario y la nueva queda apartada.
+ *
+ * Body: { cambios: [{ carga_id, producto_id }] }.
  */
-export const cambiarBolsaProducto = async (req, res) => {
-  const { id, productoId } = req.params;
-  const nuevaId = Number(req.body?.producto_id);
-
-  if (!Number.isInteger(nuevaId) || nuevaId <= 0) {
-    return res.status(400).json({ message: 'Elige la bolsa nueva.' });
-  }
-  if (nuevaId === Number(productoId)) {
-    return res.status(400).json({ message: 'Elige una bolsa distinta a la que ya lleva.' });
+export const cambiarBolsasServicio = async (req, res) => {
+  const { id } = req.params;
+  const cambios = Array.isArray(req.body?.cambios) ? req.body.cambios : null;
+  if (!cambios || cambios.length === 0 || cambios.length > 20
+      || cambios.some(c => !Number.isInteger(Number(c?.carga_id)) || !Number.isInteger(Number(c?.producto_id)))) {
+    return res.status(400).json({ message: 'Elige la bolsa de cada servicio.' });
   }
 
   const client = await pool.connect();
@@ -4615,8 +4627,7 @@ export const cambiarBolsaProducto = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      `SELECT estado, tipo_servicio, bolsas_todas_incluidas FROM notas
-        WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
+      'SELECT estado, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -4631,65 +4642,80 @@ export const cambiarBolsaProducto = async (req, res) => {
       });
     }
 
-    const { rows: npRows } = await client.query(
-      `SELECT np.* FROM nota_productos np
-         JOIN productos a ON a.id = np.producto_id AND a.clase = 'bolsa'
-        WHERE np.nota_id = $1 AND np.producto_id = $2 AND np.carga_id IS NULL`,
-      [id, productoId]
-    );
-    if (npRows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Esa bolsa no está en la nota.' });
-    }
-    const np = npRows[0];
+    for (const cambio of cambios) {
+      const cargaId = Number(cambio.carga_id);
+      const nuevaId = Number(cambio.producto_id);
 
-    const { rows: incl } = await client.query(
-      `SELECT COALESCE(SUM(bolsas_incluidas), 0) AS n FROM nota_cargas
-        WHERE nota_id = $1 AND bolsa_producto_id = $2`,
-      [id, productoId]
-    );
-    if (!nota.bolsas_todas_incluidas && Number(incl[0].n) <= 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Solo se cambia una bolsa incluida en el servicio.' });
-    }
+      const { rows: cargaRows } = await client.query(
+        `SELECT bolsa_producto_id, bolsas_incluidas FROM nota_cargas
+          WHERE id = $1 AND nota_id = $2 FOR UPDATE`,
+        [cargaId, id]
+      );
+      const carga = cargaRows[0];
+      if (!carga || carga.bolsa_producto_id == null || Number(carga.bolsas_incluidas) <= 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Solo se cambia la bolsa de un servicio que la incluye.' });
+      }
+      const viejaId = Number(carga.bolsa_producto_id);
+      if (viejaId === nuevaId) continue;
 
-    const { rows: nuevaRows } = await client.query(
-      `SELECT nombre FROM productos
-        WHERE id = $1 AND sucursal = $2 AND clase = 'bolsa' AND archivado = FALSE`,
-      [nuevaId, req.sucursal]
-    );
-    if (nuevaRows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La bolsa nueva no existe en esta sucursal.' });
-    }
-    const { rows: yaEsta } = await client.query(
-      'SELECT 1 FROM nota_productos WHERE nota_id = $1 AND producto_id = $2 AND carga_id IS NULL',
-      [id, nuevaId]
-    );
-    if (yaEsta.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        message: `La nota ya lleva "${nuevaRows[0].nombre}". Sube su cantidad y quita la otra.`,
-      });
-    }
+      const { rows: nuevaRows } = await client.query(
+        `SELECT id FROM productos
+          WHERE id = $1 AND sucursal = $2 AND clase = 'bolsa' AND archivado = FALSE`,
+        [nuevaId, req.sucursal]
+      );
+      if (nuevaRows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'La bolsa nueva no existe en esta sucursal.' });
+      }
 
-    // La vieja vuelve al inventario (lo entregado y lo apartado) y sale de la nota.
-    await devolverProductosDeNota(client, id, req.sucursal, req.user?.id, { ids: [np.id] });
-    await client.query('DELETE FROM nota_productos WHERE id = $1', [np.id]);
+      // Las bolsas del servicio salen del renglón de la vieja (las que haya).
+      const { rows: viejaRows } = await client.query(
+        `SELECT id, cantidad, cantidad_medidas FROM nota_productos
+          WHERE nota_id = $1 AND producto_id = $2 AND carga_id IS NULL`,
+        [id, viejaId]
+      );
+      let mover = 0;
+      if (viejaRows.length > 0) {
+        const vieja = viejaRows[0];
+        // Nota reabierta: lo entregado vuelve al inventario antes de tocarlo.
+        await reabrirRenglonProducto(client, id, vieja.id, req.sucursal, req.user?.id);
+        mover = Math.min(Number(carga.bolsas_incluidas), Number(vieja.cantidad));
+        const medidasPorPieza = Number(vieja.cantidad_medidas) / Number(vieja.cantidad);
+        const quedan = Number(vieja.cantidad) - mover;
+        if (quedan > 0) {
+          await client.query(
+            'UPDATE nota_productos SET cantidad = $1, cantidad_medidas = $2 WHERE id = $3',
+            [quedan, quedan * medidasPorPieza, vieja.id]
+          );
+        } else {
+          await client.query('DELETE FROM nota_productos WHERE id = $1', [vieja.id]);
+        }
+        await client.query(
+          'UPDATE productos SET stock_reservado = GREATEST(0, stock_reservado - $1) WHERE id = $2',
+          [mover * medidasPorPieza, viejaId]
+        );
+      }
 
-    let fila;
-    try {
-      fila = await reservarProducto(client, id, null, nuevaId, Number(np.cantidad), req.sucursal, nota.tipo_servicio);
-    } catch (e) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: e.message });
+      // …y entran al de la nueva.
+      if (mover > 0) {
+        const { rows: yaEsta } = await client.query(
+          'SELECT id FROM nota_productos WHERE nota_id = $1 AND producto_id = $2 AND carga_id IS NULL',
+          [id, nuevaId]
+        );
+        for (const r of yaEsta) {
+          await reabrirRenglonProducto(client, id, r.id, req.sucursal, req.user?.id);
+        }
+        try {
+          await reservarProducto(client, id, null, nuevaId, mover, req.sucursal, nota.tipo_servicio);
+        } catch (e) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: e.message });
+        }
+      }
+
+      await client.query('UPDATE nota_cargas SET bolsa_producto_id = $1 WHERE id = $2', [nuevaId, cargaId]);
     }
-
-    // Los servicios que incluían la vieja ahora incluyen la nueva.
-    await client.query(
-      'UPDATE nota_cargas SET bolsa_producto_id = $1 WHERE nota_id = $2 AND bolsa_producto_id = $3',
-      [nuevaId, id, productoId]
-    );
 
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
@@ -4702,11 +4728,11 @@ export const cambiarBolsaProducto = async (req, res) => {
     }
 
     await client.query('COMMIT');
-    res.json(fila);
+    res.status(204).send();
   } catch (err) {
     await client.query('ROLLBACK');
     if (respondioCorteCerrado(res, err)) return;
-    console.error('cambiarBolsaProducto error:', err);
+    console.error('cambiarBolsasServicio error:', err);
     res.status(500).json({ message: 'No se pudo cambiar la bolsa. Intenta de nuevo.' });
   } finally {
     client.release();

@@ -12,6 +12,7 @@ import TopeServicios from '../components/TopeServicios';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ElegirTiempoModal from '../components/ElegirTiempoModal';
 import GranelPorServicio from '../components/GranelPorServicio';
+import Selector from '../components/Selector';
 import { preguntaTiempo, tiemposDeMaquina, etiquetaPrograma } from '../lib/tiemposModelo';
 import { marcaYTamano } from '../lib/estadoMaquina';
 import { cobroAparteEncargo, bolsasIncluidas } from '../lib/cobroProductos';
@@ -83,7 +84,7 @@ export default function Salidas() {
   const [avisoProd,        setAvisoProd]        = useState(null);
   // Agregar un producto desde Salidas: el cliente lo pide ya frente a la máquina.
   const [agregarProdOpen, setAgregarProdOpen] = useState(false);
-  // Bolsa incluida que se va a cambiar por otra (modal "Cambiar bolsa").
+  // Cambiar bolsa incluida: { producto, elegidas: { cargaId: bolsaId } }.
   const [cambiarBolsaDe, setCambiarBolsaDe] = useState(null);
   const [catalogoProd, setCatalogoProd]       = useState([]);
   const [loadingCatalogo, setLoadingCatalogo] = useState(false);
@@ -551,7 +552,7 @@ export default function Salidas() {
   /** Abre "Cambiar bolsa" para una bolsa incluida, con el catálogo de la sucursal. */
   async function iniciarCambiarBolsa(p) {
     setErrorAccion('');
-    setCambiarBolsaDe(p);
+    setCambiarBolsaDe({ producto: p, elegidas: {} });
     setLoadingCatalogo(true);
     try {
       const data = await api.get('/productos');
@@ -563,13 +564,20 @@ export default function Salidas() {
     }
   }
 
-  /** Cambia la bolsa incluida por otra; sigue incluida en el servicio. */
-  async function cambiarBolsa(nuevaId) {
-    const vieja = cambiarBolsaDe;
-    setLoadingProducto(vieja.producto_id);
+  /** Manda la bolsa elegida de cada servicio que cambió; siguen incluidas. */
+  async function aceptarCambioBolsa() {
+    const { producto, elegidas } = cambiarBolsaDe;
+    const cambios = Object.entries(elegidas)
+      .filter(([, bolsaId]) => String(bolsaId) !== String(producto.producto_id))
+      .map(([cargaId, bolsaId]) => ({ carga_id: Number(cargaId), producto_id: Number(bolsaId) }));
+    if (cambios.length === 0) {
+      setCambiarBolsaDe(null);
+      return;
+    }
+    setLoadingProducto(producto.producto_id);
     setErrorAccion('');
     try {
-      await api.post(`/notas/${id}/productos/${vieja.producto_id}/cambiar-bolsa`, { producto_id: Number(nuevaId) });
+      await api.post(`/notas/${id}/bolsas-servicio`, { cambios });
       setCambiarBolsaDe(null);
       await cargarDatos();
     } catch (err) {
@@ -987,8 +995,7 @@ export default function Salidas() {
   const incluidasDe = (p) => (esEncargo && p.clase === 'bolsa' && !nota?.bolsas_todas_incluidas
     ? Math.min(Number(p.cantidad), bolsasIncluidas(nota, p.producto_id)) : 0);
   // Bolsa que va dentro de algún servicio: se puede cambiar por otra.
-  const esBolsaIncluida = (p) => esEncargo && p.clase === 'bolsa'
-    && (Boolean(nota?.bolsas_todas_incluidas) || bolsasIncluidas(nota, p.producto_id) > 0);
+  const esBolsaIncluida = (p) => esEncargo && p.clase === 'bolsa' && bolsasIncluidas(nota, p.producto_id) > 0;
   const totalProductosNota = productosNota.reduce((a, x) => a + cobradoProducto(x), 0);
   // Por Encargo: lo servido cuenta contra lo que se cobra por los servicios (lo
   // que se vende por pieza no). ¿Cabe otra unidad de este renglón?
@@ -1607,113 +1614,93 @@ export default function Salidas() {
         </div>
       )}
 
-      {cambiarBolsaDe && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-          onClick={() => { setCambiarBolsaDe(null); setErrorAccion(''); }}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
-              <div>
+      {cambiarBolsaDe && (() => {
+        const { producto, elegidas } = cambiarBolsaDe;
+        const cerrar = () => { setCambiarBolsaDe(null); setErrorAccion(''); };
+        // Servicios que incluyen esta bolsa, numerados si se repiten.
+        const conBolsa = (nota?.cargas ?? []).filter(c => Number(c.bolsas_incluidas) > 0);
+        const nombre = (c) => (String(c.tipo_prenda).toUpperCase() === 'EDREDON'
+          ? (c.tamano_edredon ? `Edredón ${c.tamano_edredon}` : 'Edredón')
+          : ({ chico: 'Chico', mediano: 'Mediano', grande: 'Grande' }[c.tamano] ?? 'Servicio'));
+        const servicios = conBolsa
+          .filter(c => String(c.bolsa_producto_id) === String(producto.producto_id))
+          .map(c => {
+            const mismos = conBolsa.filter(x => nombre(x) === nombre(c));
+            return { c, etiqueta: mismos.length > 1 ? `${nombre(c)} ${mismos.indexOf(c) + 1}` : nombre(c) };
+          });
+        const bolsas = catalogoProd.filter(b => b.clase === 'bolsa');
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={cerrar}>
+            <div
+              className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
                 <h2 className="text-base font-semibold text-gray-900">Cambiar bolsa</h2>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {`${cambiarBolsaDe.cantidad} × ${etiquetaProducto(cambiarBolsaDe)} · la nueva sigue incluida`}
-                </p>
+                <p className="text-sm text-gray-500 mt-0.5">Elige la bolsa de cada servicio; sigue incluida.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => { setCambiarBolsaDe(null); setErrorAccion(''); }}
-                aria-label="Cerrar"
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
 
-            {errorAccion && (
-              <div className="mx-5 mt-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-                {errorAccion}
-              </div>
-            )}
-
-            <div className="p-3 overflow-y-auto">
-              {loadingCatalogo ? (
-                <div className="flex justify-center py-6">
-                  <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
+              {errorAccion && (
+                <div className="mx-5 mt-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                  {errorAccion}
                 </div>
-              ) : (() => {
-                const bolsas = catalogoProd.filter(b =>
-                  b.clase === 'bolsa' && String(b.id) !== String(cambiarBolsaDe.producto_id));
-                if (bolsas.length === 0) {
-                  return (
-                    <p className="px-2 py-6 text-center text-sm text-gray-500">
-                      No hay otras bolsas dadas de alta.
-                    </p>
-                  );
-                }
-                const puestos = productosNota.map(x => String(x.producto_id));
-                return (
-                  <div className="space-y-1.5">
-                    {bolsas.map(b => {
-                      const yaEsta    = puestos.includes(String(b.id));
-                      const sinStock  = existenciaProducto(b) < Number(cambiarBolsaDe.cantidad);
-                      const bloqueado = yaEsta || sinStock || loadingProducto != null;
-                      return (
-                        <button
-                          key={b.id}
-                          type="button"
-                          disabled={bloqueado}
-                          onClick={() => cambiarBolsa(b.id)}
-                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-colors ${
-                            bloqueado
-                              ? 'border-gray-100 bg-gray-50 cursor-not-allowed'
-                              : 'border-gray-200 hover:border-blue hover:bg-light-blue/40'
-                          }`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-base font-semibold ${bloqueado ? 'text-gray-400' : 'text-gray-900'}`}>
-                              {etiquetaProducto(b)}
-                            </p>
-                            <p className="text-sm text-gray-500 tabular-nums">{detalleProducto(b)}</p>
-                          </div>
-                          {yaEsta ? (
-                            <span className="flex-shrink-0 text-xs font-semibold text-gray-500 bg-gray-200 rounded-pill px-2.5 py-1">
-                              Ya está en la nota
-                            </span>
-                          ) : sinStock ? (
-                            <span className="flex-shrink-0 text-xs font-semibold text-red bg-light-red rounded-pill px-2.5 py-1">
-                              Sin existencias
-                            </span>
-                          ) : (
-                            <svg className="w-5 h-5 flex-shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
+              )}
 
-            <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => { setCambiarBolsaDe(null); setErrorAccion(''); }}
-                className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
-              >
-                Cerrar
-              </button>
+              <div className="p-5 overflow-y-auto space-y-4">
+                {loadingCatalogo ? (
+                  <div className="flex justify-center py-6">
+                    <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
+                  </div>
+                ) : servicios.map(({ c, etiqueta }) => {
+                  const n = Number(c.bolsas_incluidas);
+                  return (
+                    <div key={c.id}>
+                      <p className="text-sm font-semibold text-gray-900 mb-1.5">
+                        {etiqueta}
+                        <span className="font-normal text-gray-500">{` · ${n} ${n === 1 ? 'bolsa' : 'bolsas'}`}</span>
+                      </p>
+                      <Selector
+                        valor={String(elegidas[c.id] ?? producto.producto_id)}
+                        onChange={v => setCambiarBolsaDe(prev => ({ ...prev, elegidas: { ...prev.elegidas, [c.id]: v } }))}
+                        titulo={`Bolsa para ${etiqueta}`}
+                        etiquetaAria={`Bolsa para ${etiqueta}`}
+                        opciones={bolsas.map(b => {
+                          const esLaActual = String(b.id) === String(producto.producto_id);
+                          const quedan = existenciaProducto(b);
+                          return {
+                            valor: String(b.id),
+                            etiqueta: etiquetaProducto(b),
+                            detalle: esLaActual ? 'Actual' : `Quedan ${quedan}`,
+                            deshabilitado: !esLaActual && quedan < n,
+                          };
+                        })}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="px-5 py-4 border-t border-gray-100 flex gap-3 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={cerrar}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={aceptarCambioBolsa}
+                  disabled={loadingProducto != null || loadingCatalogo}
+                  className="flex-1 bg-blue text-white font-medium py-3.5 rounded-lg text-base hover:opacity-90 disabled:opacity-60 transition-colors"
+                >
+                  {loadingProducto != null ? 'Guardando…' : 'Aceptar'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {confirmQuitarProd && (
         <ConfirmacionModal
