@@ -349,6 +349,16 @@ export default function Notas() {
   }, [notas, anioActual]);
 
   const filtradas = notas.filter(n => {
+    // Al buscar se busca en todas: cualquier fecha y estado, también canceladas.
+    if (q) {
+      const folio    = normalizar(n.folio ?? `#${n.id}`);
+      const cliente  = normalizar(n.cliente_nombre);
+      const apellido = normalizar(n.cliente_apellido);
+      const telefono = normalizar(n.cliente_telefono);
+      const referencia = normalizar(n.referencia);
+      return folio.includes(q) || cliente.includes(q) || apellido.includes(q) || telefono.includes(q)
+        || referencia.includes(q);
+    }
     // Las canceladas solo salen en su propio filtro.
     if (n.estado === 'CANCELADA' && filtro !== 'CANCELADA') return false;
     if (filtro === 'PENDIENTE') {
@@ -364,19 +374,14 @@ export default function Notas() {
       const fecha = new Date(n.created_at);
       if (fecha < rango.desde || fecha >= rango.hasta) return false;
     }
-    if (!q) return true;
-    const folio    = normalizar(n.folio ?? `#${n.id}`);
-    const cliente  = normalizar(n.cliente_nombre);
-    const apellido = normalizar(n.cliente_apellido);
-    const telefono = normalizar(n.cliente_telefono);
-    const referencia = normalizar(n.referencia);
-    return folio.includes(q) || cliente.includes(q) || apellido.includes(q) || telefono.includes(q)
-      || referencia.includes(q);
+    return true;
   });
 
   const hayFiltros = filtro !== 'TODOS' || rangoFecha !== 'TODAS';
   // Chips de los filtros activos, bajo la búsqueda y a la derecha; se quitan con su ✕.
-  const chipsFiltros = hayFiltros && (
+  const chipsFiltros = q ? (
+    <p className="text-sm text-gray-500 text-right">Buscando en todas las fechas y estados</p>
+  ) : hayFiltros && (
     <div className="flex flex-wrap justify-end gap-2">
       {filtro !== 'TODOS' && (
         <ChipFiltro
