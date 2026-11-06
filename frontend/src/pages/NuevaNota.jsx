@@ -665,17 +665,22 @@ export default function NuevaNota() {
     }
   };
 
-  /** Pasa `n` bolsas de un renglón a otro (`a` null = solo las quita); un renglón en cero desaparece. */
+  /**
+   * Pasa hasta `n` bolsas de un renglón a otro (`a` null = solo las quita), como
+   * el servidor: solo las que haya en el renglón. Un renglón en cero desaparece.
+   */
   const moverBolsas = (de, a, n) => {
     if (!(n > 0)) return;
     setProductosLista(prev => {
       const lista = prev.map(p => ({ ...p }));
       const origen = lista.find(p => String(p.producto_id) === String(de));
-      if (origen) origen.cantidad = String(Math.max(0, (Number(origen.cantidad) || 0) - n));
-      if (a != null) {
+      const hay = Number(origen?.cantidad) || 0;
+      const m = Math.min(n, hay);
+      if (origen) origen.cantidad = String(hay - m);
+      if (a != null && m > 0) {
         const destino = lista.find(p => String(p.producto_id) === String(a));
-        if (destino) destino.cantidad = String((Number(destino.cantidad) || 0) + n);
-        else lista.push({ producto_id: String(a), cantidad: String(n) });
+        if (destino) destino.cantidad = String((Number(destino.cantidad) || 0) + m);
+        else lista.push({ producto_id: String(a), cantidad: String(m) });
       }
       return lista.filter(p => (Number(p.cantidad) || 0) > 0);
     });
