@@ -155,3 +155,69 @@ describe('el tope del servicio sigue funcionando', () => {
     expect(res.body.message).toMatch(/material de la nota/i);
   });
 });
+
+describe('cambiar la bolsa incluida', () => {
+  /** Otra bolsa con 100 piezas, sin servicio ligado. */
+  async function otraBolsa(nombre = 'Bolsa Edredón', precio = 5) {
+    const { body } = await api('post', '/api/productos', {
+      clase: 'bolsa', nombre, tamano_bolsa: 'grande', bolsas_por_rollo: 100, precio_unitario: precio,
+    });
+    await api('post', `/api/productos/${body.id}/movimiento`,
+      { tipo: 'entrada', destino: 'piezas', unidad: 'rollo', cantidad: 1 }).expect(200);
+    return body.id;
+  }
+  const stock = async (id) => (await pool.query(
+    'SELECT stock_actual::float AS actual, stock_reservado::float AS reservado FROM productos WHERE id = $1', [id])).rows[0];
+
+  it('la nueva queda incluida, la vieja vuelve al inventario y el total no cambia', async () => {
+    const vieja = await bolsaChico();
+    const nueva = await otraBolsa();
+    const { body } = await notaChico(vieja, 1);
+
+    await api('post', `/api/notas/${body.id}/productos/${vieja}/cambiar-bolsa`, { producto_id: nueva }).expect(200);
+
+    expect(await total(body.id)).toBe(120);
+    const { rows: np } = await pool.query(
+      'SELECT producto_id, cantidad FROM nota_productos WHERE nota_id = $1', [body.id]);
+    expect(np).toEqual([{ producto_id: nueva, cantidad: 1 }]);
+    const { rows: nc } = await pool.query(
+      'SELECT bolsa_producto_id FROM nota_cargas WHERE nota_id = $1', [body.id]);
+    expect(nc[0].bolsa_producto_id).toBe(nueva);
+    expect(await stock(vieja)).toEqual({ actual: 100, reservado: 0 });
+    expect(await stock(nueva)).toEqual({ actual: 100, reservado: 1 });
+  });
+
+  it('en una nota pagada sigue pagada', async () => {
+    await api('post', '/api/caja/abrir', { monto_inicial: 0 }).expect(201);
+    const vieja = await bolsaChico();
+    const nueva = await otraBolsa();
+    const { body } = await notaChico(vieja, 1);
+    await api('patch', `/api/notas/${body.id}/estado-pago`, { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+
+    await api('post', `/api/notas/${body.id}/productos/${vieja}/cambiar-bolsa`, { producto_id: nueva }).expect(200);
+    const { rows } = await pool.query('SELECT estado_pago FROM notas WHERE id = $1', [body.id]);
+    expect(rows[0].estado_pago).toBe('PAGADO');
+  });
+
+  it('una bolsa que no es la incluida no se cambia', async () => {
+    const incluida = await bolsaChico();
+    const suelta = await otraBolsa('Bolsa Jumbo');
+    const nueva = await otraBolsa();
+    const { body } = await notaChico(incluida, 1);
+    await api('post', `/api/notas/${body.id}/productos`, { producto_id: suelta, cantidad: 1 }).expect(201);
+
+    const res = await api('post', `/api/notas/${body.id}/productos/${suelta}/cambiar-bolsa`, { producto_id: nueva });
+    expect(res.status).toBe(400);
+  });
+
+  it('si la nota ya lleva la nueva, se rechaza', async () => {
+    const vieja = await bolsaChico();
+    const nueva = await otraBolsa();
+    const { body } = await notaChico(vieja, 1);
+    await api('post', `/api/notas/${body.id}/productos`, { producto_id: nueva, cantidad: 1 }).expect(201);
+
+    const res = await api('post', `/api/notas/${body.id}/productos/${vieja}/cambiar-bolsa`, { producto_id: nueva });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/ya lleva/);
+  });
+});

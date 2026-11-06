@@ -4592,6 +4592,127 @@ export const cambiarCantidadProducto = async (req, res) => {
   }
 };
 
+// ── POST /notas/:id/productos/:productoId/cambiar-bolsa ─────
+/**
+ * Cambia la bolsa incluida de una nota Por Encargo por otra (p. ej. Edredón por
+ * SPE) con la misma cantidad. Los servicios que la incluían pasan a incluir la
+ * nueva, así que sigue sin cobrarse. La vieja vuelve al inventario y la nueva
+ * queda apartada.
+ */
+export const cambiarBolsaProducto = async (req, res) => {
+  const { id, productoId } = req.params;
+  const nuevaId = Number(req.body?.producto_id);
+
+  if (!Number.isInteger(nuevaId) || nuevaId <= 0) {
+    return res.status(400).json({ message: 'Elige la bolsa nueva.' });
+  }
+  if (nuevaId === Number(productoId)) {
+    return res.status(400).json({ message: 'Elige una bolsa distinta a la que ya lleva.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      `SELECT estado, tipo_servicio, bolsas_todas_incluidas FROM notas
+        WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    const nota = notaRows[0];
+    if (['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `No se pueden cambiar los productos de una nota ${palabra(nota.estado)}.`,
+      });
+    }
+
+    const { rows: npRows } = await client.query(
+      `SELECT np.* FROM nota_productos np
+         JOIN productos a ON a.id = np.producto_id AND a.clase = 'bolsa'
+        WHERE np.nota_id = $1 AND np.producto_id = $2 AND np.carga_id IS NULL`,
+      [id, productoId]
+    );
+    if (npRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Esa bolsa no está en la nota.' });
+    }
+    const np = npRows[0];
+
+    const { rows: incl } = await client.query(
+      `SELECT COALESCE(SUM(bolsas_incluidas), 0) AS n FROM nota_cargas
+        WHERE nota_id = $1 AND bolsa_producto_id = $2`,
+      [id, productoId]
+    );
+    if (!nota.bolsas_todas_incluidas && Number(incl[0].n) <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Solo se cambia una bolsa incluida en el servicio.' });
+    }
+
+    const { rows: nuevaRows } = await client.query(
+      `SELECT nombre FROM productos
+        WHERE id = $1 AND sucursal = $2 AND clase = 'bolsa' AND archivado = FALSE`,
+      [nuevaId, req.sucursal]
+    );
+    if (nuevaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La bolsa nueva no existe en esta sucursal.' });
+    }
+    const { rows: yaEsta } = await client.query(
+      'SELECT 1 FROM nota_productos WHERE nota_id = $1 AND producto_id = $2 AND carga_id IS NULL',
+      [id, nuevaId]
+    );
+    if (yaEsta.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `La nota ya lleva "${nuevaRows[0].nombre}". Sube su cantidad y quita la otra.`,
+      });
+    }
+
+    // La vieja vuelve al inventario (lo entregado y lo apartado) y sale de la nota.
+    await devolverProductosDeNota(client, id, req.sucursal, req.user?.id, { ids: [np.id] });
+    await client.query('DELETE FROM nota_productos WHERE id = $1', [np.id]);
+
+    let fila;
+    try {
+      fila = await reservarProducto(client, id, null, nuevaId, Number(np.cantidad), req.sucursal, nota.tipo_servicio);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: e.message });
+    }
+
+    // Los servicios que incluían la vieja ahora incluyen la nueva.
+    await client.query(
+      'UPDATE nota_cargas SET bolsa_producto_id = $1 WHERE nota_id = $2 AND bolsa_producto_id = $3',
+      [nuevaId, id, productoId]
+    );
+
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
+
+    const errTope = await validarTopesCargas(client, id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
+
+    await client.query('COMMIT');
+    res.json(fila);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
+    console.error('cambiarBolsaProducto error:', err);
+    res.status(500).json({ message: 'No se pudo cambiar la bolsa. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── Abonos (pagos parciales) ────────────────────────────────
 // Cada abono entra en la caja abierta del día y su corte lo cuenta; al liquidar
 // solo entra lo que faltaba. Cuando los abonos cubren el total, la nota queda

@@ -30,6 +30,7 @@ import {
   getNotaProductos,
   addProductoToNota,
   cambiarCantidadProducto,
+  cambiarBolsaProducto,
   elegirGranelDeCarga,
   removeProductoFromNota,
 } from '../controllers/notas.controller.js';
@@ -78,6 +79,7 @@ router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   conCaja, addProductoToNota);
 // Cambiar la cantidad la hace cualquiera; quitar el producto es de admin.
 router.patch('/:id/productos/:productoId', conCaja, cambiarCantidadProducto);
+router.post('/:id/productos/:productoId/cambiar-bolsa', conCaja, cambiarBolsaProducto);
 // El granel de un servicio Por Encargo lo elige el empleado en Salidas.
 router.put('/:id/cargas/:cargaId/granel/:tipoId', conCaja, elegirGranelDeCarga);
 router.delete('/:id/productos/:productoId', requireAdmin, conCaja, removeProductoFromNota);
