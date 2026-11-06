@@ -1323,6 +1323,13 @@ export default function DetalleNota() {
           {nota.forma_pago && (
             <FilaDetalle label="Forma de pago">
               <span className="text-gray-700">{formaPagoLabel(nota.forma_pago)}</span>
+              {/* Pago completo (sin abonos): cuánto, quién y cuándo. */}
+              {nota.estado_pago === 'PAGADO' && abonosNota.length === 0 && nota.pagado_en && (
+                <span className="block text-sm text-gray-500">
+                  {`${fmtMonto(nota.precio_total)} · ${nota.pagado_por_nombre || 'Sin registro de quién cobró'}`}
+                  <span className="block">{formatFechaHora12(nota.pagado_en)}</span>
+                </span>
+              )}
             </FilaDetalle>
           )}
           {/* Correcciones de forma de pago: quién y cuándo. */}

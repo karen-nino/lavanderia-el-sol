@@ -1769,6 +1769,8 @@ export const getNotas = async (req, res) => {
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               su.nombre  AS sucursal_nombre,
               su.direccion AS sucursal_direccion,
+              (SELECT TRIM(up.nombre || ' ' || COALESCE(up.apellido, ''))
+                 FROM usuarios up WHERE up.id = n.pagado_por) AS pagado_por_nombre,
               -- Para el comodín *Horario* de WhatsApp.
               su.horario_semana AS sucursal_horario_semana,
               (SELECT COALESCE(json_agg(DISTINCT x.mid), '[]'::json)
@@ -1886,6 +1888,8 @@ export const getNotaById = async (req, res) => {
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               su.nombre  AS sucursal_nombre,
               su.direccion AS sucursal_direccion,
+              (SELECT TRIM(up.nombre || ' ' || COALESCE(up.apellido, ''))
+                 FROM usuarios up WHERE up.id = n.pagado_por) AS pagado_por_nombre,
               -- Para el comodín *Horario* de WhatsApp.
               su.horario_semana AS sucursal_horario_semana,
               -- Mismas máquinas que en la lista: puestas, usadas y del historial.
@@ -2171,8 +2175,8 @@ export const createNota = async (req, res) => {
       `INSERT INTO notas
          (cliente_id, usuario_id, tipo_servicio, tipo_prenda, estado, estado_pago, sucursal,
           peso_kg, precio_total, fecha_entrega, tiempo_entrega, instrucciones,
-          tamano, tipo_tela, tamano_edredon, ajuste, forma_pago, referencia)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          tamano, tipo_tela, tamano_edredon, ajuste, forma_pago, referencia, pagado_por)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING *`,
       [
         cliente_id   || null,
@@ -2194,6 +2198,8 @@ export const createNota = async (req, res) => {
         // Forma de pago solo si nace PAGADO.
         estado_pago === 'PAGADO' ? normalizarFormaPago(forma_pago) : null,
         String(referencia ?? '').trim().slice(0, 80) || null,
+        // Pago completo al crearla: cobró quien la crea.
+        estado_pago === 'PAGADO' ? req.user.id : null,
       ]
     );
     const nota = notaRows[0];
@@ -4074,9 +4080,13 @@ export const cambiarEstadoPago = async (req, res) => {
 
     // Al revertir, la forma de pago se limpia.
     const { rows } = await client.query(
-      'UPDATE notas SET estado_pago = $1, forma_pago = $2, caja_id = $4 WHERE id = $3 RETURNING *',
+      `UPDATE notas SET estado_pago = $1, forma_pago = $2, caja_id = $4,
+              -- Quien la marca pagada; al revertir la limpia el trigger.
+              pagado_por = CASE WHEN estado_pago <> 'PAGADO' THEN $5::int ELSE pagado_por END
+        WHERE id = $3 RETURNING *`,
       [estado_pago, estado_pago === 'PAGADO' ? formaPago : null, id,
-       estado_pago === 'PAGADO' ? actual.caja_id : null]
+       estado_pago === 'PAGADO' ? actual.caja_id : null,
+       estado_pago === 'PAGADO' ? (req.user?.id ?? null) : null]
     );
     if (esReversion) {
       await registrarReversionPago(client, actual, req.user.id, req.sucursal, motivoReversion, abonosRevertidos);
@@ -4840,8 +4850,8 @@ export const abonarNota = async (req, res) => {
     const cubierta = importe >= saldo - 1e-9;
     if (cubierta) {
       await client.query(
-        `UPDATE notas SET estado_pago = 'PAGADO', forma_pago = $2 WHERE id = $1`,
-        [id, formaPago]
+        `UPDATE notas SET estado_pago = 'PAGADO', forma_pago = $2, pagado_por = $3 WHERE id = $1`,
+        [id, formaPago, req.user?.id ?? null]
       );
       // Igual que al liquidar: un Autoservicio sin pendientes se cierra.
       const { rows: estadoRows } = await client.query(
