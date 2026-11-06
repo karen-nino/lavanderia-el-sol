@@ -75,6 +75,7 @@ vi.mock('./dispositivos/index.js', () => ({
 
 // Sin pausa entre fichas: las pruebas no esperan los 2 s del relé.
 process.env.SONOFF_PAUSA_ENTRE_FICHAS_MS = '0';
+process.env.SONOFF_PAUSA_REINTENTO_MS = '0';
 const { sincronizarSonoff, HORAS_ENCENDIDO_MANUAL, fichasParaArranque } = await import('./sincronizarSonoff.js');
 
 const maquinaEnUso = (sonoff_estado) => ({
@@ -635,6 +636,24 @@ describe('límite de eWeLink y avisos', () => {
     expect(driver.encender).not.toHaveBeenCalled();
     expect(notificaciones).toHaveLength(1);
     expect(notificaciones[0][0]).toMatch(/L8 no encendió: .*fuera de línea/);
+  });
+
+  it('si el Sonoff no contesta a tiempo (4002), reintenta en el acto', async () => {
+    filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.encender.mockResolvedValueOnce({ ok: false, estado: null, motivo: 'ewelink_4002' });
+
+    await sincronizarSonoff(1);
+    expect(driver.encender).toHaveBeenCalledTimes(2);
+    expect(filas.maquina.sonoff_estado).toBe('enlazada');
+    expect(notificaciones).toHaveLength(0);
+  });
+
+  it('otros errores no se reintentan en el acto', async () => {
+    filas.maquina = { ...maquinaEnUso('enlazada'), en_uso_desde: new Date().toISOString(), ciclo_minutos: 22 };
+    driver.encender.mockResolvedValueOnce({ ok: false, estado: null, motivo: 'error_red' });
+
+    await sincronizarSonoff(1);
+    expect(driver.encender).toHaveBeenCalledTimes(1);
   });
 
   it('si enciende bien, no avisa', async () => {

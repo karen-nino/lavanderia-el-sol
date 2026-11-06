@@ -46,6 +46,10 @@ export function explicarMotivo(motivo) {
     // Sin código numérico ('ewelink_undefined') no se inventa un diagnóstico.
     if (!/^\d+$/.test(codigo)) return SIN_DETALLE;
     if (codigo === '412') return DETALLE_MOTIVO.ewelink_limite;
+    if (codigo === '4002') {
+      return 'el Sonoff no contestó a tiempo. Suele ser señal de WiFi débil donde está: ' +
+             'revisa su señal en la app de eWeLink o acerca el módem.';
+    }
     if (esCodigoDeAuth(codigo)) {
       return 'eWeLink no aceptó el permiso de la app. Conecta la cuenta otra vez desde el aviso ' +
              'que aparece arriba, en esta misma pantalla.';

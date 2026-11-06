@@ -382,6 +382,12 @@ export const PAUSA_ENTRE_FICHAS_MS = (() => {
   return Number.isFinite(ms) && ms >= 0 ? ms : 2000;
 })();
 
+/** Pausa antes de repetir una orden que el Sonoff no contestó a tiempo. */
+export const PAUSA_REINTENTO_MS = (() => {
+  const ms = Number(process.env.SONOFF_PAUSA_REINTENTO_MS);
+  return Number.isFinite(ms) && ms >= 0 ? ms : 3000;
+})();
+
 const AVISO_FICHAS = 'Solo entraron';
 
 const esperarMs = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -600,9 +606,14 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
       return marcar(maq.id, 'error', leido.motivo);
     }
 
-    const res = deseado === 'on'
-      ? await dispositivos.encender(maq)
-      : await dispositivos.apagar(maq);
+    const mandar = () => (deseado === 'on' ? dispositivos.encender(maq) : dispositivos.apagar(maq));
+    let res = await mandar();
+    /* 4002: el Sonoff no contestó a tiempo; casi siempre entra al segundo intento. */
+    if (!res.ok && res.motivo === 'ewelink_4002') {
+      console.warn(`[sonoff] ${maq.nombre ?? maq.id}: el Sonoff no contestó a tiempo (4002); se reintenta.`);
+      await esperarMs(PAUSA_REINTENTO_MS);
+      res = await mandar();
+    }
 
     // En simulación no se marca 'enlazada': no hay Sonoff detrás.
     if (dispositivos.esSimulacion(maq)) return maq;
