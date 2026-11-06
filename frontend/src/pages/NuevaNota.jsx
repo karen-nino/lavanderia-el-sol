@@ -1502,7 +1502,11 @@ export default function NuevaNota() {
                         titulo={`Bolsa para ${x.etiqueta}`}
                         etiquetaAria={`Bolsa para ${x.etiqueta}`}
                         opciones={bolsasCatalogo.map(b => {
-                          const quedan = Number(b.stock_disponible ?? b.stock_actual) || 0;
+                          // Lo que queda, menos las que ya van en la lista de esta nota.
+                          const enLista = productosLista
+                            .filter(p => String(p.producto_id) === String(b.id))
+                            .reduce((sum, p) => sum + (Number(p.cantidad) || 0), 0);
+                          const quedan = Math.max(0, (Number(b.stock_disponible ?? b.stock_actual) || 0) - enLista);
                           const esLaActual = String(b.id) === String(x.bolsa?.id);
                           return {
                             valor: String(b.id),
