@@ -12,6 +12,9 @@ import { ES_DEMO } from '../lib/entorno';
 /** En la demo no hay Sonoff: se esconden la pastilla, el ID y el Encender. */
 const CON_SONOFF = !ES_DEMO;
 
+/** Cada cuánto se vuelven a pedir las máquinas mientras la página está abierta. */
+const REFRESCO_MS = 30 * 1000;
+
 const ESTADO_CFG = {
   disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', clsActive: 'bg-green-600 text-white', dot: 'bg-green-500' },
   // "Reservada": libre pero asignada a otra nota abierta (lo deriva el backend).
@@ -188,6 +191,22 @@ export default function GestionMaquinas() {
       .finally(() => setLoading(false));
     if (editarId != null) navigate(location.pathname, { replace: true, state: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Se actualiza sola (estado y Sonoff) cada 30 s y al volver a la pestaña; solo lee la base.
+  useEffect(() => {
+    const recargar = () => {
+      if (document.visibilityState !== 'visible') return;
+      api.get('/maquinas').then(setMaquinas).catch(() => {});
+    };
+    const intervalo = setInterval(recargar, REFRESCO_MS);
+    document.addEventListener('visibilitychange', recargar);
+    window.addEventListener('focus', recargar);
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', recargar);
+      window.removeEventListener('focus', recargar);
+    };
   }, []);
 
   const cerrarModal = () => setModalOpen(false);

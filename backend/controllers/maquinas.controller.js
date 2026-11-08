@@ -859,6 +859,9 @@ export const probarSonoff = async (req, res) => {
       });
     }
 
+    // Se lee como el barrido (trae si eWeLink lo ve conectado): la lectura suelta
+    // podría dar el último estado conocido de un Sonoff fuera de línea.
+    await dispositivos.precargarEstados([maq]);
     const resultado = await dispositivos.estado(maq);
     const actualizada = await guardarEnlace(id, resultado.ok, resultado.motivo);
 
