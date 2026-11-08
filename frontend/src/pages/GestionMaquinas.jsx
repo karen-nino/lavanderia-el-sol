@@ -107,11 +107,12 @@ export default function GestionMaquinas() {
   const [formError, setFormError] = useState('');
   const [eliminando, setEliminando] = useState(null);
   const [encendiendo, setEncendiendo] = useState(null);
+  const [apagandoId, setApagandoId] = useState(null);
   const [probando, setProbando] = useState(false);
   const [apagando, setApagando] = useState(false);
   const [probarMsg, setProbarMsg] = useState(null); // { tipo: 'ok'|'error'|'sim', texto }
   const [desconectando, setDesconectando] = useState(false);
-  // Acción esperando confirmación: { tipo: 'encender'|'eliminar'|'desconectar', maquina? }.
+  // Acción esperando confirmación: { tipo: 'encender'|'apagar'|'eliminar'|'desconectar', maquina? }.
   const [porConfirmar, setPorConfirmar] = useState(null);
   const [filtro, setFiltro] = useState('todos');
   const [cuentaSonoff, setCuentaSonoff] = useState(null);
@@ -359,6 +360,21 @@ export default function GestionMaquinas() {
     }
   };
 
+  /** Apaga desde el menú una encendida a mano y la deja libre. */
+  const apagarMaquina = async (m) => {
+    setApagandoId(m.id);
+    try {
+      const r = await api.post(`/maquinas/${m.id}/apagar-sonoff`, {});
+      if (r?.maquina) setMaquinas(prev => prev.map(x => x.id === m.id ? r.maquina : x));
+      alert(r?.message ?? 'Orden de apagado enviada.');
+    } catch (err) {
+      refrescarDesdeError(err, m.id);
+      alert(err.message);
+    } finally {
+      setApagandoId(null);
+    }
+  };
+
   const eliminarMaquina = async (m) => {
     setEliminando(m.id);
     try {
@@ -393,6 +409,16 @@ export default function GestionMaquinas() {
     ],
     textoConfirmar: encendiendo === maquina.id ? 'Encendiendo…' : 'Encender',
     procesando: encendiendo === maquina.id,
+  } : tipo === 'apagar' ? {
+    tono: 'aviso',
+    titulo: `Apagar ${maquina.nombre}`,
+    mensaje: 'Se le corta la corriente de verdad y vuelve a quedar libre para las notas.',
+    puntos: [
+      'Si tiene ropa lavándose, el ciclo se detiene a la mitad.',
+      'También se ve apagada en la app de eWeLink.',
+    ],
+    textoConfirmar: apagandoId === maquina.id ? 'Apagando…' : 'Apagar',
+    procesando: apagandoId === maquina.id,
   } : {
     tono: 'peligro',
     titulo: `Eliminar ${maquina.nombre}`,
@@ -563,6 +589,8 @@ export default function GestionMaquinas() {
               : null;
             const borrando = eliminando === m.id;
             const prendiendo = encendiendo === m.id;
+            /* Prendida a mano: el menú ofrece Apagar en vez de Encender. */
+            const ofreceApagar = Boolean(m.encendida_manual_at) && Boolean(m.device_id) && mostrarApagadoEmergencia;
             // La pastilla siempre (aquí se enlazan), salvo en modelos de fichas.
             const sonoffCfg = m.solo_fichas ? null
               : SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'sin_probar') : 'sin_enlazar'];
@@ -617,7 +645,20 @@ export default function GestionMaquinas() {
                         Editar
                       </button>
                       {/* La de fichas no tiene Sonoff que encender. */}
-                      {CON_SONOFF && !m.solo_fichas && (
+                      {CON_SONOFF && !m.solo_fichas && ofreceApagar && (
+                      <button
+                        type="button"
+                        onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'apagar', maquina: m }); }}
+                        disabled={apagandoId === m.id}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v9m6.36-6.36a9 9 0 11-12.72 0" />
+                        </svg>
+                        {apagandoId === m.id ? 'Apagando…' : 'Apagar'}
+                      </button>
+                      )}
+                      {CON_SONOFF && !m.solo_fichas && !ofreceApagar && (
                       <button
                         type="button"
                         onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'encender', maquina: m }); }}
@@ -709,7 +750,7 @@ export default function GestionMaquinas() {
 
       </div>
 
-      {/* Advertencia de encender y de eliminar */}
+      {/* Advertencia de encender, apagar y eliminar */}
       {porConfirmar && (
         <ConfirmacionModal
           {...avisoDe(porConfirmar)}
@@ -717,6 +758,7 @@ export default function GestionMaquinas() {
           onConfirm={async () => {
             const { tipo, maquina } = porConfirmar;
             if (tipo === 'encender') await encenderMaquina(maquina);
+            else if (tipo === 'apagar') await apagarMaquina(maquina);
             else if (tipo === 'eliminar') await eliminarMaquina(maquina);
             else await handleDesconectarSonoff();
             setPorConfirmar(null);
