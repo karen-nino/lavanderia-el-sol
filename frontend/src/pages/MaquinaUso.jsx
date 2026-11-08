@@ -3,6 +3,7 @@ import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import SucursalBar from '../components/SucursalBar';
+import AccionesMaquina from '../components/AccionesMaquina';
 import { fmtEncendidaConTope, horarioCiclo } from '../lib/tiempoEncendida';
 
 const fmtMoneda = (n) =>
@@ -206,6 +207,9 @@ export default function MaquinaUso() {
   const [mostrarFecha, setMostrarFecha] = useState(false);
   const [pagina,       setPagina]       = useState(1);
   const fechaRef = useRef(null);
+  // Fila completa (Sonoff, encendido a mano) para el menú de opciones.
+  const [maquina,    setMaquina]    = useState(null);
+  const [sonoffReal, setSonoffReal] = useState(false);
 
   useEffect(() => {
     let activo = true;
@@ -213,6 +217,13 @@ export default function MaquinaUso() {
       .then(d => { if (activo) setData(d); })
       .catch(e => { if (activo) setError(e.message); })
       .finally(() => { if (activo) setLoading(false); });
+    api.get('/maquinas')
+      .then(lista => { if (activo) setMaquina(lista.find(m => String(m.id) === String(id)) ?? null); })
+      .catch(() => {});
+    // Apagar solo con el driver real: en simulación la máquina seguiría girando.
+    api.get('/ewelink/estado')
+      .then(e => { if (activo) setSonoffReal(Boolean(e) && !e.simulado); })
+      .catch(() => {});
     return () => { activo = false; };
   }, [id]);
 
@@ -248,7 +259,8 @@ export default function MaquinaUso() {
     <div className="min-h-full bg-slate-100">
       {/* Cabecera */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center gap-3">
+        <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => navigate('/gestion-maquinas')}
             aria-label="Volver"
@@ -258,10 +270,21 @@ export default function MaquinaUso() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xl font-bold text-gray-900">{data?.maquina?.nombre ?? '—'}</h1>
             <p className="text-sm text-gray-500">Información de uso</p>
           </div>
+          </div>
+
+          {maquina && (
+            <AccionesMaquina
+              maquina={maquina}
+              sonoffReal={sonoffReal}
+              onEditar={() => navigate('/gestion-maquinas', { state: { editarId: maquina.id } })}
+              onActualizada={setMaquina}
+              onEliminada={() => navigate('/gestion-maquinas', { replace: true })}
+            />
+          )}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -95,6 +95,7 @@ function WashingMachineIcon({ className = '' }) {
 
 export default function GestionMaquinas() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { usuario } = useAuth();
   const esAdmin = esAdminFn(usuario?.rol);
   const [maquinas, setMaquinas] = useState([]);
@@ -105,30 +106,18 @@ export default function GestionMaquinas() {
   const [editandoId, setEditandoId] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [formError, setFormError] = useState('');
-  const [eliminando, setEliminando] = useState(null);
-  const [encendiendo, setEncendiendo] = useState(null);
-  const [apagandoId, setApagandoId] = useState(null);
   const [probando, setProbando] = useState(false);
   const [apagando, setApagando] = useState(false);
   const [probarMsg, setProbarMsg] = useState(null); // { tipo: 'ok'|'error'|'sim', texto }
   const [desconectando, setDesconectando] = useState(false);
-  // Acción esperando confirmación: { tipo: 'encender'|'apagar'|'eliminar'|'desconectar', maquina? }.
+  // Olvidar la cuenta de eWeLink, esperando confirmación.
   const [porConfirmar, setPorConfirmar] = useState(null);
   const [filtro, setFiltro] = useState('todos');
   const [cuentaSonoff, setCuentaSonoff] = useState(null);
   const [conectando, setConectando] = useState(false);
-  const [accionesMenuId, setAccionesMenuId] = useState(null);
-  const accionesMenuRef = useRef(null);
   // Catálogos de marcas y modelos (se administran en Ajustes → Máquinas).
   const [marcas, setMarcas] = useState([]);
   const [modelos, setModelos] = useState([]);
-
-  useEffect(() => {
-    api.get('/maquinas')
-      .then(setMaquinas)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
 
   // Catálogos del negocio. Los modelos se traen todos y se filtran por marca.
   // Si fallan, los selectores quedan vacíos.
@@ -158,15 +147,6 @@ export default function GestionMaquinas() {
     return () => window.removeEventListener('focus', onFocus);
   }, [esAdmin, cargarCuentaSonoff]);
 
-  useEffect(() => {
-    if (accionesMenuId == null) return;
-    const onMouseDown = (e) => {
-      if (accionesMenuRef.current && !accionesMenuRef.current.contains(e.target)) setAccionesMenuId(null);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [accionesMenuId]);
-
   const abrirModal = () => {
     setForm(FORM_INIT);
     setEditandoId(null);
@@ -194,6 +174,21 @@ export default function GestionMaquinas() {
     setProbarMsg(null);
     setModalOpen(true);
   };
+
+  useEffect(() => {
+    // Editar desde Información de uso: llega con { editarId } y abre su formulario.
+    const editarId = location.state?.editarId;
+    api.get('/maquinas')
+      .then(lista => {
+        setMaquinas(lista);
+        const m = editarId != null && lista.find(x => x.id === editarId);
+        if (m) editarMaquina(m);
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+    if (editarId != null) navigate(location.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const cerrarModal = () => setModalOpen(false);
 
@@ -345,50 +340,8 @@ export default function GestionMaquinas() {
     }
   };
 
-  // Encendido manual (el modal advierte que se queda andando).
-  const encenderMaquina = async (m) => {
-    setEncendiendo(m.id);
-    try {
-      const r = await api.post(`/maquinas/${m.id}/encender-sonoff`, {});
-      if (r?.maquina) setMaquinas(prev => prev.map(x => x.id === m.id ? r.maquina : x));
-      alert(r?.message ?? 'Orden de encendido enviada.');
-    } catch (err) {
-      refrescarDesdeError(err, m.id);
-      alert(err.message);
-    } finally {
-      setEncendiendo(null);
-    }
-  };
-
-  /** Apaga desde el menú una encendida a mano y la deja libre. */
-  const apagarMaquina = async (m) => {
-    setApagandoId(m.id);
-    try {
-      const r = await api.post(`/maquinas/${m.id}/apagar-sonoff`, {});
-      if (r?.maquina) setMaquinas(prev => prev.map(x => x.id === m.id ? r.maquina : x));
-      alert(r?.message ?? 'Orden de apagado enviada.');
-    } catch (err) {
-      refrescarDesdeError(err, m.id);
-      alert(err.message);
-    } finally {
-      setApagandoId(null);
-    }
-  };
-
-  const eliminarMaquina = async (m) => {
-    setEliminando(m.id);
-    try {
-      await api.delete(`/maquinas/${m.id}`);
-      setMaquinas(prev => prev.filter(x => x.id !== m.id));
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setEliminando(null);
-    }
-  };
-
-  // Advertencia de cada acción, según cómo esté la máquina ahora.
-  const avisoDe = ({ tipo, maquina }) => tipo === 'desconectar' ? {
+  // Advertencia de olvidar la cuenta de eWeLink.
+  const avisoDesconectar = {
     tono: 'peligro',
     titulo: 'Olvidar la cuenta de eWeLink',
     mensaje: 'Las máquinas dejan de encender y apagar solas hasta que se conecte otra vez.',
@@ -399,38 +352,6 @@ export default function GestionMaquinas() {
     ],
     textoConfirmar: desconectando ? 'Olvidando…' : 'Olvidar cuenta',
     procesando: desconectando,
-  } : tipo === 'encender' ? {
-    tono: 'aviso',
-    titulo: `Encender ${maquina.nombre}`,
-    mensaje: 'La máquina arranca de verdad y se queda encendida hasta que la apagues.',
-    puntos: [
-      'Mientras esté encendida queda ocupada: no se va a poder usar en una nota.',
-      'Asegúrate de que nadie la esté cargando ni tenga las manos dentro.',
-    ],
-    textoConfirmar: encendiendo === maquina.id ? 'Encendiendo…' : 'Encender',
-    procesando: encendiendo === maquina.id,
-  } : tipo === 'apagar' ? {
-    tono: 'aviso',
-    titulo: `Apagar ${maquina.nombre}`,
-    mensaje: 'Se le corta la corriente de verdad y vuelve a quedar libre para las notas.',
-    puntos: [
-      'Si tiene ropa lavándose, el ciclo se detiene a la mitad.',
-      'También se ve apagada en la app de eWeLink.',
-    ],
-    textoConfirmar: apagandoId === maquina.id ? 'Apagando…' : 'Apagar',
-    procesando: apagandoId === maquina.id,
-  } : {
-    tono: 'peligro',
-    titulo: `Eliminar ${maquina.nombre}`,
-    mensaje: 'La máquina desaparece del sistema y esto no se puede deshacer.',
-    puntos: [
-      // nota_cargas apunta a la máquina con ON DELETE SET NULL.
-      'Las notas que la usaron, incluso las ya cerradas, dejan de decir en qué máquina se lavó.',
-      maquina.estado === 'en_uso'
-        && 'Ahora mismo está en uso: la nota que la tiene se queda sin máquina asignada.',
-    ],
-    textoConfirmar: eliminando === maquina.id ? 'Eliminando…' : 'Eliminar',
-    procesando: eliminando === maquina.id,
   };
 
   const conteos = {
@@ -587,10 +508,6 @@ export default function GestionMaquinas() {
             const tamanoLabel = tamanoVal
               ? (tamanoVal === 'jumbo' ? 'Jumbo' : 'Mediana')
               : null;
-            const borrando = eliminando === m.id;
-            const prendiendo = encendiendo === m.id;
-            /* Prendida a mano: el menú ofrece Apagar en vez de Encender. */
-            const ofreceApagar = Boolean(m.encendida_manual_at) && Boolean(m.device_id) && mostrarApagadoEmergencia;
             // La pastilla siempre (aquí se enlazan), salvo en modelos de fichas.
             const sonoffCfg = m.solo_fichas ? null
               : SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'sin_probar') : 'sin_enlazar'];
@@ -610,83 +527,6 @@ export default function GestionMaquinas() {
                   esAdmin ? 'cursor-pointer hover:shadow-md transition-shadow' : ''
                 }`}
               >
-                {/* Menú de acciones (kebab) — solo Admin; no debe navegar */}
-                {esAdmin && (
-                <div
-                  className="absolute top-3 right-3"
-                  onClick={(e) => e.stopPropagation()}
-                  ref={accionesMenuId === m.id ? accionesMenuRef : null}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setAccionesMenuId(prev => prev === m.id ? null : m.id)}
-                    aria-haspopup="true"
-                    aria-expanded={accionesMenuId === m.id}
-                    aria-label="Acciones"
-                    className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                      <circle cx="5" cy="12" r="1.8" />
-                      <circle cx="12" cy="12" r="1.8" />
-                      <circle cx="19" cy="12" r="1.8" />
-                    </svg>
-                  </button>
-
-                  {accionesMenuId === m.id && (
-                    <div className="absolute right-0 mt-1 z-10 w-40 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => { setAccionesMenuId(null); editarMaquina(m); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Editar
-                      </button>
-                      {/* La de fichas no tiene Sonoff que encender. */}
-                      {CON_SONOFF && !m.solo_fichas && ofreceApagar && (
-                      <button
-                        type="button"
-                        onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'apagar', maquina: m }); }}
-                        disabled={apagandoId === m.id}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v9m6.36-6.36a9 9 0 11-12.72 0" />
-                        </svg>
-                        {apagandoId === m.id ? 'Apagando…' : 'Apagar'}
-                      </button>
-                      )}
-                      {CON_SONOFF && !m.solo_fichas && !ofreceApagar && (
-                      <button
-                        type="button"
-                        onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'encender', maquina: m }); }}
-                        disabled={prendiendo}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v9m6.36-6.36a9 9 0 11-12.72 0" />
-                        </svg>
-                        {prendiendo ? 'Encendiendo…' : 'Encender'}
-                      </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'eliminar', maquina: m }); }}
-                        disabled={borrando}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
-                        </svg>
-                        {borrando ? 'Eliminando...' : 'Eliminar'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-                )}
-
                 {/* Ícono */}
                 <div className="flex justify-center pt-8 pb-5">
                   <WashingMachineIcon className="w-24 h-24 text-gray-300" />
@@ -750,17 +590,13 @@ export default function GestionMaquinas() {
 
       </div>
 
-      {/* Advertencia de encender, apagar y eliminar */}
+      {/* Advertencia de olvidar la cuenta de eWeLink */}
       {porConfirmar && (
         <ConfirmacionModal
-          {...avisoDe(porConfirmar)}
+          {...avisoDesconectar}
           onClose={() => setPorConfirmar(null)}
           onConfirm={async () => {
-            const { tipo, maquina } = porConfirmar;
-            if (tipo === 'encender') await encenderMaquina(maquina);
-            else if (tipo === 'apagar') await apagarMaquina(maquina);
-            else if (tipo === 'eliminar') await eliminarMaquina(maquina);
-            else await handleDesconectarSonoff();
+            await handleDesconectarSonoff();
             setPorConfirmar(null);
           }}
         />
