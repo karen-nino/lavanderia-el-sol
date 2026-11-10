@@ -1014,8 +1014,11 @@ export default function Layout() {
                 </svg>
                 <p className="text-sm text-amber-800">
                   {cajaSinCerrar.sucursal && cajaSinCerrar.sucursal !== sucursalSlug
-                    ? `Abriste la caja de ${cajaSinCerrar.sucursal_nombre ?? cajaSinCerrar.sucursal} y aún no se ha cerrado. Haz el corte para poder cerrar sesión.`
-                    : 'Abriste la caja y aún no se ha cerrado. Haz el corte para poder cerrar sesión.'}
+                    ? `Abriste la caja de ${cajaSinCerrar.sucursal_nombre ?? cajaSinCerrar.sucursal} y aún no se ha cerrado.`
+                    : 'Abriste la caja y aún no se ha cerrado.'}
+                  {isAdmin
+                    ? ' Puedes cerrar sesión de todos modos; la caja se queda abierta.'
+                    : ' Haz el corte para poder cerrar sesión.'}
                 </p>
               </div>
             ) : (
@@ -1033,7 +1036,7 @@ export default function Layout() {
               </div>
             )}
             {cajaSinCerrar ? (
-              // Con caja abierta: ir a Caja o cancelar (nadie sale sin su corte).
+              // Con caja abierta: ir a Caja o cancelar; solo el admin puede salir sin su corte.
               <div className="space-y-2.5">
                 <button
                   onClick={irACaja}
@@ -1041,6 +1044,14 @@ export default function Layout() {
                 >
                   Ir a Caja
                 </button>
+                {isAdmin && (
+                  <button
+                    onClick={confirmarLogout}
+                    className="w-full border border-red-300 text-red-600 font-medium py-3.5 rounded-lg text-base hover:bg-red-50 transition-colors"
+                  >
+                    Cerrar sesión de todos modos
+                  </button>
+                )}
                 <button
                   onClick={() => setConfirmLogout(false)}
                   className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
