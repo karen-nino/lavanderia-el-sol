@@ -5,12 +5,13 @@
 //   GET  /api/ewelink/callback     vuelta de eWeLink (público)
 //   POST /api/ewelink/desconectar  olvida los tokens (admin)
 //   GET  /api/ewelink/llamadas     llamadas del mes contra el límite (admin)
+//   GET  /api/ewelink/llamadas/historial?mes=AAAA-MM  por día y sucursal (admin)
 
 import * as oauth from '../services/dispositivos/ewelinkOAuth.js';
 import * as cuentaStore from '../services/dispositivos/ewelinkCuenta.js';
 import { _reset as resetDriver } from '../services/dispositivos/ewelinkDriver.js';
 import * as dispositivos from '../services/dispositivos/index.js';
-import { LIMITE_MENSUAL, llamadasDelMes } from '../services/dispositivos/ewelinkLlamadas.js';
+import { LIMITE_MENSUAL, llamadasDelMes, llamadasPorDia, diaLocal } from '../services/dispositivos/ewelinkLlamadas.js';
 import pool from '../db/pool.js';
 
 /** Página HTML del callback (sin estilos ni scripts: helmet aplica CSP). */
@@ -156,5 +157,43 @@ export const getLlamadas = async (req, res) => {
   } catch (err) {
     console.error('getLlamadas error:', err);
     res.status(500).json({ message: 'No se pudo cargar el contador de llamadas. Intenta de nuevo.' });
+  }
+};
+
+// ── GET /ewelink/llamadas/historial?mes=YYYY-MM ───────────────
+/**
+ * Llamadas por día y sucursal de un mes (hora de México), del más reciente al
+ * más viejo. Sin `mes`, el mes en curso. Lo que no es de una sucursal visible
+ * (renovar la sesión, ocultas o borradas) va junto en `otras`.
+ */
+export const getHistorialLlamadas = async (req, res) => {
+  try {
+    const mes = String(req.query.mes ?? '') || diaLocal().slice(0, 7);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) {
+      return res.status(400).json({ message: 'El mes debe venir como AAAA-MM.' });
+    }
+    const [{ dias, primerMes }, { rows: sucursales }] = await Promise.all([
+      llamadasPorDia(mes),
+      pool.query(`SELECT slug, nombre FROM sucursales WHERE oculta = FALSE ORDER BY activa DESC, orden ASC, nombre ASC`),
+    ]);
+    const conocidas = new Set(sucursales.map(s => s.slug));
+    res.json({
+      mes,
+      mes_actual: diaLocal().slice(0, 7),
+      primer_mes: primerMes,
+      sucursales,
+      dias: dias.map(({ dia, porSucursal }) => {
+        const valores = [...porSucursal];
+        return {
+          dia,
+          sucursales: Object.fromEntries(sucursales.map(s => [s.slug, porSucursal.get(s.slug) ?? 0])),
+          otras: valores.filter(([s]) => !conocidas.has(s)).reduce((t, [, n]) => t + n, 0),
+          total: valores.reduce((t, [, n]) => t + n, 0),
+        };
+      }),
+    });
+  } catch (err) {
+    console.error('getHistorialLlamadas error:', err);
+    res.status(500).json({ message: 'No se pudo cargar el historial de llamadas. Intenta de nuevo.' });
   }
 };

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/roles.js';
 import { bloquearPruebaGlobal } from '../middleware/sucursalActiva.js';
-import { getEstado, conectar, callback, desconectar, getLlamadas } from '../controllers/ewelink.controller.js';
+import { getEstado, conectar, callback, desconectar, getLlamadas, getHistorialLlamadas } from '../controllers/ewelink.controller.js';
 
 const router = Router();
 
@@ -14,6 +14,7 @@ router.use(verifyToken, requireAdmin);
 
 router.get('/estado', getEstado);
 router.get('/llamadas', getLlamadas);
+router.get('/llamadas/historial', getHistorialLlamadas);
 // Conectar y desconectar tocan la cuenta real del negocio, no la sucursal de
 // pruebas: los usuarios de prueba quedan fuera.
 router.post('/conectar', bloquearPruebaGlobal, conectar);

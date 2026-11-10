@@ -86,6 +86,37 @@ export async function llamadasDelMes() {
   return { mes, porSucursal };
 }
 
+/**
+ * Historial del mes 'YYYY-MM': llamadas por día y sucursal (guardadas más
+ * pendientes), y el primer mes con registro para no navegar antes.
+ * @returns {Promise<{dias: Array<{dia: string, porSucursal: Map<string, number>}>, primerMes: string}>}
+ */
+export async function llamadasPorDia(mes) {
+  const { default: pool } = await import('../../db/pool.js');
+  const [{ rows }, { rows: [primero] }] = await Promise.all([
+    pool.query(
+      `SELECT to_char(dia, 'YYYY-MM-DD') AS dia, sucursal, llamadas
+         FROM ewelink_llamadas
+        WHERE dia >= ($1 || '-01')::date AND dia < (($1 || '-01')::date + INTERVAL '1 month')`,
+      [mes]
+    ),
+    pool.query(`SELECT to_char(MIN(dia), 'YYYY-MM') AS mes FROM ewelink_llamadas`),
+  ]);
+  const porDia = new Map();
+  const sumar = (dia, sucursal, n) => {
+    if (!porDia.has(dia)) porDia.set(dia, new Map());
+    const m = porDia.get(dia);
+    m.set(sucursal, (m.get(sucursal) ?? 0) + n);
+  };
+  for (const r of rows) sumar(r.dia, r.sucursal, r.llamadas);
+  for (const [clave, n] of pendientes) {
+    const [dia, sucursal] = clave.split('|');
+    if (dia.startsWith(mes)) sumar(dia, sucursal, n);
+  }
+  const dias = [...porDia].sort(([a], [b]) => b.localeCompare(a)).map(([dia, porSucursal]) => ({ dia, porSucursal }));
+  return { dias, primerMes: primero?.mes ?? diaLocal().slice(0, 7) };
+}
+
 /** Solo para pruebas. */
 export function _reset() {
   pendientes.clear();
