@@ -279,7 +279,7 @@ const SECCION_SONOFFS = {
 /** Escribir por WhatsApp a quien da soporte a la app; la tienen todos. */
 const SECCION_SOPORTE = {
   id: 'soporte', label: 'Soporte', subtitle: 'Ayuda con la app',
-  detalle: 'Escríbenos por WhatsApp si algo no funciona', icon: SectionIcon.soporte,
+  detalle: 'Escríbeme por WhatsApp si algo no funciona', icon: SectionIcon.soporte,
 };
 /** WhatsApp de soporte. */
 const TELEFONO_SOPORTE = '9615791159';
@@ -512,16 +512,13 @@ function TarjetaManual({ onAbrir }) {
   );
 }
 
-/** Abre el chat de WhatsApp de soporte con un saludo que dice quién escribe. */
+/** Abre el chat de WhatsApp de soporte, sin mensaje escrito. */
 function TarjetaSoporte() {
-  const { usuario } = useAuth();
-  const nombre = [usuario?.nombre, usuario?.apellido].filter(Boolean).join(' ');
-  const texto = `Hola, ${nombre ? `soy ${nombre} y ` : ''}necesito ayuda con la app de Lavandería El Sol.`;
-  const enlace = `https://wa.me/${telefonoWhatsapp(TELEFONO_SOPORTE)}?text=${encodeURIComponent(texto)}`;
+  const enlace = `https://wa.me/${telefonoWhatsapp(TELEFONO_SOPORTE)}`;
   return (
     <div className="bg-white rounded-xl border border-gray-200 px-5 py-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
       <p className="text-sm text-gray-600 max-w-md">
-        ¿Algo no funciona o tienes una duda? Escríbenos por WhatsApp al {formatTelefono(TELEFONO_SOPORTE)} y te ayudamos.
+        ¿Algo no funciona o tienes una duda? Escríbeme por WhatsApp y te ayudo.
       </p>
       <a
         href={enlace}
