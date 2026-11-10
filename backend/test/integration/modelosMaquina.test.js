@@ -580,3 +580,35 @@ describe('casilla "Trabaja con fichas: con Sonoff y con tiempos"', () => {
     expect(await porFichaDe(l1)).toBe(5);
   });
 });
+
+describe('casilla "Arranca sola al recibir corriente"', () => {
+  const conIniciarDe = async (maquinaId) => {
+    const { body } = await request(app).get('/api/maquinas').set(auth(admin.token));
+    return body.find(m => m.id === maquinaId).con_iniciar;
+  };
+
+  it('con la casilla, la máquina usa un solo botón, Iniciar', async () => {
+    const gb = await seedMarca('Girbau');
+    const { body: modelo } = await crearModelo(admin.token, {
+      marca_id: gb, nombre: 'Girbau', tipo: 'lavadora', tamano: 'jumbo',
+    }).expect(201);
+    expect(modelo.arranca_con_corriente).toBe(false);
+    const girbau = await seedMaquina({ nombre: 'GIRBAU', tipo: 'lavadora_jumbo', tamano: 'jumbo', marca: 'Girbau', modelo: 'Girbau' });
+    expect(await conIniciarDe(girbau)).toBe(false);
+
+    await request(app).put(`/api/etiquetas/modelos-maquina/${modelo.id}`).set(auth(admin.token))
+      .send({ arranca_con_corriente: true }).expect(200);
+    expect(await conIniciarDe(girbau)).toBe(true);
+  });
+
+  it('no va con la de fichas sin Sonoff', async () => {
+    const gb = await seedMarca('Girbau');
+    const { body: modelo } = await crearModelo(admin.token, {
+      marca_id: gb, nombre: 'Girbau', tipo: 'lavadora', tamano: 'jumbo', arranca_con_corriente: true,
+    }).expect(201);
+    expect(modelo.arranca_con_corriente).toBe(true);
+    const { body: otro } = await request(app).put(`/api/etiquetas/modelos-maquina/${modelo.id}`)
+      .set(auth(admin.token)).send({ solo_fichas: true }).expect(200);
+    expect([otro.solo_fichas, otro.arranca_con_corriente]).toEqual([true, false]);
+  });
+});

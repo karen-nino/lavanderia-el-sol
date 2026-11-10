@@ -970,8 +970,12 @@ const CAMPOS_MODELO = [
   // "Cada ficha" y "Costo ficha" en los tiempos. Va con varios programas.
   { name: 'fichas_sonoff', defecto: false, tipo: 'check', excluye: 'solo_fichas',
     label: 'Trabaja con fichas: con Sonoff y con tiempos', chip: 'fichas con Sonoff' },
+  // Arranca en cuanto le llega la luz (la Girbau): un solo botón, "Iniciar", como las Speed Queen.
+  { name: 'arranca_con_corriente', defecto: false, tipo: 'check', excluye: 'solo_fichas',
+    label: 'Arranca sola al recibir corriente: un solo botón, Iniciar', chip: 'arranca con corriente' },
   // Solo fichas: sin Sonoff ni tiempos; no va con varios programas.
-  { name: 'solo_fichas', defecto: false, tipo: 'check', excluye: ['pregunta_tiempo', 'fichas_sonoff'],
+  { name: 'solo_fichas', defecto: false, tipo: 'check',
+    excluye: ['pregunta_tiempo', 'fichas_sonoff', 'arranca_con_corriente'],
     label: 'Trabaja con fichas: sin Sonoff y sin tiempos', chip: 'fichas' },
   // "Una carga corre 2 ciclos" no se muestra con cronómetro. Para el temporizador:
   //   { name: 'dos_ciclos', defecto: false, tipo: 'check',

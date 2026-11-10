@@ -70,6 +70,7 @@ export const esCronometroSql = () => (cronometroActivo() ? 'TRUE' : 'FALSE');
  * Máquinas con cronómetro y un solo botón, "Iniciar", que da corriente y
  * arranca el cronómetro en el mismo paso (sin "Encender"):
  * - todas las Speed Queen;
+ * - el modelo que arranca solo al recibir corriente (la Girbau);
  * - el modelo que pregunta su programa (se pregunta al iniciar);
  * - el modelo de solo fichas (sin Sonoff: solo arranca el cronómetro).
  */
@@ -103,7 +104,8 @@ export const conIniciarSql = (alias) => (!cronometroActivo() && process.env.ENTO
      WHERE mmc.nombre = ${alias}.marca
        AND moc.nombre = ${alias}.modelo
        AND ((moc.pregunta_tiempo AND cardinality(${PROGRAMAS_DEL_MODELO('moc')}) > 1)
-            OR moc.solo_fichas)
+            OR moc.solo_fichas
+            OR moc.arranca_con_corriente)
   )
 )` : 'FALSE');
 
