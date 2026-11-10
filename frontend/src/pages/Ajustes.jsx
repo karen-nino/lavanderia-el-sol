@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin, esAdminMain as esAdminMainFn } from '../lib/roles';
 import { ES_DEMO, CON_EDREDON } from '../lib/entorno';
 import { almacenSesion } from '../lib/sesion';
-import { COMODINES_WHATSAPP, armarMensajeWhatsapp } from '../lib/mensajeWhatsapp';
+import { COMODINES_WHATSAPP, armarMensajeWhatsapp, telefonoWhatsapp } from '../lib/mensajeWhatsapp';
 import Selector from '../components/Selector';
 
 /**
@@ -105,6 +105,13 @@ const SectionIcon = {
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  ),
+  // Audífonos con micrófono: alguien que contesta.
+  soporte: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 14v-2a8 8 0 0116 0v2M4 14a2 2 0 012-2h1v6H6a2 2 0 01-2-2v-2zm16 0a2 2 0 00-2-2h-1v6h1a2 2 0 002-2v-2zM17 18v.5a2.5 2.5 0 01-2.5 2.5H12" />
     </svg>
   ),
   // Rayo: la corriente que manda cada Sonoff.
@@ -269,12 +276,20 @@ const SECCION_SONOFFS = {
   detalle: 'Cuántas llamadas van y cuántas quedan en el mes', icon: SectionIcon.sonoffs,
 };
 
+/** Escribir por WhatsApp a quien da soporte a la app; la tienen todos. */
+const SECCION_SOPORTE = {
+  id: 'soporte', label: 'Soporte', subtitle: 'Ayuda con la app',
+  detalle: 'Escríbenos por WhatsApp si algo no funciona', icon: SectionIcon.soporte,
+};
+/** WhatsApp de soporte. */
+const TELEFONO_SOPORTE = '9615791159';
+
 /** Todas las secciones de Ajustes, en el orden del menú del celular. */
-const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_SONOFFS, SECCION_INSTALAR, SECCION_ACTUALIZAR];
+const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_SONOFFS, SECCION_INSTALAR, SECCION_ACTUALIZAR, SECCION_SOPORTE];
 const seccionPorId = (id) => SECCIONES_AJUSTES.find(s => s.id === id);
 
 /** Secciones del admin que la demo no enseña: sin Sonoff y sin app que instalar. */
-const OCULTAS_DEMO = ES_DEMO ? ['sonoffs', 'instalar'] : [];
+const OCULTAS_DEMO = ES_DEMO ? ['sonoffs', 'instalar', 'soporte'] : [];
 /** Sección del admin por id, salvo las ocultas en la demo. */
 const seccionAdminPorId = (id) => (OCULTAS_DEMO.includes(id) ? undefined : seccionPorId(id));
 
@@ -284,6 +299,7 @@ const GRUPOS_AJUSTES = [
   { titulo: 'Negocio',   ids: ['negocio', 'ticket', 'whatsapp'] },
   { titulo: 'Operación', ids: ['maquinas', 'cargas', 'etiquetas', 'inventario'] },
   { titulo: 'Sistema',   ids: ['alertas', 'sonoffs', 'manual', 'actualizar', 'instalar'] },
+  { titulo: 'Ayuda',     ids: ['soporte'] },
 ].map(g => ({ ...g, ids: g.ids.filter(id => !OCULTAS_DEMO.includes(id)) }));
 
 /**
@@ -320,7 +336,7 @@ const ALERTAS_APAGABLES = [
 ];
 
 /** Secciones sin nada que guardar con el botón general. */
-const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'manual', 'sonoffs', 'instalar', 'actualizar'];
+const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'manual', 'sonoffs', 'instalar', 'actualizar', 'soporte'];
 
 /** Encabezado de un grupo de campos (por encima de las etiquetas, que son bold). */
 function TituloGrupo({ children }) {
@@ -492,6 +508,30 @@ function TarjetaManual({ onAbrir }) {
         </svg>
         Abrir el manual
       </button>
+    </div>
+  );
+}
+
+/** Abre el chat de WhatsApp de soporte con un saludo que dice quién escribe. */
+function TarjetaSoporte() {
+  const { usuario } = useAuth();
+  const nombre = [usuario?.nombre, usuario?.apellido].filter(Boolean).join(' ');
+  const texto = `Hola, ${nombre ? `soy ${nombre} y ` : ''}necesito ayuda con la app de Lavandería El Sol.`;
+  const enlace = `https://wa.me/${telefonoWhatsapp(TELEFONO_SOPORTE)}?text=${encodeURIComponent(texto)}`;
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 px-5 py-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <p className="text-sm text-gray-600 max-w-md">
+        ¿Algo no funciona o tienes una duda? Escríbenos por WhatsApp al {formatTelefono(TELEFONO_SOPORTE)} y te ayudamos.
+      </p>
+      <a
+        href={enlace}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 w-full lg:w-auto px-6 py-3.5 bg-green-600 hover:bg-green-700 text-white text-base font-medium rounded-lg transition-colors whitespace-nowrap"
+      >
+        <span className="flex-shrink-0 [&>svg]:w-5 [&>svg]:h-5">{SectionIcon.whatsapp}</span>
+        Escribir por WhatsApp
+      </a>
     </div>
   );
 }
@@ -1138,7 +1178,8 @@ export default function Ajustes() {
 const GRUPOS_EMPLEADO = [
   { titulo: 'Cuenta',  ids: ['perfil'] },
   { titulo: 'Sistema', ids: ['actualizar'] },
-];
+  { titulo: 'Ayuda',   ids: ['soporte'] },
+].map(g => ({ ...g, ids: g.ids.filter(id => !OCULTAS_DEMO.includes(id)) }));
 
 /** Una sección del Ajustes del empleado con su encabezado y el botón de volver. */
 function SeccionEmpleado({ seccion, grupo, mobile, desktop }) {
@@ -1202,6 +1243,16 @@ function AjustesEmpleado() {
         grupo="Sistema"
         mobile={<ActualizarApp variant="mobile" />}
         desktop={<ActualizarApp />}
+      />
+    );
+  }
+  if (seccion === 'soporte' && !OCULTAS_DEMO.includes('soporte')) {
+    return (
+      <SeccionEmpleado
+        seccion={SECCION_SOPORTE}
+        grupo="Ayuda"
+        mobile={<TarjetaSoporte />}
+        desktop={<TarjetaSoporte />}
       />
     );
   }
@@ -3254,6 +3305,7 @@ function AjustesAdmin() {
     sonoffs: <LlamadasSonoff />,
     instalar: <InstalarApp variant="mobile" />,
     actualizar: <ActualizarApp variant="mobile" />,
+    soporte: <TarjetaSoporte />,
   };
 
   // Éxitos: banner verde. Errores: modal.
@@ -3297,7 +3349,7 @@ function AjustesAdmin() {
 
   // En pruebas, toda sección salvo Mi Perfil es de consulta: sin Cancelar/Guardar.
   const seccionDeConsulta = soloConsultaPruebas
-    && activeSection && !['instalar', 'actualizar', 'sonoffs'].includes(activeSection.id);
+    && activeSection && !['instalar', 'actualizar', 'sonoffs', 'soporte'].includes(activeSection.id);
 
   // Aviso fijo del entorno de pruebas, arriba de la lista de ajustes.
   const avisoPruebas = soloConsultaPruebas && (
@@ -3480,6 +3532,7 @@ function AjustesAdmin() {
               sonoffs:    <LlamadasSonoff />,
               instalar:   <InstalarApp />,
               actualizar: <ActualizarApp />,
+              soporte:    <TarjetaSoporte />,
             }[seccionVista]}
             </div>
             )}
