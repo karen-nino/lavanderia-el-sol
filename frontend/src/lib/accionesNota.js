@@ -27,6 +27,17 @@ export const puedeFinalizar = (nota) =>
   !esTerminal(nota) && nota?.estado === 'LISTA' && nota?.estado_pago !== 'PENDIENTE';
 
 /**
+ * Admin Main: un Autoservicio cobrado que se quedó En espera sin ninguna
+ * máquina asignada (el cliente no la usó) se finaliza directo.
+ */
+export const puedeFinalizarSinUsar = (nota, esAdminMain) =>
+  Boolean(esAdminMain)
+  && nota?.tipo_servicio === 'AUTOSERVICIO'
+  && nota?.estado === 'EN_ESPERA'
+  && nota?.estado_pago === 'PAGADO'
+  && (nota?.cargas ?? []).every(cg => !cg.lavadora_id && !cg.secadora_id);
+
+/**
  * Borrar es del Admin Main, en cualquier estado y en cualquier pantalla, salvo
  * con el cobro congelado en un corte cerrado (`cobro_congelado`: el servidor
  * responde 409).

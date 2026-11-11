@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar } from './accionesNota';
+import { esTerminal, puedeLiquidar, puedeFinalizar, puedeFinalizarSinUsar, puedeEliminar } from './accionesNota';
 
 const nota = (estado, estado_pago) => ({ estado, estado_pago });
 
@@ -45,6 +45,18 @@ describe('acciones del detalle de una nota', () => {
     expect(puedeFinalizar(nota('LISTA', 'PAGADO'))).toBe(true);
     expect(puedeFinalizar(nota('LISTA', 'PENDIENTE'))).toBe(false);
     expect(puedeFinalizar(nota('LAVANDO', 'PAGADO'))).toBe(false);
+  });
+
+  it('el Admin Main finaliza un Autoservicio cobrado En espera que no tiene máquina', () => {
+    const auto = (extra) => ({
+      tipo_servicio: 'AUTOSERVICIO', estado: 'EN_ESPERA', estado_pago: 'PAGADO',
+      cargas: [{ lavadora_id: null, secadora_id: null }], ...extra,
+    });
+    expect(puedeFinalizarSinUsar(auto(), true)).toBe(true);
+    expect(puedeFinalizarSinUsar(auto(), false)).toBe(false);
+    expect(puedeFinalizarSinUsar(auto({ estado_pago: 'PENDIENTE' }), true)).toBe(false);
+    expect(puedeFinalizarSinUsar(auto({ tipo_servicio: 'POR_ENCARGO' }), true)).toBe(false);
+    expect(puedeFinalizarSinUsar(auto({ cargas: [{ lavadora_id: null, secadora_id: 7 }] }), true)).toBe(false);
   });
 
   it('liquidar y finalizar nunca salen a la vez', () => {

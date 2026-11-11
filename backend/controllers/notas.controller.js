@@ -2669,8 +2669,27 @@ export const cambiarEstadoNota = async (req, res) => {
       });
     }
 
+    // Admin Main: un Autoservicio cobrado que se quedó En espera sin máquina (el
+    // cliente no la usó) se finaliza directo.
+    const finalizaSinUsar = estado === 'FINALIZADA' && estadoActual === 'EN_ESPERA'
+      && notaRows[0].tipo_servicio === 'AUTOSERVICIO' && notaRows[0].estado_pago === 'PAGADO'
+      && esAdminMain(req.user?.rol);
+    if (finalizaSinUsar) {
+      const { rows: [{ conMaquina }] } = await client.query(
+        `SELECT EXISTS (SELECT 1 FROM nota_cargas
+                         WHERE nota_id = $1 AND (lavadora_id IS NOT NULL OR secadora_id IS NOT NULL)) AS "conMaquina"`,
+        [id]
+      );
+      if (conMaquina) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: 'La nota todavía tiene una máquina asignada: libérala en Gestión de máquinas o finalízala en Salidas.',
+        });
+      }
+    }
+
     const permitidos = TRANSICIONES_VALIDAS[estadoActual] || [];
-    if (!permitidos.includes(estado)) {
+    if (!finalizaSinUsar && !permitidos.includes(estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         message: `Una nota ${palabra(estadoActual)} no puede pasar a ${palabra(estado)}. Desde aquí solo puede pasar a: ${permitidos.map(palabra).join(', ') || 'ningún otro estado'}.`,

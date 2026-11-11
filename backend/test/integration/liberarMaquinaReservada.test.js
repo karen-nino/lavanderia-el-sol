@@ -6,11 +6,12 @@ import request from 'supertest';
 import app from '../../app.js';
 import { pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedMarca, seedAjustes, auth } from '../helpers.js';
 
-let admin, empleado;
+let admin, adminMain, empleado;
 beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  adminMain = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Main' });
   empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
   await seedAjustes({ tiempo_carga_secadora: 40 });
 });
@@ -75,5 +76,26 @@ describe('liberar una máquina reservada', () => {
   it('es solo de admin', async () => {
     const { sec, nota: id } = await reservada();
     await api('patch', `/api/maquinas/${sec}/liberar`, { nota_id: id }, empleado).expect(403);
+  });
+});
+
+describe('finalizar un Autoservicio cobrado que se quedó sin máquina', () => {
+  it('el Admin Main lo finaliza desde En espera', async () => {
+    const { sec, nota: id } = await reservada();
+    await api('patch', `/api/maquinas/${sec}/liberar`, { nota_id: id }).expect(200);
+    await api('patch', `/api/notas/${id}/estado`, { estado: 'FINALIZADA' }, adminMain).expect(200);
+    expect((await nota(id)).estado).toBe('FINALIZADA');
+  });
+
+  it('un admin normal no puede', async () => {
+    const { sec, nota: id } = await reservada();
+    await api('patch', `/api/maquinas/${sec}/liberar`, { nota_id: id }).expect(200);
+    await api('patch', `/api/notas/${id}/estado`, { estado: 'FINALIZADA' }).expect(400);
+  });
+
+  it('no si todavía tiene la máquina asignada', async () => {
+    const { nota: id } = await reservada();
+    await api('patch', `/api/notas/${id}/estado`, { estado: 'FINALIZADA' }, adminMain).expect(409);
+    expect((await nota(id)).estado).toBe('EN_ESPERA');
   });
 });

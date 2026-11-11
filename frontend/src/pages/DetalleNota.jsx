@@ -11,7 +11,7 @@ import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto, seV
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
-import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar } from '../lib/accionesNota';
+import { esTerminal, puedeLiquidar, puedeFinalizar, puedeFinalizarSinUsar, puedeEliminar } from '../lib/accionesNota';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ModalCobrar from '../components/ModalCobrar';
 import TopeServicios from '../components/TopeServicios';
@@ -945,8 +945,8 @@ export default function DetalleNota() {
           {esAdmin && esEncargoNota
             ? <>{botonProcesado}{botonSalidas}{botonAjuste}{botonCobrar}</>
             : <>{botonAjuste}{botonCobrar}{botonSalidas}{botonProcesado}</>}
-          {/* Último paso; exige el cobro. En Por Encargo dice ENTREGAR. */}
-          {puedeFinalizar(nota) && (
+          {/* Último paso; exige el cobro. En Por Encargo dice ENTREGAR. Admin Main: también el Autoservicio cobrado que nunca usó su máquina. */}
+          {(puedeFinalizar(nota) || puedeFinalizarSinUsar(nota, esAdminMain)) && (
             <AccionCircular
               label={esEncargoNota ? 'Entregar' : 'Finalizar'}
               icono={IconoEntregar}
@@ -2078,7 +2078,9 @@ export default function DetalleNota() {
           titulo={esEncargoNota ? 'Entregar nota' : 'Finalizar nota'}
           mensaje={esEncargoNota
             ? `¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como entregada? El cliente ya se llevó su encargo.`
-            : `¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como finalizada? Esta acción no se puede deshacer.`}
+            : puedeFinalizarSinUsar(nota, esAdminMain)
+              ? `La nota ${nota.folio ?? `#${nota.id}`} se cobró pero no usó ninguna máquina. ¿Finalizarla? Lo cobrado no cambia; si hay que devolver dinero, va como salida de caja.`
+              : `¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como finalizada? Esta acción no se puede deshacer.`}
           onCancelar={() => setConfirmFinalizar(false)}
           onConfirmar={finalizarNota}
           loading={loadingAccion}
