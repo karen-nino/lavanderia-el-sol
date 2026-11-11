@@ -1,10 +1,12 @@
 // Cálculos puros de notas (sin BD ni req), para probarlos sin Postgres.
 
 /**
- * Precio del secado según el tamaño de la secadora (Ajustes → Secadora); sin
- * tamaño o sin precio propio, el de la mediana. La prenda no cuenta.
+ * Precio del secado: el del modelo si tiene uno propio; si no, el de su tamaño
+ * (Ajustes → Secadora) y, sin tamaño o sin precio, el de la mediana. La prenda
+ * no cuenta.
  */
-export function tarifaSecadora(secadoraTamano, _tipoPrenda, t) {
+export function tarifaSecadora(secadoraTamano, _tipoPrenda, t, precioModelo = null) {
+  if (precioModelo != null) return Number(precioModelo);
   const propio = { chica: t.secadoraChica, grande: t.secadoraGrande, jumbo: t.secadoraJumbo }[secadoraTamano];
   return propio ?? t.secadora;
 }

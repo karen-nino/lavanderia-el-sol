@@ -488,9 +488,9 @@ describe('modelo de fichas', () => {
     // No puede ir con varios programas.
     expect(res.body.pregunta_tiempo).toBe(false);
 
-    // No sale en los bloques de tiempo de Ajustes.
+    // Sale en Ajustes marcado de fichas: solo con su precio, sin tope.
     const tiempos = await request(app).get('/api/etiquetas/tiempos-marca').set(auth(admin.token));
-    expect(tiempos.body.some(t => t.modelo_id === res.body.id)).toBe(false);
+    expect(tiempos.body.find(t => t.modelo_id === res.body.id)?.solo_fichas).toBe(true);
 
     const lav = await seedMaquina({ nombre: 'L1', marca: 'Fichera', modelo: 'F1' });
     const maqs = await request(app).get('/api/maquinas').set(auth(admin.token));

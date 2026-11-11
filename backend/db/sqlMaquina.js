@@ -110,6 +110,18 @@ export const conIniciarSql = (alias) => (!cronometroActivo() && process.env.ENTO
 )` : 'FALSE');
 
 /**
+ * Precio por carga propio del modelo de la máquina `a`, o NULL (cobra el de su
+ * tamaño).
+ */
+export const PRECIO_DEL_MODELO = (a) => `(
+  SELECT mop.precio_carga
+    FROM marcas_maquina mmp
+    JOIN modelos_maquina mop ON mop.marca_id = mmp.id
+   WHERE mmp.nombre = ${a}.marca
+     AND mop.nombre = ${a}.modelo
+)`;
+
+/**
  * Minuto en que se para el reloj de una máquina con cronómetro: su tope. En la
  * secadora de fichas con "Otro ciclo" (`minutos_pagados`), el fin real, que
  * puede pasar del tope.

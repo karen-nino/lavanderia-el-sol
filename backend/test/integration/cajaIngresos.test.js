@@ -229,3 +229,35 @@ describe('precio del secado por tamaño', () => {
     expect(cobrado).toEqual({ chica: 40, mediana: 50, grande: 60, jumbo: 75 });
   });
 });
+
+describe('precio propio del modelo', () => {
+  it('el modelo con precio propio cobra ese; vacío, el de su tamaño', async () => {
+    await seedAjustes({ precio_carga_secadora: 50 });
+    const { rows: [marca] } = await pool.query(`INSERT INTO marcas_maquina (nombre) VALUES ('MAYTAG') RETURNING id`);
+    const { rows: [modelo] } = await pool.query(
+      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, solo_fichas) VALUES ($1, 'Maytag2', 'secadora', 'mediana', TRUE) RETURNING id`,
+      [marca.id]
+    );
+    // Se captura en Ajustes: el de fichas también sale en la lista.
+    await api('put', '/api/etiquetas/tiempos-marca', { modelo_id: modelo.id, precio_carga: 55 }).expect(200);
+    const lista = (await api('get', '/api/etiquetas/tiempos-marca')).body;
+    expect(lista.find(t => t.modelo_id === modelo.id)).toMatchObject({ precio_carga: '55.00', solo_fichas: true });
+
+    const cobrar = async (nombre, modeloNombre) => {
+      const nota = await api('post', '/api/notas', {
+        tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+        cargas: [{ secadora_tipo: 'mediana' }],
+      }).expect(201);
+      const { rows: [s] } = await pool.query(
+        `INSERT INTO maquinas (nombre, tipo, tamano, sucursal, marca, modelo)
+         VALUES ($1, 'secadora', 'mediana', 'centro', $2, $3) RETURNING id`,
+        [nombre, modeloNombre ? 'MAYTAG' : null, modeloNombre]
+      );
+      await api('patch', `/api/notas/${nota.body.id}/asignar-carga-maquina`,
+        { carga_id: nota.body.cargas[0].id, slot: 'secadora', maquina_id: s.id }).expect(200);
+      return Number((await api('get', `/api/notas/${nota.body.id}`)).body.precio_total);
+    };
+    expect(await cobrar('S2', 'Maytag2')).toBe(55);
+    expect(await cobrar('S9', null)).toBe(50);
+  });
+});

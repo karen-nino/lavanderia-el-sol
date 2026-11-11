@@ -288,6 +288,8 @@ export default function NuevaNota() {
     if (!m) return 0;
     // La que cobra por programa (Sec49) queda por definir: $0 hasta iniciarla.
     if (m.tipo === 'secadora' && tipoServicio === 'AUTOSERVICIO' && cobraPorPrograma(m)) return 0;
+    // El modelo con precio propio cobra ese (como el servidor).
+    if (m.precio_modelo != null) return Number(m.precio_modelo);
     if (m.tipo === 'secadora') return precioSecado(m.tamano);
     return precioPorTipo(m.tipo, 'ROPA');
   };

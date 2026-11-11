@@ -496,11 +496,12 @@ export const getTiemposMarca = async (req, res) => {
               mo.tipo, mo.tamano,
               mo.minutos, mo.minutos_2, mo.minutos_3, mo.minutos_4, mo.pregunta_tiempo, mo.dos_ciclos,
               mo.minutos_por_ficha, mo.precio_por_ficha, mo.fichas_sonoff,
-              mo.precio_programa_2, mo.precio_programa_3, mo.precio_programa_4
+              mo.precio_programa_2, mo.precio_programa_3, mo.precio_programa_4,
+              mo.precio_carga, mo.solo_fichas
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
-        -- El de fichas no pide tiempos.
-        WHERE mo.activo AND mm.activo AND NOT mo.solo_fichas
+        -- El de fichas también: no pide tiempos, pero puede tener precio propio.
+        WHERE mo.activo AND mm.activo
         ORDER BY mo.tipo, CASE mo.tamano WHEN 'chica' THEN 0 WHEN 'mediana' THEN 1 WHEN 'grande' THEN 2 ELSE 3 END,
                  mm.orden NULLS LAST, mm.id, mo.orden NULLS LAST, mo.id`
     );
@@ -542,8 +543,10 @@ export const guardarTiempoMarca = async (req, res) => {
       updates.push(`${campo} = $${i++}`);
       values.push(leido.valor);
     }
-    // Pesos (vacío = sin precio): costo de cada ficha y precio de cada programa.
+    // Pesos (vacío = sin precio): precio propio del modelo, costo de cada ficha
+    // y precio de cada programa.
     for (const [campo, mensaje] of [
+      ['precio_carga', 'El precio del modelo debe ser un número de 0 en adelante.'],
       ['precio_por_ficha', 'El costo por ficha debe ser un número de 0 en adelante.'],
       ['precio_programa_2', 'El precio de cada tiempo debe ser un número de 0 en adelante.'],
       ['precio_programa_3', 'El precio de cada tiempo debe ser un número de 0 en adelante.'],
@@ -569,7 +572,7 @@ export const guardarTiempoMarca = async (req, res) => {
           WHERE id = $${i}
           RETURNING id AS modelo_id, marca_id, nombre AS modelo, tipo, tamano,
                     minutos, minutos_2, minutos_3, minutos_4, pregunta_tiempo, minutos_por_ficha, precio_por_ficha,
-                    precio_programa_2, precio_programa_3, precio_programa_4`,
+                    precio_programa_2, precio_programa_3, precio_programa_4, precio_carga, solo_fichas`,
         values
       );
       if (rows.length === 0) {

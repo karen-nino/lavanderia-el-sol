@@ -261,8 +261,9 @@ const SECCION_ACTUALIZAR = {
 };
 
 const aNumero = (v) => (v === '' || v == null ? null : Number(v));
-/** Tope, programas, ficha y su costo de un modelo, para compararlo con lo guardado. */
+/** Tope, programas, ficha, su costo y el precio propio de un modelo, para compararlo con lo guardado. */
 const fotoTiempo = (t) => [
+  aNumero(t.precio_carga),
   aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
   aNumero(t.minutos_por_ficha), aNumero(t.precio_por_ficha),
   aNumero(t.precio_programa_2), aNumero(t.precio_programa_3), aNumero(t.precio_programa_4),
@@ -1410,19 +1411,19 @@ function AjustesAdmin() {
   // nuevo (o reactivado) se trae del servidor; uno desactivado o "sin tiempos" se va.
   const recibirModelos = useCallback((lista) => {
     const delModelo = (t) => lista.find(x => String(x.id) === String(t.modelo_id));
-    const sigue = (t) => { const mo = delModelo(t); return !mo || (mo.activo && !mo.solo_fichas); };
+    const sigue = (t) => { const mo = delModelo(t); return !mo || mo.activo; };
     const alDia = (t) => {
       const mo = delModelo(t);
       return mo ? {
         ...t, modelo: mo.nombre, tipo: mo.tipo, tamano: mo.tamano,
-        pregunta_tiempo: mo.pregunta_tiempo, fichas_sonoff: mo.fichas_sonoff,
+        pregunta_tiempo: mo.pregunta_tiempo, fichas_sonoff: mo.fichas_sonoff, solo_fichas: mo.solo_fichas,
       } : t;
     };
     setTiemposMarca(prev => prev.filter(sigue).map(alDia));
     tiemposOrigRef.current = tiemposOrigRef.current.filter(sigue).map(alDia);
 
     const conocidos = new Set(tiemposOrigRef.current.map(t => String(t.modelo_id)));
-    const faltan = lista.some(mo => mo.activo && !mo.solo_fichas && !conocidos.has(String(mo.id)));
+    const faltan = lista.some(mo => mo.activo && !conocidos.has(String(mo.id)));
     if (!faltan) return;
     api.get('/etiquetas/tiempos-marca')
       .then(d => {
@@ -1698,6 +1699,24 @@ function AjustesAdmin() {
   const tiemposDe = (tipo, tamano) =>
     tiemposMarca.filter(t => t.tipo === tipo && t.tamano === tamano);
 
+  /** Precio por carga propio del modelo; vacío = el precio del tamaño (arriba). */
+  const campoPrecioModelo = (t, inputCls, unidadCls) => (
+    <div className="flex items-center gap-2 mt-2">
+      <span className={`${unidadCls} flex-shrink-0`}>$</span>
+      <input
+        type="number" inputMode="decimal" min="0" step="0.01" placeholder="Precio de arriba"
+        aria-label={`Precio por carga de ${etiquetaTiempo(t)}`}
+        value={t.precio_carga ?? ''} onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, 'precio_carga')}
+        className={inputCls}
+      />
+      <span className={`${unidadCls} flex-shrink-0`}>MXN</span>
+    </div>
+  );
+  /** Ayuda del renglón del modelo: tope y programas (si tiene) y su precio propio. */
+  const ayudaModelo = (t) => (t.solo_fichas
+    ? 'Trabaja con fichas: no tiene tope. Precio por carga de este modelo; vacío = usa el precio de arriba.'
+    : `${ayudaTiempo(t)} Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.`);
+
   const setMinutosMarca = (clave, valor, campo = 'minutos') =>
     setTiemposMarca(prev => prev.map(t => (claveTiempo(t) === clave ? { ...t, [campo]: valor } : t)));
 
@@ -1741,6 +1760,7 @@ function AjustesAdmin() {
 
     await Promise.all(cambiados.map(t => api.put('/etiquetas/tiempos-marca', {
       modelo_id: t.modelo_id,
+      precio_carga: aNumero(t.precio_carga),
       minutos:   aNumero(t.minutos),
       minutos_2: aNumero(t.minutos_2),
       minutos_3: aNumero(t.minutos_3),
@@ -1761,7 +1781,7 @@ function AjustesAdmin() {
       minutos_4: aNumero(t.minutos_4), minutos_por_ficha: aNumero(t.minutos_por_ficha),
       precio_por_ficha: aNumero(t.precio_por_ficha),
       precio_programa_2: aNumero(t.precio_programa_2), precio_programa_3: aNumero(t.precio_programa_3),
-      precio_programa_4: aNumero(t.precio_programa_4),
+      precio_programa_4: aNumero(t.precio_programa_4), precio_carga: aNumero(t.precio_carga),
     }));
   };
 
@@ -2192,18 +2212,24 @@ function AjustesAdmin() {
       <Field
         key={claveTiempo(t)}
         label={etiquetaTiempo(t)}
-        hint={ayudaTiempo(t)}
+        hint={ayudaModelo(t)}
       >
-        <div className="flex items-center gap-2">
-          <input
-            type="number" inputMode="numeric" min="1" step="1" value={t.minutos ?? ''} placeholder="0"
-            onChange={e => setMinutosMarca(claveTiempo(t), e.target.value)}
-            className={INPUT_CLS}
-          />
-          <span className="text-sm text-gray-500 flex-shrink-0">min</span>
-          {stepBtnsMarca(claveTiempo(t))}
-        </div>
-        {camposOtrosTiempos(t, INPUT_CLS, 'text-sm text-gray-500')}
+        {/* El de fichas no tiene tope: solo su precio. */}
+        {!t.solo_fichas && (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" inputMode="numeric" min="1" step="1" value={t.minutos ?? ''} placeholder="0"
+                onChange={e => setMinutosMarca(claveTiempo(t), e.target.value)}
+                className={INPUT_CLS}
+              />
+              <span className="text-sm text-gray-500 flex-shrink-0">min</span>
+              {stepBtnsMarca(claveTiempo(t))}
+            </div>
+            {camposOtrosTiempos(t, INPUT_CLS, 'text-sm text-gray-500')}
+          </>
+        )}
+        {campoPrecioModelo(t, INPUT_CLS, 'text-sm text-gray-500')}
       </Field>
     ));
   };
@@ -2990,18 +3016,24 @@ function AjustesAdmin() {
       <MobileField
         key={claveTiempo(t)}
         label={etiquetaTiempo(t)}
-        hint={ayudaTiempo(t)}
+        hint={ayudaModelo(t)}
       >
-        <div className="flex items-center gap-2">
-          <input
-            type="number" inputMode="numeric" min="1" step="1" value={t.minutos ?? ''} placeholder="0"
-            onChange={e => setMinutosMarca(claveTiempo(t), e.target.value)}
-            className={MOBILE_INPUT_CLS}
-          />
-          <span className="text-base text-grey flex-shrink-0">min</span>
-          {stepBtnsMarca(claveTiempo(t), true)}
-        </div>
-        {camposOtrosTiempos(t, MOBILE_INPUT_CLS, 'text-base text-grey')}
+        {/* El de fichas no tiene tope: solo su precio. */}
+        {!t.solo_fichas && (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" inputMode="numeric" min="1" step="1" value={t.minutos ?? ''} placeholder="0"
+                onChange={e => setMinutosMarca(claveTiempo(t), e.target.value)}
+                className={MOBILE_INPUT_CLS}
+              />
+              <span className="text-base text-grey flex-shrink-0">min</span>
+              {stepBtnsMarca(claveTiempo(t), true)}
+            </div>
+            {camposOtrosTiempos(t, MOBILE_INPUT_CLS, 'text-base text-grey')}
+          </>
+        )}
+        {campoPrecioModelo(t, MOBILE_INPUT_CLS, 'text-base text-grey')}
       </MobileField>
     ));
   };

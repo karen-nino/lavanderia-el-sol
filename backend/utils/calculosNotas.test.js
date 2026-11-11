@@ -16,6 +16,12 @@ describe('tarifaSecadora', () => {
     expect(tarifaSecadora('jumbo', 'EDREDON', t)).toBe(35);
   });
 
+  it('el modelo con precio propio cobra ese', () => {
+    expect(tarifaSecadora('mediana', 'ROPA', t, 55)).toBe(55);
+    expect(tarifaSecadora('jumbo', 'ROPA', t, '55.00')).toBe(55);
+    expect(tarifaSecadora('jumbo', 'ROPA', t, null)).toBe(35);
+  });
+
   it('sin tamaño o sin precio propio, el de la mediana', () => {
     expect(tarifaSecadora(null, undefined, t)).toBe(20);
     expect(tarifaSecadora('grande', 'ROPA', { secadora: 20 })).toBe(20);
