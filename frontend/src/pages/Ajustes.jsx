@@ -1879,6 +1879,8 @@ function AjustesAdmin() {
     precio_carga_grande:   Number(config.precio_carga_grande),
     precio_carga_jumbo:    Number(config.precio_carga_jumbo),
     precio_carga_secadora: Number(config.precio_carga_secadora),
+    precio_secadora_chica:   Number(config.precio_secadora_chica),
+    precio_secadora_grande:  Number(config.precio_secadora_grande),
     precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
     tope_carga_chico:      precioServicioONull(config.tope_carga_chico),
     tope_carga_mediano:    precioServicioONull(config.tope_carga_mediano),
@@ -2247,10 +2249,10 @@ function AjustesAdmin() {
       )}
     </Section>
 
-    {/* Secadora: Chica, Mediana, Grande y Jumbo. El precio es uno; el tiempo, de cada tamaño. */}
+    {/* Secadora: Chica, Mediana, Grande y Jumbo, cada una con su precio y su tiempo. */}
     <Section titulo="Secadora">
-      {/* El secado tiene un solo precio: la chica solo lleva su tiempo. */}
       {subTitulo('Chica')}
+      {campoPrecio('precio_secadora_chica', 'Precio del secado de una carga chica.')}
       {campoTiempo('tiempo_secadora_chica', ayudaTiempoGeneral('secadoras chicas'))}
       {camposTiempoMarca('secadora', 'chica')}
 
@@ -2263,8 +2265,8 @@ function AjustesAdmin() {
 
       <div className="border-t border-gray-100" />
 
-      {/* El secado tiene un solo precio: la grande solo lleva su tiempo. */}
       {subTitulo('Grande')}
+      {campoPrecio('precio_secadora_grande', 'Precio del secado de una carga grande.')}
       {campoTiempo('tiempo_secadora_grande', ayudaTiempoGeneral('secadoras grandes'))}
       {camposTiempoMarca('secadora', 'grande')}
 
@@ -3041,8 +3043,8 @@ function AjustesAdmin() {
       <div className="border-t border-light-blue/60 pt-8 space-y-6">
         <TituloGrupoMobile>Secadora</TituloGrupoMobile>
         <div className="space-y-4">
-        {/* El secado tiene un solo precio: la chica solo lleva su tiempo. */}
         <TarjetaMobile titulo="Chica">
+          {campoPrecioM('precio_secadora_chica', 'Precio del secado de una carga chica.')}
           {campoTiempoM('tiempo_secadora_chica', ayudaTiempoGeneral('secadoras chicas'))}
           {camposTiempoMarcaM('secadora', 'chica')}
         </TarjetaMobile>
@@ -3051,8 +3053,8 @@ function AjustesAdmin() {
           {campoTiempoM('tiempo_carga_secadora', ayudaTiempoGeneral('secadoras medianas'))}
           {camposTiempoMarcaM('secadora', 'mediana')}
         </TarjetaMobile>
-        {/* El secado tiene un solo precio: la grande solo lleva su tiempo. */}
         <TarjetaMobile titulo="Grande">
+          {campoPrecioM('precio_secadora_grande', 'Precio del secado de una carga grande.')}
           {campoTiempoM('tiempo_secadora_grande', ayudaTiempoGeneral('secadoras grandes'))}
           {camposTiempoMarcaM('secadora', 'grande')}
         </TarjetaMobile>

@@ -210,3 +210,22 @@ describe('GET /api/caja/actual — ingresos', () => {
   });
 });
 
+
+describe('precio del secado por tamaño', () => {
+  it('cada secadora cobra el precio de su tamaño en Autoservicio', async () => {
+    await seedAjustes({ precio_carga_secadora: 50, precio_secadora_chica: 40, precio_secadora_grande: 60, precio_secadora_jumbo: 75 });
+    const cobrado = {};
+    for (const tamano of ['chica', 'mediana', 'grande', 'jumbo']) {
+      const nota = await api('post', '/api/notas', {
+        tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+        cargas: [{ secadora_tipo: 'mediana' }],
+      }).expect(201);
+      const sec = await seedMaquina({ nombre: `S-${tamano}`, tipo: 'secadora', tamano });
+      await api('patch', `/api/notas/${nota.body.id}/asignar-carga-maquina`,
+        { carga_id: nota.body.cargas[0].id, slot: 'secadora', maquina_id: sec }).expect(200);
+      const { body } = await api('get', `/api/notas/${nota.body.id}`);
+      cobrado[tamano] = Number(body.precio_total);
+    }
+    expect(cobrado).toEqual({ chica: 40, mediana: 50, grande: 60, jumbo: 75 });
+  });
+});

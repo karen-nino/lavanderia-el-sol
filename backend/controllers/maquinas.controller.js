@@ -297,6 +297,10 @@ export const getReporteDiarioMaquinas = async (req, res) => {
                    ELSE CASE
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'
                                AND COALESCE(v.maquina_tamano, m.tamano::text) = 'jumbo' THEN aj.precio_secadora_jumbo
+                          WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'
+                               AND COALESCE(v.maquina_tamano, m.tamano::text) = 'grande' THEN aj.precio_secadora_grande
+                          WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'
+                               AND COALESCE(v.maquina_tamano, m.tamano::text) = 'chica' THEN aj.precio_secadora_chica
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'       THEN aj.precio_carga_secadora
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'lavadora_grande' THEN aj.precio_carga_grande
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'lavadora_chica'  THEN aj.precio_carga_chica
@@ -413,6 +417,8 @@ export const getUsoMaquina = async (req, res) => {
                              ELSE nc.precio_secadora + nc.precio_fichas_extra END
                    ELSE CASE
                           WHEN mx.tipo = 'secadora' AND mx.tamano = 'jumbo' THEN aj.precio_secadora_jumbo
+                          WHEN mx.tipo = 'secadora' AND mx.tamano = 'grande' THEN aj.precio_secadora_grande
+                          WHEN mx.tipo = 'secadora' AND mx.tamano = 'chica' THEN aj.precio_secadora_chica
                           WHEN mx.tipo = 'secadora'                         THEN aj.precio_carga_secadora
                           WHEN mx.tipo = 'lavadora_grande'                  THEN aj.precio_carga_grande
                           WHEN mx.tipo = 'lavadora_chica'                   THEN aj.precio_carga_chica

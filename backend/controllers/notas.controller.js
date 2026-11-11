@@ -455,7 +455,8 @@ async function desmarcarPagoPorCambio(client, nota, antes, ahora, usuarioId, suc
 async function tarifasCarga(client) {
   const { rows } = await client.query(
     `SELECT precio_carga_chica, precio_carga_mediana, precio_carga_grande, precio_carga_jumbo,
-            precio_carga_secadora, precio_secadora_jumbo, precio_edredon_jumbo,
+            precio_carga_secadora, precio_secadora_chica, precio_secadora_grande, precio_secadora_jumbo,
+            precio_edredon_jumbo,
             tope_carga_chico, tope_carga_mediano, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon
        FROM ajustes WHERE id = 1`
   );
@@ -467,7 +468,9 @@ async function tarifasCarga(client) {
     jumbo:           c.precio_carga_jumbo      != null ? Number(c.precio_carga_jumbo)      : 70,
     // precio_carga_secadora es la secadora mediana.
     secadora:       c.precio_carga_secadora   != null ? Number(c.precio_carga_secadora)   : 45,
-    secadoraJumbo:   c.precio_secadora_jumbo   != null ? Number(c.precio_secadora_jumbo)   : 45,
+    secadoraChica:   c.precio_secadora_chica   != null ? Number(c.precio_secadora_chica)   : null,
+    secadoraGrande:  c.precio_secadora_grande  != null ? Number(c.precio_secadora_grande)  : null,
+    secadoraJumbo:   c.precio_secadora_jumbo   != null ? Number(c.precio_secadora_jumbo)   : null,
     // Ajustes → Máquinas → Lavadora → Edredón.
     edredonJumbo:   c.precio_edredon_jumbo    != null ? Number(c.precio_edredon_jumbo)    : 80,
     // Precio de cada servicio Por Encargo. null = sin configurar.
@@ -730,7 +733,8 @@ async function precioSecadoraAutoservicio(client, maquina, tipoPrenda, t) {
  */
 async function cobrarProgramaDeSecadora(client, notaId, secadoraId, minutos, t) {
   const precios = await preciosDePrograma(client, secadoraId);
-  const precio = precios?.get(Number(minutos)) ?? tarifaSecadora(null, null, t);
+  const { rows: [sec] } = await client.query('SELECT tamano FROM maquinas WHERE id = $1', [secadoraId]);
+  const precio = precios?.get(Number(minutos)) ?? tarifaSecadora(sec?.tamano, null, t);
   const { rowCount } = await client.query(
     `UPDATE nota_cargas SET precio_secadora = $3, secadora_por_definir = FALSE
       WHERE nota_id = $1 AND secadora_id = $2 AND secadora_por_definir`,
@@ -1178,7 +1182,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
         }
         // El tipo sale de la máquina (para el ticket y el trabajo pendiente).
         if (lavadoraId) lavadoraTipo = String(tipoPorId.get(lavadoraId)).replace('lavadora_', '');
-        if (secadoraId) secadoraTipo = 'mediana';
+        if (secadoraId) secadoraTipo = tamanoPorId.get(secadoraId) || 'mediana';
       }
       // En Autoservicio se cobra la máquina: sin ella no hay nada que cobrar.
       if (tipo_servicio === 'AUTOSERVICIO' && !lavadoraId && !secadoraId && !lavadoraTipo && !secadoraTipo) {

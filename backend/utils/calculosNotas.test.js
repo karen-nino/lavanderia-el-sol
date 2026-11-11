@@ -6,13 +6,19 @@ import {
 } from './calculosNotas.js';
 
 describe('tarifaSecadora', () => {
-  const t = { secadora: 20, secadoraJumbo: 35, secadoraEdredon: 50 };
+  const t = { secadora: 20, secadoraChica: 15, secadoraGrande: 28, secadoraJumbo: 35, secadoraEdredon: 50 };
 
-  it('la secadora es de un solo tamaño: precio único, ignora tamaño y prenda', () => {
+  it('cada tamaño cobra su precio; la prenda no cuenta', () => {
+    expect(tarifaSecadora('chica', 'ROPA', t)).toBe(15);
     expect(tarifaSecadora('mediana', 'ROPA', t)).toBe(20);
-    expect(tarifaSecadora('jumbo', 'ROPA', t)).toBe(20);
-    expect(tarifaSecadora('jumbo', 'EDREDON', t)).toBe(20);
+    expect(tarifaSecadora('grande', 'ROPA', t)).toBe(28);
+    expect(tarifaSecadora('jumbo', 'ROPA', t)).toBe(35);
+    expect(tarifaSecadora('jumbo', 'EDREDON', t)).toBe(35);
+  });
+
+  it('sin tamaño o sin precio propio, el de la mediana', () => {
     expect(tarifaSecadora(null, undefined, t)).toBe(20);
+    expect(tarifaSecadora('grande', 'ROPA', { secadora: 20 })).toBe(20);
   });
 });
 

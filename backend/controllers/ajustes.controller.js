@@ -61,6 +61,8 @@ export const updateAjustes = async (req, res) => {
     precio_carga_grande,
     precio_carga_jumbo,
     precio_carga_secadora,
+    precio_secadora_chica,
+    precio_secadora_grande,
     precio_secadora_jumbo,
     precio_secadora_edredon,
     precio_edredon_jumbo,
@@ -110,7 +112,9 @@ export const updateAjustes = async (req, res) => {
     precio_carga_mediana:    'El precio de la carga mediana',
     precio_carga_grande:     'El precio de la carga grande',
     precio_carga_jumbo:      'El precio de la carga jumbo',
-    precio_carga_secadora:   'El precio del secado',
+    precio_carga_secadora:   'El precio del secado mediano',
+    precio_secadora_chica:   'El precio del secado chico',
+    precio_secadora_grande:  'El precio del secado grande',
     precio_secadora_jumbo:   'El precio del secado jumbo',
     precio_secadora_edredon: 'El precio del secado de edredón',
     precio_edredon_jumbo:    'El precio del edredón en jumbo',
@@ -137,7 +141,7 @@ export const updateAjustes = async (req, res) => {
   const nombreDe = (campo) => ETIQUETA[campo] ?? `El ajuste "${campo}"`;
 
   const precios = { precio_carga_chica, precio_carga_mediana, precio_carga_grande, precio_carga_jumbo, precio_carga_secadora,
-                    precio_secadora_jumbo, precio_secadora_edredon, precio_edredon_jumbo };
+                    precio_secadora_chica, precio_secadora_grande, precio_secadora_jumbo, precio_secadora_edredon, precio_edredon_jumbo };
   for (const [campo, valor] of Object.entries(precios)) {
     if (valor !== undefined && (!esNumero(valor) || Number(valor) < 0)) {
       return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número mayor o igual a 0.` });
@@ -210,6 +214,8 @@ export const updateAjustes = async (req, res) => {
   if (precio_carga_grande   !== undefined) { updates.push(`precio_carga_grande = $${i++}`);   values.push(precio_carga_grande); }
   if (precio_carga_jumbo    !== undefined) { updates.push(`precio_carga_jumbo = $${i++}`);    values.push(precio_carga_jumbo); }
   if (precio_carga_secadora !== undefined) { updates.push(`precio_carga_secadora = $${i++}`); values.push(precio_carga_secadora); }
+  if (precio_secadora_chica   !== undefined) { updates.push(`precio_secadora_chica = $${i++}`);   values.push(precio_secadora_chica); }
+  if (precio_secadora_grande  !== undefined) { updates.push(`precio_secadora_grande = $${i++}`);  values.push(precio_secadora_grande); }
   if (precio_secadora_jumbo   !== undefined) { updates.push(`precio_secadora_jumbo = $${i++}`);   values.push(precio_secadora_jumbo); }
   if (precio_secadora_edredon !== undefined) { updates.push(`precio_secadora_edredon = $${i++}`); values.push(precio_secadora_edredon); }
   if (precio_edredon_jumbo  !== undefined) { updates.push(`precio_edredon_jumbo = $${i++}`);  values.push(precio_edredon_jumbo); }

@@ -181,7 +181,7 @@ export default function NuevaNota() {
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
-  const [precios,           setPrecios]           = useState({ chica: 70, mediana: 70, grande: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45, edredon: 80 });
+  const [precios,           setPrecios]           = useState({ chica: 70, mediana: 70, grande: 70, jumbo: 70, secadora: 45, secadoraChica: null, secadoraGrande: null, secadoraJumbo: null, edredon: 80 });
   // Precio de cada servicio (Ajustes); null = sin configurar.
   const [topes,             setTopes]             = useState({ chico: null, mediano: null, grande: null, jumbo: null, edredon: null });
   // Lo que trae puesto cada servicio de ropa (los de edredón, en su catálogo).
@@ -271,8 +271,10 @@ export default function NuevaNota() {
     if (tipoMaquina === 'lavadora_chica')  return precios.chica;
     return precios.mediana;
   };
-  // Secado: precio único.
-  const precioSecado = () => precios.secadora;
+  // Secado: el precio del tamaño de la secadora (sin precio propio, el de la mediana).
+  const precioSecado = (tamano) =>
+    ({ chica: precios.secadoraChica, grande: precios.secadoraGrande, jumbo: precios.secadoraJumbo })[tamano]
+    ?? precios.secadora;
   // Precio por tipo de lavadora en Por Encargo.
   const precioLavadoTipo = (tipo, prenda) =>
     tipo === 'jumbo'   ? precioPorTipo('lavadora_jumbo', prenda)
@@ -286,7 +288,7 @@ export default function NuevaNota() {
     if (!m) return 0;
     // La que cobra por programa (Sec49) queda por definir: $0 hasta iniciarla.
     if (m.tipo === 'secadora' && tipoServicio === 'AUTOSERVICIO' && cobraPorPrograma(m)) return 0;
-    if (m.tipo === 'secadora') return precioSecado();
+    if (m.tipo === 'secadora') return precioSecado(m.tamano);
     return precioPorTipo(m.tipo, 'ROPA');
   };
   // Un renglón es una máquina (las notas viejas pueden traer dos). El "Edredón"
@@ -465,7 +467,9 @@ export default function NuevaNota() {
             jumbo:           cfg.precio_carga_jumbo      != null ? Number(cfg.precio_carga_jumbo)      : 70,
             // precio_carga_secadora es la secadora mediana.
             secadora:        cfg.precio_carga_secadora   != null ? Number(cfg.precio_carga_secadora)   : 45,
-            secadoraJumbo:   cfg.precio_secadora_jumbo   != null ? Number(cfg.precio_secadora_jumbo)   : 45,
+            secadoraChica:   cfg.precio_secadora_chica   != null ? Number(cfg.precio_secadora_chica)   : null,
+            secadoraGrande:  cfg.precio_secadora_grande  != null ? Number(cfg.precio_secadora_grande)  : null,
+            secadoraJumbo:   cfg.precio_secadora_jumbo   != null ? Number(cfg.precio_secadora_jumbo)   : null,
             // El "Edredón" de Autoservicio: su tarifa, en cualquier lavadora.
             edredon:         cfg.precio_edredon_jumbo    != null ? Number(cfg.precio_edredon_jumbo)    : 80,
           });
