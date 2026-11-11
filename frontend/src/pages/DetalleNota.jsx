@@ -894,11 +894,9 @@ export default function DetalleNota() {
             <h1 className="text-xl font-bold text-gray-900 leading-tight truncate">
               Detalles Nota
             </h1>
-            {/* El cliente: el del catálogo, la referencia del Autoservicio o Mostrador. */}
+            {/* El tipo de nota: Autoservicio, Por encargo, etc. */}
             <p className="text-sm text-gray-500 leading-tight truncate">
-              {nota.cliente_nombre
-                ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
-                : (nota.referencia || 'Mostrador')}
+              {BADGE_TIPO_SERVICIO[nota.tipo_servicio]?.label || nota.tipo_servicio}
             </p>
           </div>
         </div>
