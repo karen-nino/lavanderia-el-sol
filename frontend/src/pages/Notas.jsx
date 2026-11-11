@@ -22,6 +22,11 @@ const FILTRO_SERVICIO_CLS = {
   // mt-2: aire entre los dos servicios.
   POR_ENCARGO:  'mt-2 border-l-4 border-amber-500 rounded-l-sm font-semibold text-gray-700',
 };
+/** Franjas izquierda y derecha de la tarjeta, con el color del filtro de su servicio. */
+const FRANJA_SERVICIO_CLS = {
+  AUTOSERVICIO: 'border-x-[3px] border-x-blue-500',
+  POR_ENCARGO:  'border-x-[3px] border-x-amber-500',
+};
 
 // Renglones por página en la tabla de escritorio.
 const POR_PAGINA = 15;
@@ -895,7 +900,7 @@ export default function Notas() {
               return (
                 <div
                   key={n.id}
-                  className="bg-white rounded-card shadow-card border border-gray-100 px-5 py-4 active:bg-gray-50 cursor-pointer"
+                  className={`bg-white rounded-card shadow-card border border-gray-100 px-5 py-4 active:bg-gray-50 cursor-pointer ${FRANJA_SERVICIO_CLS[n.tipo_servicio] ?? ''}`}
                   onClick={() => navigate(`/notas/${n.id}`)}
                 >
                   {/* Folio + estado */}
