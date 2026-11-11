@@ -45,6 +45,13 @@ const Icon = {
         d="M3 20c0-3 2.5-5 6-5s6 2 6 5M15 20c0-2 1.8-4 4-4s2 2 2 4" />
     </svg>
   ),
+  // Ficha: una moneda con su marca.
+  fichas: (
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <circle cx="12" cy="12" r="5" strokeWidth={2} />
+    </svg>
+  ),
   inventario: (
     <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -122,12 +129,14 @@ const navItems = [
  * Navegación de escritorio por prioridad: el sidebar muestra los que caben y
  * el resto va al Menú, sin repetir botones.
  */
-const buildDesktopNav = (isAdmin) => [
+const buildDesktopNav = (isAdmin, usaFichas) => [
   { to: '/',                 label: 'Inicio',              icon: Icon.dashboard, end: true },
   { to: '/maquinas',         label: 'Máquinas',            icon: Icon.maquinas },
   { to: '/notas',            label: 'Notas',               icon: Icon.notas },
   { to: '/clientes',         label: 'Clientes',            icon: Icon.clientes },
   { to: '/inventario',       label: 'Inventario',          icon: Icon.inventario },
+  // Solo si la sucursal usa fichas (Ajustes → Operación → Fichas).
+  ...(usaFichas ? [{ to: '/fichas', label: 'Fichas', icon: Icon.fichas }] : []),
   ...(isAdmin ? [{ to: '/ventas', label: 'Ventas', icon: Icon.ventas }] : []),
   { to: '/caja',             label: 'Caja',                icon: Icon.caja },
   { to: '/gestion-maquinas', label: 'Gestión de máquinas', short: 'Gestión', icon: Icon.maquinas },
@@ -931,7 +940,17 @@ export default function Layout() {
   };
 
   const isAdmin = esAdmin(usuario?.rol);
-  const desktopNav = useMemo(() => buildDesktopNav(isAdmin), [isAdmin]);
+  // ¿La sucursal usa fichas? Saca o mete el botón Fichas; Ajustes avisa al cambiarlo.
+  const [usaFichas, setUsaFichas] = useState(false);
+  useEffect(() => {
+    const leer = () => api.get('/fichas')
+      .then(d => setUsaFichas(Boolean(d?.usa_fichas)))
+      .catch(() => { /* sin el dato, sin botón */ });
+    leer();
+    window.addEventListener('fichas-cambio', leer);
+    return () => window.removeEventListener('fichas-cambio', leer);
+  }, []);
+  const desktopNav = useMemo(() => buildDesktopNav(isAdmin, usaFichas), [isAdmin, usaFichas]);
 
   const mobileBottomItems = navItems.filter((item) => item.to !== '/inventario');
 
@@ -939,6 +958,7 @@ export default function Layout() {
   const menuExtraItems = [
     { label: 'Caja',                icon: Icon.caja,       onClick: () => goTo('/caja') },
     { label: 'Inventario',          icon: Icon.inventario, onClick: () => goTo('/inventario') },
+    ...(usaFichas ? [{ label: 'Fichas', icon: Icon.fichas, onClick: () => goTo('/fichas') }] : []),
     { label: 'Gestión de máquinas', icon: Icon.maquinas,   onClick: () => goTo('/gestion-maquinas') },
     ...(isAdmin
       ? [

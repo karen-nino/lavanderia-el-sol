@@ -492,6 +492,8 @@ function FichasSucursales({ soloConsulta = false }) {
     try {
       const fila = await api.patch(`/fichas/sucursales/${slug}`, cambios);
       if (fila) {
+        /* El menú saca o mete el botón Fichas sin recargar. */
+        window.dispatchEvent(new Event('fichas-cambio'));
         setSucursales(prev => prev.map(s => (s.slug === slug ? fila : s)));
         setTotales(prev => { const { [slug]: _ya, ...resto } = prev; return resto; });
         if (cambios.fichas_disponibles !== undefined) {
@@ -508,8 +510,8 @@ function FichasSucursales({ soloConsulta = false }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Encendida: las máquinas que trabajan con fichas preguntan cuántas al iniciar (1, 2 o 3), se descuentan del
-        inventario e Inventario muestra la categoría Fichas para verlas y recogerlas.
+        Encendida: las máquinas que trabajan con fichas preguntan cuántas al iniciar (1, 2 o 3), se descuentan de
+        las disponibles y el menú muestra el botón Fichas para verlas y recogerlas.
       </p>
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>}
       {!sucursales ? (

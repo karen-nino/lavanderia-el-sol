@@ -13,6 +13,7 @@ import Maquinas from './pages/Maquinas';
 import GestionMaquinas from './pages/GestionMaquinas';
 import MaquinaUso from './pages/MaquinaUso';
 import Inventario from './pages/Inventario';
+import Fichas from './pages/Fichas';
 import Caja from './pages/Caja';
 import DetalleNota from './pages/DetalleNota';
 import TicketNota from './pages/TicketNota';
@@ -59,6 +60,7 @@ export default function App() {
             {/* Mi Perfil vive en Ajustes; la dirección vieja lleva ahí. */}
             <Route path="mi-perfil" element={<Navigate to="/ajustes/perfil" replace />} />
             <Route path="inventario" element={<Inventario />} />
+            <Route path="fichas" element={<Fichas />} />
             <Route path="caja" element={<Caja />} />
             <Route
               path="ventas"

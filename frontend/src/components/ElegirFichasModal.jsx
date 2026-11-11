@@ -30,7 +30,7 @@ export default function ElegirFichasModal({ maquina, guardando = false, error = 
   if (!maquina) return null;
   const quedan = disponibles == null ? null
     : disponibles < 3
-      ? `Quedan ${textoFichas(disponibles)}: si usas más, el conteo queda en negativo hasta que las recojan o lo corrijan en Inventario → Fichas.`
+      ? `Quedan ${textoFichas(disponibles)}: si usas más, el conteo queda en negativo hasta que las recojan o lo corrijan en Fichas.`
       : `Quedan ${textoFichas(disponibles)} en la sucursal.`;
   return (
     <ElegirTiempoModal

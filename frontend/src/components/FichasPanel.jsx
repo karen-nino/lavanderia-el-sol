@@ -20,11 +20,11 @@ const textoMovimiento = (mv) => {
 };
 
 /**
- * Inventario → Fichas: las que hay en la sucursal, las que quedaron dentro de
+ * Página Fichas: las que hay en la sucursal, las que quedaron dentro de
  * cada máquina (se recogen aquí) y los últimos movimientos. El admin corrige el
  * conteo. `resumen` viene de GET /fichas; `onResumen` recibe el nuevo.
  */
-export default function FichasInventario({ resumen, onResumen, esAdmin }) {
+export default function FichasPanel({ resumen, onResumen, esAdmin }) {
   const [recogiendo, setRecogiendo] = useState(null); // id de máquina o 'todas'
   const [error, setError] = useState('');
   const [corrigiendo, setCorrigiendo] = useState(false);
