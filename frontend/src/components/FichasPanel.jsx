@@ -1,22 +1,13 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
-import { formatFechaHora12 } from '../lib/fecha';
 import { textoFichas } from '../lib/fichas';
 import { IconoFicha } from './ElegirFichasModal';
+import HistorialFichas from './HistorialFichas';
 
 /** Tipo y tamaño de la máquina: "Secadora mediana", "Lavadora chica". */
 const tipoMaquina = (m) => {
   const tipo = m.tipo === 'secadora' ? 'Secadora' : 'Lavadora';
   return m.tamano ? `${tipo} ${m.tamano}` : tipo;
-};
-
-/** Texto de un movimiento del historial. */
-const textoMovimiento = (mv) => {
-  if (mv.tipo === 'uso') {
-    return `${textoFichas(-mv.cantidad)} a ${mv.maquina_nombre ?? 'una máquina'}${mv.folio ? ` · nota ${mv.folio}` : ''}`;
-  }
-  if (mv.tipo === 'recoger') return `Recogidas ${textoFichas(mv.cantidad)} de ${mv.maquina_nombre ?? 'una máquina'}`;
-  return `Conteo corregido (${mv.cantidad > 0 ? '+' : ''}${mv.cantidad})`;
 };
 
 /**
@@ -109,29 +100,8 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
         )}
       </div>
 
-      {/* Historial: quién usó, recogió o corrigió, y con cuántas quedó. */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h2 className="text-base font-bold text-dark-blue">Últimos movimientos</h2>
-        </div>
-        {resumen.movimientos.length === 0 ? (
-          <p className="px-5 py-4 text-sm text-gray-500">Aún no hay movimientos.</p>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {resumen.movimientos.map(mv => (
-              <div key={mv.id} className="px-5 py-3 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm text-gray-800">{textoMovimiento(mv)}</p>
-                  <p className="text-sm text-gray-500">
-                    {formatFechaHora12(mv.created_at)}{mv.usuario ? ` · ${mv.usuario}` : ''}
-                  </p>
-                </div>
-                <span className="text-sm text-gray-500 tabular-nums flex-shrink-0">Quedan {mv.disponibles_despues}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Historial en tabla, con su período; se recarga tras recoger. */}
+      <HistorialFichas recarga={resumen} />
 
     </div>
   );

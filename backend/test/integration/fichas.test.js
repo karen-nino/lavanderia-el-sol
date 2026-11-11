@@ -111,6 +111,18 @@ describe('Inventario → Fichas', () => {
     expect(res.body.movimientos[0]).toMatchObject({ tipo: 'recoger', cantidad: 3, maquina_nombre: 'S2' });
   });
 
+  it('el historial filtra por fechas', async () => {
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
+    await pool.query(`UPDATE fichas_movimientos SET created_at = '2026-01-15T12:00:00Z'`);
+    await api('post', '/api/fichas/recoger', { maquina_id: secadora }, empleado.token).expect(200);
+
+    const enero = (await api('get', '/api/fichas/historial?desde=2026-01-01T06:00:00Z&hasta=2026-02-01T06:00:00Z', null, empleado.token)).body;
+    expect(enero.movimientos.map(m => [m.tipo, m.cantidad, m.folio != null])).toEqual([['uso', -2, true]]);
+    expect(enero.anios).toContain(2026);
+    await api('get', '/api/fichas/historial?desde=nada&hasta=2026-02-01').expect(400);
+  });
+
   it('solo el admin corrige el conteo, y queda la diferencia en el historial', async () => {
     await api('post', '/api/fichas/ajustar', { disponibles: 107 }, empleado.token).expect(403);
     const res = await api('post', '/api/fichas/ajustar', { disponibles: 107 });

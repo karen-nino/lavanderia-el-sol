@@ -1,5 +1,6 @@
 // Inventario de fichas (mig. 176).
 //   GET   /api/fichas                    resumen de la sucursal activa (todos)
+//   GET   /api/fichas/historial          movimientos de un rango de fechas (todos)
 //   POST  /api/fichas/recoger            recoge de una máquina o de todas (todos)
 //   POST  /api/fichas/ajustar            corrige el conteo de disponibles (admin)
 //   GET   /api/fichas/sucursales         qué sucursales usan fichas (admin)
@@ -47,6 +48,43 @@ export const getFichas = async (req, res) => {
   } catch (err) {
     console.error('getFichas error:', err);
     res.status(500).json({ message: 'No se pudieron cargar las fichas. Intenta de nuevo.' });
+  }
+};
+
+/**
+ * Historial de movimientos entre `desde` (incluido) y `hasta` (excluido), dos
+ * fechas ISO; del más reciente al más viejo, hasta 1,000. Con `años`, los años
+ * que tienen movimientos (para el selector de período).
+ */
+export const getHistorialFichas = async (req, res) => {
+  const desde = new Date(String(req.query.desde ?? ''));
+  const hasta = new Date(String(req.query.hasta ?? ''));
+  if (Number.isNaN(desde.getTime()) || Number.isNaN(hasta.getTime()) || hasta <= desde) {
+    return res.status(400).json({ message: 'Elige un rango de fechas válido.' });
+  }
+  try {
+    const [{ rows: movimientos }, { rows: anios }] = await Promise.all([
+      pool.query(
+        `SELECT f.id, f.tipo, f.cantidad, f.disponibles_despues, f.maquina_nombre, f.created_at,
+                n.id AS nota_id, n.folio, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario
+           FROM fichas_movimientos f
+           LEFT JOIN notas n ON n.id = f.nota_id
+           LEFT JOIN usuarios u ON u.id = f.usuario_id
+          WHERE f.sucursal = $1 AND f.created_at >= $2 AND f.created_at < $3
+          ORDER BY f.created_at DESC, f.id DESC
+          LIMIT 1000`,
+        [req.sucursal, desde, hasta]
+      ),
+      pool.query(
+        `SELECT DISTINCT EXTRACT(YEAR FROM created_at AT TIME ZONE 'America/Mexico_City')::int AS anio
+           FROM fichas_movimientos WHERE sucursal = $1 ORDER BY 1 DESC`,
+        [req.sucursal]
+      ),
+    ]);
+    res.json({ movimientos, anios: anios.map(r => r.anio) });
+  } catch (err) {
+    console.error('getHistorialFichas error:', err);
+    res.status(500).json({ message: 'No se pudo cargar el historial de fichas. Intenta de nuevo.' });
   }
 };
 
