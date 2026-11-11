@@ -12,11 +12,16 @@ export function formatHora12(fecha) {
     .toLowerCase();
 }
 
-// Fecha corta + hora: "15 ago 2026, 09:05 am".
-export function formatFechaHora12(fecha) {
+// Fecha corta: "15 ago 2026".
+export function formatFechaCorta(fecha) {
   if (fecha == null || fecha === '') return '';
   const d = fecha instanceof Date ? fecha : new Date(fecha);
   if (Number.isNaN(d.getTime())) return '';
-  const dia = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-  return `${dia}, ${formatHora12(d)}`;
+  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// Fecha corta + hora: "15 ago 2026, 09:05 am".
+export function formatFechaHora12(fecha) {
+  const dia = formatFechaCorta(fecha);
+  return dia ? `${dia}, ${formatHora12(fecha)}` : '';
 }

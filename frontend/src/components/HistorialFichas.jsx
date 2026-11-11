@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { formatFechaHora12 } from '../lib/fecha';
+import { formatFechaCorta, formatHora12 } from '../lib/fecha';
 import { periodoInicial, rangoDePeriodo } from '../lib/periodo';
 import SelectorPeriodo from './SelectorPeriodo';
 
@@ -14,7 +14,7 @@ const TIPO = {
 
 /**
  * Historial de fichas en tabla, filtrado por período (como el de Caja): fecha,
- * movimiento, máquina, nota, fichas (+ entran / − salen) y quién. `recarga` cambia cuando hubo un movimiento nuevo (recoger).
+ * hora, movimiento, máquina, nota, fichas (+ entran / − salen) y quién. `recarga` cambia cuando hubo un movimiento nuevo (recoger).
  */
 export default function HistorialFichas({ recarga }) {
   const [periodo, setPeriodo] = useState(periodoInicial);
@@ -57,6 +57,7 @@ export default function HistorialFichas({ recarga }) {
             <thead>
               <tr className="text-left text-gray-500 border-b border-gray-100">
                 <th className={th}>Fecha</th>
+                <th className={th}>Hora</th>
                 <th className={th}>Movimiento</th>
                 <th className={th}>Máquina</th>
                 <th className={th}>Nota</th>
@@ -69,7 +70,8 @@ export default function HistorialFichas({ recarga }) {
                 const tipo = TIPO[mv.tipo] ?? TIPO.ajuste;
                 return (
                   <tr key={mv.id}>
-                    <td className={`${td} text-gray-700`}>{formatFechaHora12(mv.created_at)}</td>
+                    <td className={`${td} text-gray-700`}>{formatFechaCorta(mv.created_at)}</td>
+                    <td className={`${td} text-gray-700 tabular-nums`}>{formatHora12(mv.created_at)}</td>
                     <td className={td}>
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tipo.cls}`}>{tipo.label}</span>
                     </td>
