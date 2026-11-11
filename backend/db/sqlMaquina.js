@@ -204,7 +204,8 @@ export const CICLOS_DE_PASADAS = (filtro) => `SELECT nc.nota_id, nc.orden AS car
                                   ELSE nc.precio_secadora END) > 0
                    THEN CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
                              ELSE nc.precio_secadora END
-                   ELSE CASE
+                   -- El modelo con precio propio cobra ese; si no, el de su tamaño.
+                   ELSE COALESCE(${PRECIO_DEL_MODELO('mx')}, CASE
                           WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'
                                AND COALESCE(p.maquina_tamano, mx.tamano::text) = 'jumbo'         THEN aj.precio_secadora_jumbo
                           WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'
@@ -216,7 +217,7 @@ export const CICLOS_DE_PASADAS = (filtro) => `SELECT nc.nota_id, nc.orden AS car
                           WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'lavadora_chica'    THEN aj.precio_carga_chica
                           WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'lavadora_jumbo'    THEN aj.precio_carga_jumbo
                           ELSE aj.precio_carga_mediana
-                        END
+                        END)
               END AS precio,
               CASE WHEN p.finalizada_at IS NOT NULL
                    THEN ROUND(EXTRACT(EPOCH FROM p.finalizada_at - p.encendida_at))::int

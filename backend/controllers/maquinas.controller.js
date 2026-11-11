@@ -296,7 +296,8 @@ export const getReporteDiarioMaquinas = async (req, res) => {
                      THEN ROUND(EXTRACT(EPOCH FROM NOW() - COALESCE(v.encendida_at, m.en_uso_desde)))::int
               END AS segundos,
               CASE WHEN v.n_vuelta = 1 AND v.cobrado > 0 THEN v.cobrado
-                   ELSE CASE
+                   -- El modelo con precio propio cobra ese; si no, el de su tamaño.
+                   ELSE COALESCE(${PRECIO_DEL_MODELO('m')}, CASE
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'
                                AND COALESCE(v.maquina_tamano, m.tamano::text) = 'jumbo' THEN aj.precio_secadora_jumbo
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'
@@ -308,7 +309,7 @@ export const getReporteDiarioMaquinas = async (req, res) => {
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'lavadora_chica'  THEN aj.precio_carga_chica
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'lavadora_jumbo' THEN aj.precio_carga_jumbo
                           ELSE aj.precio_carga_mediana
-                        END
+                        END)
               END AS precio
          FROM vueltas v
          JOIN maquinas m ON m.id = v.maquina_id
@@ -417,7 +418,8 @@ export const getUsoMaquina = async (req, res) => {
                                   ELSE nc.precio_secadora + nc.precio_fichas_extra END) > 0
                    THEN CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
                              ELSE nc.precio_secadora + nc.precio_fichas_extra END
-                   ELSE CASE
+                   -- El modelo con precio propio cobra ese; si no, el de su tamaño.
+                   ELSE COALESCE(${PRECIO_DEL_MODELO('mx')}, CASE
                           WHEN mx.tipo = 'secadora' AND mx.tamano = 'jumbo' THEN aj.precio_secadora_jumbo
                           WHEN mx.tipo = 'secadora' AND mx.tamano = 'grande' THEN aj.precio_secadora_grande
                           WHEN mx.tipo = 'secadora' AND mx.tamano = 'chica' THEN aj.precio_secadora_chica
@@ -426,7 +428,7 @@ export const getUsoMaquina = async (req, res) => {
                           WHEN mx.tipo = 'lavadora_chica'                   THEN aj.precio_carga_chica
                           WHEN mx.tipo = 'lavadora_jumbo'                   THEN aj.precio_carga_jumbo
                           ELSE aj.precio_carga_mediana
-                        END
+                        END)
               END AS precio,
               -- Minutos encendida; si sigue y ya pasó su tope, hasta el tope.
               p.finalizada_at IS NULL AND vivo.al_tope AS tope_vivo,
