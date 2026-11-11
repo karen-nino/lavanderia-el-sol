@@ -6,7 +6,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, 
 // Encender y apagar normalmente lo dispara el trigger LISTEN/NOTIFY. "Encender
 // máquina" llama directo para no depender del listener; es idempotente.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
-import { sellarPasadasVivas } from '../db/pasadas.js';
+import { sellarPasadasVivas, soltarVueltaSinArrancar } from '../db/pasadas.js';
 import { COBRO_APARTE_ENCARGO, GRANEL_POR_ELEGIR } from '../db/sqlProductos.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, PRECIOS_DE_PROGRAMAS, OPCIONES_DE_MARCA,
@@ -3702,7 +3702,6 @@ export const liberarMaquinaReservada = async (req, res) => {
 
     const esSecadora = maq.tipo === 'secadora';
     const cargaCol   = esSecadora ? 'secadora_id'          : 'lavadora_id';
-    const usadaCol   = esSecadora ? 'secadora_usada_id'    : 'lavadora_usada_id';
     const iniciadaCol = esSecadora ? 'secadora_iniciada_at' : 'lavadora_iniciada_at';
     const { rows: cargaRows } = await client.query(
       `SELECT id, ${iniciadaCol} AS iniciada_at FROM nota_cargas
@@ -3718,14 +3717,9 @@ export const liberarMaquinaReservada = async (req, res) => {
       return res.status(409).json({ message: `La ${maq.nombre} ya se inició en esta nota: finalízala desde Salidas.` });
     }
 
-    // Igual que el cierre del día: sin arrancar no cuenta como usada.
-    await client.query(
-      `UPDATE nota_cargas
-          SET ${usadaCol} = CASE WHEN ${usadaCol} = ${cargaCol} THEN NULL ELSE ${usadaCol} END,
-              ${cargaCol} = NULL
-        WHERE id = ANY($1)`,
-      [cargaRows.map(c => c.id)]
-    );
+    // Sin arrancar no cuenta como usada; si era otra vuelta ("Más secado"),
+    // la carga conserva la anterior.
+    await soltarVueltaSinArrancar(client, cargaRows.map(c => c.id), esSecadora ? 'secadora' : 'lavadora');
 
     let estado = nota.estado;
     if (finalizar) {

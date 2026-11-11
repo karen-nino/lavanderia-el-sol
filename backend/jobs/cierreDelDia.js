@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import pool from '../db/pool.js';
-import { sellarPasadasVivas } from '../db/pasadas.js';
+import { sellarPasadasVivas, soltarVueltaSinArrancar } from '../db/pasadas.js';
 import {
   ventasDeSesion, totalesMovimientos, ingresosDeSesion, porEncargoPendienteDeSesion,
 } from '../controllers/caja.controller.js';
@@ -40,8 +40,14 @@ export async function liberarMaquinasCierreDelDia() {
     );
     const notaIds = notas.rows.map(r => r.id);
 
-    // Las cargas sueltan su máquina viva y la conservan como "usada".
+    // Las cargas sueltan su máquina viva y la conservan como "usada"; la que
+    // solo estaba asignada no cuenta (vuelve a la vuelta anterior, si hubo).
     if (notaIds.length > 0) {
+      const { rows: cargas } = await client.query(
+        'SELECT id FROM nota_cargas WHERE nota_id = ANY($1) FOR UPDATE', [notaIds]
+      );
+      await soltarVueltaSinArrancar(client, cargas.map(r => r.id), 'lavadora');
+      await soltarVueltaSinArrancar(client, cargas.map(r => r.id), 'secadora');
       await client.query(
         `UPDATE nota_cargas
             SET lavadora_usada_id = COALESCE(lavadora_usada_id, lavadora_id),
@@ -67,23 +73,27 @@ export async function liberarMaquinasCierreDelDia() {
     );
 
     // Máquinas asignadas que nunca arrancaron: se sueltan (no cuentan como
-    // usadas) y la nota sigue viva para asignarle otra después.
-    const { rows: [{ sueltas }] } = await client.query(
-      `WITH liberadas AS (
-         UPDATE nota_cargas nc
-            SET lavadora_id = NULL, secadora_id = NULL,
-                lavadora_usada_id = CASE WHEN nc.lavadora_usada_id = nc.lavadora_id
-                                         THEN NULL ELSE nc.lavadora_usada_id END,
-                secadora_usada_id = CASE WHEN nc.secadora_usada_id = nc.secadora_id
-                                         THEN NULL ELSE nc.secadora_usada_id END
-          FROM notas n
-          WHERE n.id = nc.nota_id
-            AND n.estado = 'EN_ESPERA'
-            AND (nc.lavadora_id IS NOT NULL OR nc.secadora_id IS NOT NULL)
-          RETURNING nc.id
-       )
-       SELECT COUNT(*)::int AS sueltas FROM liberadas`
+    // usadas; "Más secado" vuelve a la vuelta anterior) y la nota sigue viva.
+    const { rows: sinArrancar } = await client.query(
+      `SELECT nc.id,
+              (nc.lavadora_id IS NOT NULL) AS lav,
+              (nc.secadora_id IS NOT NULL) AS sec
+         FROM nota_cargas nc
+         JOIN notas n ON n.id = nc.nota_id
+        WHERE n.estado = 'EN_ESPERA'
+          AND (nc.lavadora_id IS NOT NULL OR nc.secadora_id IS NOT NULL)
+        FOR UPDATE OF nc`
     );
+    await soltarVueltaSinArrancar(client, sinArrancar.filter(r => r.lav).map(r => r.id), 'lavadora');
+    await soltarVueltaSinArrancar(client, sinArrancar.filter(r => r.sec).map(r => r.id), 'secadora');
+    // Lo que quede puesto (arrancada, sin estar en uso) también se suelta.
+    if (sinArrancar.length > 0) {
+      await client.query(
+        `UPDATE nota_cargas SET lavadora_id = NULL, secadora_id = NULL WHERE id = ANY($1)`,
+        [sinArrancar.map(r => r.id)]
+      );
+    }
+    const sueltas = sinArrancar.length;
 
     await client.query('COMMIT');
     return {

@@ -45,3 +45,47 @@ export async function sellarPasadasVivas(client, maquinaIds) {
     [ids]
   );
 }
+
+/**
+ * Suelta del hueco (`slot`) de estas cargas la máquina asignada que nunca
+ * arrancó: borra esa vuelta sin usar y el hueco vuelve a la vuelta anterior que
+ * sí corrió (máquina usada y hora de arranque), o queda vacío si no hubo.
+ * Así "Más secado" sin arrancar no borra el secado que ya se hizo.
+ */
+export async function soltarVueltaSinArrancar(client, cargaIds, slot) {
+  const ids = (cargaIds ?? []).map(Number).filter(Number.isInteger);
+  if (ids.length === 0) return;
+  const col      = slot === 'secadora' ? 'secadora_id'          : 'lavadora_id';
+  const usada    = slot === 'secadora' ? 'secadora_usada_id'    : 'lavadora_usada_id';
+  const iniciada = slot === 'secadora' ? 'secadora_iniciada_at' : 'lavadora_iniciada_at';
+  await client.query(
+    `DELETE FROM nota_carga_maquinas x
+      USING nota_cargas nc
+      WHERE nc.id = ANY($1) AND x.carga_id = nc.id AND x.slot = $2
+        AND nc.${col} IS NOT NULL AND nc.${iniciada} IS NULL
+        AND x.maquina_id = nc.${col}
+        AND x.encendida_at IS NULL AND x.finalizada_at IS NULL
+        AND x.id = (
+          SELECT y.id FROM nota_carga_maquinas y
+           WHERE y.carga_id = nc.id AND y.slot = $2
+           ORDER BY y.asignada_at DESC, y.id DESC LIMIT 1
+        )`,
+    [ids, slot]
+  );
+  await client.query(
+    `UPDATE nota_cargas nc
+        SET ${col}      = NULL,
+            ${usada}    = prev.maquina_id,
+            ${iniciada} = prev.encendida_at
+       FROM nota_cargas o
+       LEFT JOIN LATERAL (
+         SELECT p.maquina_id, p.encendida_at FROM nota_carga_maquinas p
+          WHERE p.carga_id = o.id AND p.slot = $2
+            AND (p.encendida_at IS NOT NULL OR p.finalizada_at IS NOT NULL)
+          ORDER BY p.asignada_at DESC, p.id DESC LIMIT 1
+       ) prev ON TRUE
+      WHERE nc.id = o.id AND o.id = ANY($1)
+        AND o.${col} IS NOT NULL AND o.${iniciada} IS NULL`,
+    [ids, slot]
+  );
+}

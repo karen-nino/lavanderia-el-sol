@@ -115,3 +115,51 @@ describe('finalizar un Autoservicio cobrado que se quedó sin máquina', () => {
     expect((await nota(id)).estado).toBe('EN_ESPERA');
   });
 });
+
+describe('otra vuelta sin arrancar (Relavado / Más secado) en Por Encargo', () => {
+  /** Por Encargo: lava en L1 hasta terminar y luego pide relavado en L2, sin arrancarlo. */
+  async function relavadoSinArrancar() {
+    const l1 = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
+    const l2 = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana' });
+    const n = await api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    }).expect(201);
+    const id = n.body.id;
+    const carga = n.body.cargas[0].id;
+    await api('patch', `/api/notas/${id}/asignar-carga-maquina`, { carga_id: carga, slot: 'lavadora', maquina_id: l1 }).expect(200);
+    await api('patch', `/api/notas/${id}/activar-pendientes`, { maquina_id: l1 }).expect(200);
+    await api('patch', `/api/notas/${id}/terminar-lavado-final`, { lavadora_id: l1 }).expect(200);
+    const primera = (await pool.query('SELECT lavadora_iniciada_at FROM nota_cargas WHERE id = $1', [carga])).rows[0].lavadora_iniciada_at;
+    await api('patch', `/api/notas/${id}/asignar-maquina`, { maquina_ids: [l2], carga_id: carga, cobrar: false }).expect(200);
+    return { l1, l2, id, carga, primera };
+  }
+
+  const cargaDe = async (carga) => (await pool.query(
+    'SELECT lavadora_id, lavadora_usada_id, lavadora_iniciada_at FROM nota_cargas WHERE id = $1', [carga]
+  )).rows[0];
+  const vueltas = async (carga) => (await pool.query(
+    'SELECT maquina_nombre FROM nota_carga_maquinas WHERE carga_id = $1 ORDER BY id', [carga]
+  )).rows.map(r => r.maquina_nombre);
+
+  it('al liberarla, la carga conserva el primer lavado', async () => {
+    const { l1, l2, id, carga, primera } = await relavadoSinArrancar();
+    await api('patch', `/api/maquinas/${l2}/liberar`, { nota_id: id }).expect(200);
+    const c = await cargaDe(carga);
+    expect(c.lavadora_id).toBeNull();
+    expect(c.lavadora_usada_id).toBe(l1);
+    expect(c.lavadora_iniciada_at).not.toBeNull();
+    expect(new Date(c.lavadora_iniciada_at).getTime()).toBeCloseTo(new Date(primera).getTime(), -3);
+    expect(await vueltas(carga)).toEqual(['L1']);
+  });
+
+  it('el cierre de medianoche también conserva el primer lavado', async () => {
+    const { l1, carga } = await relavadoSinArrancar();
+    const { liberarMaquinasCierreDelDia } = await import('../../jobs/cierreDelDia.js');
+    await liberarMaquinasCierreDelDia();
+    const c = await cargaDe(carga);
+    expect(c.lavadora_id).toBeNull();
+    expect(c.lavadora_usada_id).toBe(l1);
+    expect(await vueltas(carga)).toEqual(['L1']);
+  });
+});
