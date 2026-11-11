@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { desgloseCaja } from './desgloseCaja';
+import { desgloseCaja, lineasConcepto } from './desgloseCaja';
 
 // Todo en efectivo: un solo total, como siempre.
 const turno = {
@@ -43,7 +43,7 @@ describe('desgloseCaja', () => {
 
   it('lleva las líneas en el orden pedido', () => {
     expect(desgloseCaja(turno).ingresos.map((l) => l.label)).toEqual([
-      'Caja inicial', 'Entradas', 'Lav. Chicas', 'Lav. Medianas', 'Lav. Grandes', 'Lav. Jumbo', 'Secadoras',
+      'Caja inicial', 'Entradas', 'Lav. Medianas', 'Lav. Jumbo', 'Secadoras',
       'SPE', 'Edredón', 'Productos',
     ]);
     expect(desgloseCaja(conTransferencia).comoSeCobro.map((l) => [l.label, l.value])).toEqual([
@@ -55,7 +55,7 @@ describe('desgloseCaja', () => {
   it('con transferencia: lo vendido (sin caja inicial) y aparte lo del cajón', () => {
     const d = desgloseCaja(conTransferencia);
     expect(d.ingresos.map((l) => l.label)).toEqual([
-      'Lav. Chicas', 'Lav. Medianas', 'Lav. Grandes', 'Lav. Jumbo', 'Secadoras', 'SPE', 'Edredón', 'Productos',
+      'Lav. Medianas', 'Lav. Jumbo', 'Secadoras', 'SPE', 'Edredón', 'Productos',
       'Total vendido',
       'Cómo se cobró', 'Efectivo', 'Transferencia',
       'En el cajón', 'Caja inicial', 'Entradas', 'Ventas en efectivo',
@@ -99,5 +99,15 @@ describe('desgloseCaja', () => {
       expect(d.desglose.map((l) => l.label)).toEqual(['Caja inicial', 'Ingresos', 'Egresos']);
       expect(d.esperado).toBe(desgloseCaja(t, { cajaAparte: false }).esperado);
     }
+  });
+});
+
+describe('lineasConcepto', () => {
+  it('lavadoras chicas y grandes solo salen si hubo venta', () => {
+    const sin = lineasConcepto({ lavadoras_medianas: 70 }).map(l => l.label);
+    expect(sin).not.toContain('Lav. Chicas');
+    expect(sin).not.toContain('Lav. Grandes');
+    const con = lineasConcepto({ lavadoras_chicas: 50, lavadoras_grandes: 80 }).map(l => l.label);
+    expect(con.slice(0, 3)).toEqual(['Lav. Chicas', 'Lav. Medianas', 'Lav. Grandes']);
   });
 });

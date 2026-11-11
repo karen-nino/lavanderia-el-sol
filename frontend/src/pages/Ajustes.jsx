@@ -2247,7 +2247,7 @@ function AjustesAdmin() {
       )}
     </Section>
 
-    {/* Secadora: Mediana y Jumbo. El precio es de la carga; el tiempo, de la máquina. */}
+    {/* Secadora: Chica, Mediana, Grande y Jumbo. El precio es uno; el tiempo, de cada tamaño. */}
     <Section titulo="Secadora">
       {/* El secado tiene un solo precio: la chica solo lleva su tiempo. */}
       {subTitulo('Chica')}

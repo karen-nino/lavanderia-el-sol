@@ -44,6 +44,13 @@ describe('POST /api/maquinas — validaciones', () => {
     expect(sec.body.tamano).toBe('chica');
   });
 
+  it('en la lavadora, el tamaño sale de su tipo', async () => {
+    const res = await request(app).post('/api/maquinas').set(auth(admin.token))
+      .send({ nombre: 'LG2', tipo: 'lavadora_grande', tamano: 'mediana' });
+    expect(res.status).toBe(201);
+    expect(res.body.tamano).toBe('grande');
+  });
+
   it('crea lavadora y secadora grandes', async () => {
     const lav = await request(app).post('/api/maquinas').set(auth(admin.token))
       .send({ nombre: 'LG1', tipo: 'lavadora_grande', tamano: 'grande' });

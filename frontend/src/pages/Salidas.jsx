@@ -202,6 +202,9 @@ export default function Salidas() {
           grande:   ajustes.tiempo_carga_grande   != null ? Number(ajustes.tiempo_carga_grande)   : 30,
           jumbo:    ajustes.tiempo_carga_jumbo    != null ? Number(ajustes.tiempo_carga_jumbo)    : 45,
           secadora: ajustes.tiempo_carga_secadora != null ? Number(ajustes.tiempo_carga_secadora) : 30,
+          sec_chica:  ajustes.tiempo_secadora_chica != null ? Number(ajustes.tiempo_secadora_chica) : null,
+          sec_grande: ajustes.tiempo_secadora_grande != null ? Number(ajustes.tiempo_secadora_grande) : null,
+          sec_jumbo:  ajustes.tiempo_secadora_jumbo != null ? Number(ajustes.tiempo_secadora_jumbo) : null,
         });
       }
       setError('');
@@ -836,7 +839,8 @@ export default function Salidas() {
     if (!['LAVANDO', 'SECANDO'].includes(nota?.estado)) return false;
     // Ciclo sellado al arrancar o, si no hay, el de su tipo.
     const minutos = m.ciclo_minutos != null ? m.ciclo_minutos
-                  : m.tipo === 'secadora'       ? tiempos.secadora
+                  // La secadora, la de su tamaño (cae en la mediana), como el servidor.
+                  : m.tipo === 'secadora'       ? (tiempos[`sec_${m.tamano}`] ?? tiempos.secadora)
                   : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
                   : m.tipo === 'lavadora_grande' ? tiempos.grande
                   : m.tipo === 'lavadora_chica'  ? tiempos.chica

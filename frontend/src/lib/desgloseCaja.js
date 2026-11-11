@@ -43,9 +43,14 @@ export const CONCEPTOS = [
   { key: 'productos',          label: 'Productos' },
 ].filter(c => CON_EDREDON || c.key !== 'edredon');
 
+/** Conceptos que solo se enseñan si hubo venta: la mayoría de las sucursales no tiene esas máquinas. */
+const SOLO_CON_VENTA = ['lavadoras_chicas', 'lavadoras_grandes'];
+
 // Renglones { label, value } de un reparto por concepto.
 export const lineasConcepto = (reparto) =>
-  CONCEPTOS.map(({ key, label }) => ({ label, value: num(reparto?.[key]) }));
+  CONCEPTOS
+    .filter(({ key }) => !SOLO_CON_VENTA.includes(key) || num(reparto?.[key]) !== 0)
+    .map(({ key, label }) => ({ label, value: num(reparto?.[key]) }));
 
 /**
  * @param cajaAparte la caja inicial va en su propio recuadro, fuera de Ingresos,

@@ -23,6 +23,13 @@ const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
 const TIPOS_VALIDOS   = ['lavadora_chica', 'lavadora_mediana', 'lavadora_grande', 'lavadora_jumbo', 'secadora'];
 const CAPACIDADES_VALIDAS = ['20kg', '35kg'];
 const TAMANOS_VALIDOS = ['chica', 'mediana', 'grande', 'jumbo'];
+/**
+ * Tamaño que se guarda: en la lavadora sale de su tipo ('lavadora_grande' →
+ * 'grande'), para que precio, tiempo y modelo digan lo mismo; en la secadora,
+ * el que se eligió.
+ */
+const tamanoDeMaquina = (tipo, tamano) =>
+  (String(tipo).startsWith('lavadora_') ? tipo.slice('lavadora_'.length) : (tamano || null));
 
 /** ['lavadora_mediana', 'secadora'] → "lavadora mediana o secadora" */
 const enPalabras = (valores) => {
@@ -597,7 +604,7 @@ export const createMaquina = async (req, res) => {
       `INSERT INTO maquinas (nombre, tipo, tamano, marca, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas, device_id, device_canal, sonoff_estado)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
-      [nombre, tipo, tamano || null, marca || null, modelo, capacidad, numero_serie, fecha_adquisicion, req.sucursal, notas, deviceId, deviceCanal, sonoffEstado]
+      [nombre, tipo, tamanoDeMaquina(tipo, tamano), marca || null, modelo, capacidad, numero_serie, fecha_adquisicion, req.sucursal, notas, deviceId, deviceCanal, sonoffEstado]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -674,7 +681,7 @@ export const updateMaquina = async (req, res) => {
              END
        WHERE id = $10 AND sucursal = $11
        RETURNING *`,
-      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id, req.sucursal, deviceId, deviceCanal, marca || null]
+      [nombre, tipo, tamanoDeMaquina(tipo, tamano), modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id, req.sucursal, deviceId, deviceCanal, marca || null]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });

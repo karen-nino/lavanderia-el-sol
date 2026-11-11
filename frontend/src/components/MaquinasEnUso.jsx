@@ -134,6 +134,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
             grande:   a.tiempo_carga_grande   != null ? Number(a.tiempo_carga_grande)   : 30,
             jumbo:    a.tiempo_carga_jumbo    != null ? Number(a.tiempo_carga_jumbo)    : 45,
             secadora: a.tiempo_carga_secadora != null ? Number(a.tiempo_carga_secadora) : 30,
+            sec_chica:  a.tiempo_secadora_chica != null ? Number(a.tiempo_secadora_chica) : null,
+            sec_grande: a.tiempo_secadora_grande != null ? Number(a.tiempo_secadora_grande) : null,
+            sec_jumbo:  a.tiempo_secadora_jumbo != null ? Number(a.tiempo_secadora_jumbo) : null,
           });
         }
 
@@ -300,7 +303,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // fichas no tiene tope: su reloj solo sube.
     const minutos = m.solo_fichas ? 0
                   : m.ciclo_minutos != null ? m.ciclo_minutos
-                  : m.tipo === 'secadora'       ? tiempos.secadora
+                  // La secadora, la de su tamaño (cae en la mediana), como el servidor.
+                  : m.tipo === 'secadora'       ? (tiempos[`sec_${m.tamano}`] ?? tiempos.secadora)
                   : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
                   : m.tipo === 'lavadora_grande' ? tiempos.grande
                   : m.tipo === 'lavadora_chica'  ? tiempos.chica
