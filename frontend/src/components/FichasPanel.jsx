@@ -21,15 +21,11 @@ const textoMovimiento = (mv) => {
 
 /**
  * Página Fichas: las que hay en la sucursal, las que quedaron dentro de
- * cada máquina (se recogen aquí) y los últimos movimientos. El admin corrige el
- * conteo. `resumen` viene de GET /fichas; `onResumen` recibe el nuevo.
+ * cada máquina (se recogen aquí) y los últimos movimientos. `resumen` viene de GET /fichas; `onResumen` recibe el nuevo.
  */
 export default function FichasPanel({ resumen, onResumen, esAdmin }) {
   const [recogiendo, setRecogiendo] = useState(null); // id de máquina o 'todas'
   const [error, setError] = useState('');
-  const [corrigiendo, setCorrigiendo] = useState(false);
-  const [conteo, setConteo] = useState('');
-  const [guardando, setGuardando] = useState(false);
 
   if (!resumen) return null;
   const negativo = resumen.disponibles < 0;
@@ -47,22 +43,6 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
     }
   };
 
-  const guardarConteo = async () => {
-    setGuardando(true);
-    setError('');
-    try {
-      const r = await api.post('/fichas/ajustar', { disponibles: Number(conteo) });
-      if (r) {
-        onResumen(r);
-        setCorrigiendo(false);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGuardando(false);
-    }
-  };
-
   return (
     <div className="space-y-4 pt-2">
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>}
@@ -72,15 +52,10 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Disponibles</p>
           <p className={`text-3xl font-bold tabular-nums ${negativo ? 'text-red-600' : 'text-gray-900'}`}>{resumen.disponibles}</p>
-          {negativo && <p className="text-sm text-red-600 mt-1">El conteo no cuadra: recoge las fichas o corrígelo.</p>}
-          {esAdmin && (
-            <button
-              type="button"
-              onClick={() => { setConteo(String(Math.max(0, resumen.disponibles))); setCorrigiendo(true); }}
-              className="mt-2 text-sm font-medium text-blue hover:underline"
-            >
-              Corregir conteo
-            </button>
+          {negativo && (
+            <p className="text-sm text-red-600 mt-1">
+              El conteo no cuadra: recoge las fichas{esAdmin ? ' o fija cuántas hay en Ajustes → Fichas' : ''}.
+            </p>
           )}
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -158,33 +133,6 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
         )}
       </div>
 
-      {corrigiendo && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-base font-bold text-gray-900">Corregir conteo</h3>
-            <p className="text-sm text-gray-500">Cuenta las fichas que hay para usar (sin las que están dentro de las máquinas) y escribe el total.</p>
-            <input
-              type="number" inputMode="numeric" min="0" step="1" value={conteo}
-              onChange={e => setConteo(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue"
-            />
-            <div className="flex gap-3">
-              <button
-                type="button" onClick={() => setCorrigiendo(false)} disabled={guardando}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button" onClick={guardarConteo} disabled={guardando || conteo === ''}
-                className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base disabled:opacity-60"
-              >
-                {guardando ? 'Guardando…' : 'Guardar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -26,7 +26,7 @@ export default function Fichas() {
       <div className="bg-white border-b-2 border-gray-200">
         <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4">
           <h1 className="text-xl font-bold text-gray-900">Fichas</h1>
-          <p className="text-sm text-gray-500">Las que hay, las que están en las máquinas y recogerlas</p>
+          <p className="text-sm text-gray-500">Inventario de fichas de la sucursal</p>
         </div>
       </div>
 
