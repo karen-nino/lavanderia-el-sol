@@ -8,6 +8,7 @@ import { imprimirReporte, descargarReporteExcel } from '../lib/exportReporteInve
 import { fechaLarga } from '../lib/exportUtils';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import SucursalBar from '../components/SucursalBar';
+import FichasInventario from '../components/FichasInventario';
 import Selector from '../components/Selector';
 import { CON_EDREDON } from '../lib/entorno';
 
@@ -1376,6 +1377,8 @@ const FILTRO_CFG = {
   granel:       { label: 'Granel',       cls: 'bg-light-blue text-blue',      clsActive: 'bg-blue text-white',       dot: 'bg-blue' },
   marca:        { label: 'Marca',        cls: 'bg-purple-100 text-purple-700', clsActive: 'bg-purple-600 text-white', dot: 'bg-purple-500' },
   bolsa:        { label: 'Bolsa',        cls: 'bg-amber-100 text-amber-700',  clsActive: 'bg-amber-500 text-white',  dot: 'bg-amber-500' },
+  // Solo en sucursales que usan fichas (Ajustes → Operación → Fichas).
+  fichas:       { label: 'Fichas',       cls: 'bg-emerald-100 text-emerald-700', clsActive: 'bg-emerald-600 text-white', dot: 'bg-emerald-500' },
   desactivados: { label: 'Desactivados', cls: 'bg-gray-100 text-gray-600',    clsActive: 'bg-gray-600 text-white',   dot: 'bg-gray-400' },
 };
 
@@ -1899,6 +1902,12 @@ export default function Inventario() {
   // Filtro de la lista: 'todos', una categoría o 'desactivados' (solo admin).
   const [filtro, setFiltro] = useState('todos');
   const verArchivados = filtro === 'desactivados';
+  const verFichas = filtro === 'fichas';
+  // Inventario de fichas de la sucursal (GET /fichas); la categoría sale si la usa.
+  const [fichas, setFichas] = useState(null);
+  useEffect(() => {
+    api.get('/fichas').then(setFichas).catch(() => { /* sin fichas no hay categoría */ });
+  }, []);
   // Desactivados: se cargan al entrar (admin) para el número del filtro.
   const [archivados,      setArchivados]      = useState([]);
   const [archLoading,     setArchLoading]     = useState(true);
@@ -2027,6 +2036,7 @@ export default function Inventario() {
     marca: productos.filter(p => categoriaProd(p) === 'marca').length,
     bolsa: productos.filter(p => categoriaProd(p) === 'bolsa').length,
     desactivados: archivados.length,
+    fichas: fichas?.disponibles ?? 0,
   };
   const handleArchivar = async () => {
     const p = prodAArchivar;
@@ -2206,7 +2216,7 @@ export default function Inventario() {
             Todos: {conteos.todos}
           </button>
           {Object.entries(FILTRO_CFG)
-            .filter(([id]) => id !== 'desactivados' || esAdmin)
+            .filter(([id]) => (id !== 'desactivados' || esAdmin) && (id !== 'fichas' || fichas?.usa_fichas))
             .map(([id, cfg]) => {
               const activo = filtro === id;
               return (
@@ -2299,7 +2309,9 @@ export default function Inventario() {
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
       )}
 
-      {!loading && !error && !verArchivados && productos.length === 0 && (
+      {verFichas && <FichasInventario resumen={fichas} onResumen={setFichas} esAdmin={esAdmin} />}
+
+      {!loading && !error && !verArchivados && !verFichas && productos.length === 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 text-center py-12">
           <p className="text-gray-400 text-sm mb-3">Sin productos en inventario</p>
           {esAdmin && (
@@ -2313,11 +2325,11 @@ export default function Inventario() {
         </div>
       )}
 
-      {!loading && !error && !verArchivados && productos.length > 0 && visibles.length === 0 && (
+      {!loading && !error && !verArchivados && !verFichas && productos.length > 0 && visibles.length === 0 && (
         <p className="text-sm text-gray-400 italic py-2">No hay productos de esta categoría.</p>
       )}
 
-      {!loading && !error && !verArchivados && visibles.length > 0 && (
+      {!loading && !error && !verArchivados && !verFichas && visibles.length > 0 && (
         /* Separado de los filtros, como en Gestión de máquinas. */
         <div className="pt-2">
           {/* Barra de acciones de selección múltiple (admin, desktop) */}

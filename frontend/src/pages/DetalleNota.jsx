@@ -3,6 +3,7 @@ import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import { api } from '../lib/api';
+import { textoFichas } from '../lib/fichas';
 import { urlListaNotas } from '../lib/filtrosNotas';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
@@ -1405,6 +1406,8 @@ export default function DetalleNota() {
                     const estadoVivo = esLav ? cg.lavadora_estado : cg.secadora_estado;
                     return {
                       nombre: u.nombre, tipo: u.tipo, tamano: esLav ? undefined : u.tamano,
+                      // Fichas que se le metieron al iniciarla (inventario de fichas).
+                      fichas: u.fichas ?? null,
                       // Puesta: estado en vivo; cerrada: "terminado".
                       estado: u.actual ? estadoVivo : 'terminado',
                       precio: esPrimera
@@ -1491,6 +1494,9 @@ export default function DetalleNota() {
                                 <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
                                 {tipoLabel && (
                                   <span className="text-sm text-gray-500">— {tipoLabel}</span>
+                                )}
+                                {m.fichas > 0 && (
+                                  <span className="text-sm text-gray-500">· {textoFichas(m.fichas)}</span>
                                 )}
                                 {m.repite && (
                                   <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-light-blue text-blue">

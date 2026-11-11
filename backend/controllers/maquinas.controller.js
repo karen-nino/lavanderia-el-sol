@@ -1,9 +1,10 @@
 import pool from '../db/pool.js';
+import { fichasDelArranque, usarFichas, ErrorFichas } from '../services/fichas.js';
 import { sellarPasadasVivas } from '../db/pasadas.js';
 import { TZ_NEGOCIO, esFechaISO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, PRECIO_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql, PRECIO_DEL_MODELO } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, PRECIO_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql, PRECIO_DEL_MODELO, pideFichasSql } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -152,6 +153,8 @@ export const getMaquinas = async (req, res) => {
               ${MINUTOS_CONFIGURADOS} AS minutos_ciclo,
               -- Precio propio del modelo (NULL = el de su tamaño), para Nueva Nota.
               ${PRECIO_DEL_MODELO('m')} AS precio_modelo,
+              -- Al iniciarla se pregunta cuántas fichas (inventario de fichas).
+              ${pideFichasSql('m')} AS pide_fichas,
               -- Programas del modelo y si se pregunta cuál al iniciar.
               ${TIEMPOS_DEL_MODELO} AS modelo_tiempos,
               -- Opciones del modelo (dos ciclos).
@@ -1152,6 +1155,12 @@ export const otroCiclo = async (req, res) => {
       [carga.id]
     );
 
+    // Cada arranque de la de fichas pide sus fichas (salen del inventario).
+    const fichasPorMeter = await fichasDelArranque(client, [maq.id], req.body?.fichas);
+    for (const f of fichasPorMeter) {
+      await usarFichas(client, { maquinaId: f.maquinaId, notaId: carga.nota_id, fichas: f.fichas, usuarioId: req.user?.id });
+    }
+
     // Reiniciar en_uso_desde arranca el reloj. El ciclo se vuelve a sellar
     // (encender lo dejó en NULL) con la misma cadena que el primero.
     const { rows: upd } = await client.query(
@@ -1207,6 +1216,7 @@ export const otroCiclo = async (req, res) => {
     });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
+    if (err instanceof ErrorFichas) return res.status(400).json({ message: err.message, code: err.code });
     console.error('otroCiclo error:', err);
     res.status(500).json({ message: 'No se pudo iniciar el siguiente ciclo. Intenta de nuevo.' });
   } finally {

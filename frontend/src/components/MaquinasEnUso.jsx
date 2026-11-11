@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import MachineCard from './MachineCard';
 import MaquinaCicloOverlay from './MaquinaCicloOverlay';
 import ElegirTiempoModal from './ElegirTiempoModal';
+import ElegirFichasModal from './ElegirFichasModal';
 import { preguntaTiempo, tiemposDeMaquina, etiquetaPrograma } from '../lib/tiemposModelo';
 import { marcaYTamano } from '../lib/estadoMaquina';
 
@@ -62,6 +63,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [eligiendoTiempo, setEligiendoTiempo] = useState(null);
   // Máquina de botón Iniciar que pregunta su programa: espera la elección.
   const [eligiendoArranque, setEligiendoArranque] = useState(null);
+  // Máquina de fichas por arrancar: { maquina, alElegir(fichas) }.
+  const [eligiendoFichas, setEligiendoFichas] = useState(null);
   // Secadora que arranca al terminar el lavado (para la animación).
   const [iniciandoSecadora, setIniciandoSecadora] = useState(null);
   const [secadoraSel, setSecadoraSel] = useState('');
@@ -229,7 +232,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     : !esAutoservicioTerminar ? 'Por Entregar'
     : notaParaTerminar?.estado_pago === 'PAGADO' ? 'Finalizada' : 'Por Cobrar';
 
-  const confirmarTerminarCiclo = async (minutosElegidos = null) => {
+  const confirmarTerminarCiclo = async (minutosElegidos = null, fichasElegidas = null) => {
     if (!confirmTerminar) return;
     if (terminaLavado && !secadoraSel) return;
     // Si la secadora pregunta su programa, se pregunta antes de nada.
@@ -238,6 +241,13 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     if (terminaLavado && minutosElegidos == null) {
       if (preguntaTiempo(secElegida)) { setEligiendoTiempo(secElegida); return; }
     }
+    // La secadora de fichas arranca aquí: antes, cuántas fichas lleva.
+    if (terminaLavado && secElegida?.pide_fichas && fichasElegidas == null) {
+      setEligiendoTiempo(null);
+      setEligiendoFichas({ maquina: secElegida, alElegir: (n) => confirmarTerminarCiclo(minutosElegidos, n) });
+      return;
+    }
+    setEligiendoFichas(null);
     setTerminando(true);
     setErrorTerminar('');
     // Si la sesión expira a medias, se guarda la intención para reabrir esta
@@ -253,6 +263,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
             lavadora_id: Number(confirmTerminar.id),
             secadora_id: Number(secadoraSel),
             ...(minutosElegidos != null && { minutos: minutosElegidos }),
+            ...(fichasElegidas != null && { fichas: fichasElegidas }),
           }),
           new Promise((r) => setTimeout(r, 2500)),
         ]);
@@ -369,7 +380,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   };
 
   // Pide el siguiente ciclo, sin confirmación (el backend revalida tope y pausa).
-  const pedirOtroCiclo = async (maquina, minutos = null) => {
+  const pedirOtroCiclo = async (maquina, minutos = null, fichas = null) => {
     // Botón Iniciar recién encendida: es el primer arranque, no otro ciclo (si
     // pregunta su programa, se elige antes).
     const primerArranque = maquina.con_iniciar && maquina.esperando_arranque
@@ -378,15 +389,22 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       setEligiendoArranque(maquina);
       return;
     }
+    // Cada arranque de la de fichas (el primero y otro ciclo) pide cuántas lleva.
+    if (maquina.pide_fichas && fichas == null) {
+      setEligiendoArranque(null);
+      setEligiendoFichas({ maquina, alElegir: (n) => pedirOtroCiclo(maquina, minutos, n) });
+      return;
+    }
+    setEligiendoFichas(null);
     setEligiendoArranque(null);
     setErrorOtroCiclo(null);
     setOtroCicloEnCurso(String(maquina.id));
     try {
       const r = primerArranque
         ? await api.patch(`/notas/${maquina.en_uso_nota_id}/activar-pendientes`, {
-            maquina_id: maquina.id, ...(minutos != null && { minutos }),
+            maquina_id: maquina.id, ...(minutos != null && { minutos }), ...(fichas != null && { fichas }),
           })
-        : await api.patch(`/maquinas/${maquina.id}/otro-ciclo`, {});
+        : await api.patch(`/maquinas/${maquina.id}/otro-ciclo`, fichas != null ? { fichas } : {});
       // Sesión expirada: api redirige y devuelve undefined.
       if (r) await refrescarDatos();
     } catch (err) {
@@ -573,6 +591,15 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
 
       {modalElegirTiempo}
       {modalElegirArranque}
+      {eligiendoFichas && (
+        <ElegirFichasModal
+          maquina={eligiendoFichas.maquina}
+          guardando={terminando}
+          error={errorTerminar}
+          onElegir={(n) => eligiendoFichas.alElegir(n)}
+          onCancelar={() => { setEligiendoFichas(null); setErrorTerminar(''); }}
+        />
+      )}
 
       {/* Corriente para el siguiente ciclo: la animación de "Encender máquina". */}
       {encendiendoMaquina && (

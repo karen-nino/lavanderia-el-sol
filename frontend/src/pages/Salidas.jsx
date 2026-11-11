@@ -11,6 +11,7 @@ import ConfirmacionModal from '../components/ConfirmacionModal';
 import TopeServicios from '../components/TopeServicios';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ElegirTiempoModal from '../components/ElegirTiempoModal';
+import ElegirFichasModal from '../components/ElegirFichasModal';
 import GranelPorServicio from '../components/GranelPorServicio';
 import Selector from '../components/Selector';
 import { preguntaTiempo, tiemposDeMaquina, etiquetaPrograma } from '../lib/tiemposModelo';
@@ -111,6 +112,8 @@ export default function Salidas() {
   // Máquina esperando que se elija su programa: { maquina, paso } ('encender' o
   // 'iniciar'), porque al elegir se hace algo distinto en cada paso.
   const [eligiendoTiempo,  setEligiendoTiempo]  = useState(null);
+  // Máquina de fichas que espera saber cuántas lleva antes de arrancar.
+  const [eligiendoFichas,  setEligiendoFichas]  = useState(null);
   /** Modal de caja cerrada (✕ y "Abrir caja"), el mismo que sale si el servidor la rechaza. */
   const avisarCajaCerrada = () => setAvisoBloqueo({
     titulo: 'La caja está cerrada', mensaje: 'Ábrela para poder mover máquinas o productos.', caja: true,
@@ -289,6 +292,10 @@ export default function Salidas() {
       setEligiendoTiempo({ maquina: maq, paso: 'iniciar' });
       return;
     }
+    if (maq.pide_fichas) {
+      setEligiendoFichas(maq);
+      return;
+    }
     return arrancarMaquina(maq, null);
   }
 
@@ -302,8 +309,9 @@ export default function Salidas() {
     return arrancarMaquina(maquina, min);
   }
 
-  async function arrancarMaquina(maq, minutos) {
+  async function arrancarMaquina(maq, minutos, fichas = null) {
     if (!maq) return;
+    setEligiendoFichas(null);
     setLoadingMaquina(true);
     setErrorAccion('');
     setIniciando(maq); // arranca la animación de lavadora
@@ -311,7 +319,7 @@ export default function Salidas() {
       // Mínimo para que la animación (agua llenándose) se vea.
       await Promise.all([
         api.patch(`/notas/${id}/activar-pendientes`, {
-          maquina_id: maq.id, ...(minutos != null && { minutos }),
+          maquina_id: maq.id, ...(minutos != null && { minutos }), ...(fichas != null && { fichas }),
         }),
         new Promise((r) => setTimeout(r, 2500)),
       ]);
@@ -729,6 +737,9 @@ export default function Salidas() {
               con_iniciar: Boolean(u.con_iniciar),
               // Solo fichas: sin Sonoff ni tope; Iniciar solo arranca el cronómetro.
               solo_fichas: Boolean(u.solo_fichas),
+              // Su sucursal lleva inventario de fichas: al iniciar se pregunta cuántas.
+              pide_fichas: Boolean(u.pide_fichas),
+              fichas: u.fichas ?? null,
               ...(esLav ? {} : { tamano: u.tamano }),
               // La vuelta viva muestra el estado de su máquina; una cerrada, "terminado".
               estado: u.actual
@@ -1798,6 +1809,17 @@ export default function Salidas() {
           error={errorAccion}
           onElegir={elegirTiempo}
           onCancelar={() => { setEligiendoTiempo(null); setErrorAccion(''); }}
+        />
+      )}
+
+      {/* Máquina de fichas: cuántas lleva; va antes de la animación. */}
+      {eligiendoFichas && !iniciando && (
+        <ElegirFichasModal
+          maquina={eligiendoFichas}
+          guardando={loadingMaquina}
+          error={errorAccion}
+          onElegir={(n) => arrancarMaquina(eligiendoFichas, null, n)}
+          onCancelar={() => { setEligiendoFichas(null); setErrorAccion(''); }}
         />
       )}
 

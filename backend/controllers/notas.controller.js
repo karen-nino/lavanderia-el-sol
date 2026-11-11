@@ -1,6 +1,7 @@
 import pool from '../db/pool.js';
 import { esAdmin, esAdminMain } from '../middleware/roles.js';
 import { notaRequiereCaja } from '../middleware/cajaAbierta.js';
+import { fichasDelArranque, usarFichas, ErrorFichas } from '../services/fichas.js';
 import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
 // Encender y apagar normalmente lo dispara el trigger LISTEN/NOTIFY. "Encender
 // máquina" llama directo para no depender del listener; es idempotente.
@@ -9,7 +10,7 @@ import { sellarPasadasVivas } from '../db/pasadas.js';
 import { COBRO_APARTE_ENCARGO, GRANEL_POR_ELEGIR } from '../db/sqlProductos.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, PRECIOS_DE_PROGRAMAS, OPCIONES_DE_MARCA,
-  esCronometroSql, conIniciarSql, soloFichasSql, cronometroActivo, TOPE_RELOJ, PRECIO_DEL_MODELO,
+  esCronometroSql, conIniciarSql, soloFichasSql, cronometroActivo, TOPE_RELOJ, PRECIO_DEL_MODELO, pideFichasSql,
 } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
@@ -1644,6 +1645,10 @@ async function cargasDeNota(client, notaId) {
                         -- Solo fichas: su Iniciar no enciende nada.
                         (SELECT ${soloFichasSql('mm6')} FROM maquinas mm6
                           WHERE mm6.id = ncm.maquina_id) AS solo_fichas,
+                        -- Al iniciarla se pregunta cuántas fichas.
+                        (SELECT ${pideFichasSql('mm7')} FROM maquinas mm7
+                          WHERE mm7.id = ncm.maquina_id) AS pide_fichas,
+                        ncm.fichas,
                         -- Actual = la última vuelta del hueco, si esa máquina
                         -- sigue puesta (un relavado repite máquina).
                         (ncm.maquina_id IS NOT NULL
@@ -3071,6 +3076,9 @@ export const activarMaquinasPendientes = async (req, res) => {
       [id, libres]
     );
 
+    // La de fichas arranca sola y con cuántas fichas lleva (salen del inventario).
+    const fichasPorMeter = await fichasDelArranque(client, libres, req.body?.fichas);
+
     await client.query(
       `UPDATE maquinas
           SET estado = 'en_uso',
@@ -3081,6 +3089,10 @@ export const activarMaquinasPendientes = async (req, res) => {
       [libres]
     );
     await marcarMaquinasIniciadas(client, id, libres);
+    let fichasDisponibles = null;
+    for (const f of fichasPorMeter) {
+      fichasDisponibles = await usarFichas(client, { maquinaId: f.maquinaId, notaId: id, fichas: f.fichas, usuarioId: req.user?.id });
+    }
 
     if (lavASoltar.length > 0) {
       const lavIds   = lavASoltar.map(r => r.lavadora_id);
@@ -3114,9 +3126,13 @@ export const activarMaquinasPendientes = async (req, res) => {
       `SELECT n.* FROM notas n WHERE n.id = $1`,
       [id]
     );
-    res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
+    res.json({
+      ...rows[0], cargas: await cargasDeNota(pool, id),
+      ...(fichasDisponibles != null && { fichas_disponibles: fichasDisponibles }),
+    });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (err instanceof ErrorFichas) return res.status(400).json({ message: err.message, code: err.code });
     if (respondioCorteCerrado(res, err)) return;
     console.error('activarMaquinasPendientes error:', err);
     res.status(500).json({ message: 'No se pudieron activar las máquinas. Intenta de nuevo.' });
@@ -3723,12 +3739,16 @@ export const terminarLavado = async (req, res) => {
       [lavadora_id]
     );
 
-    // La secadora arranca ya: este botón es su "Iniciar".
+    // La secadora arranca ya: este botón es su "Iniciar" (la de fichas, con sus fichas).
+    const fichasSecadora = await fichasDelArranque(client, [secadora_id], req.body.fichas);
     await client.query(
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
       [secadora_id]
     );
     await marcarMaquinasIniciadas(client, id, [secadora_id]);
+    for (const f of fichasSecadora) {
+      await usarFichas(client, { maquinaId: f.maquinaId, notaId: id, fichas: f.fichas, usuarioId: req.user?.id });
+    }
     await sellarCicloMaquinas(client, id, leido ? { maquinaId: secadora_id, minutos: leido.minutos } : null);
     // Terminó una lavadora: el granel de los servicios sale del inventario.
     await consumirProductosDeNota(client, id, req.sucursal, req.user?.id, { soloGranel: true });
@@ -3759,6 +3779,7 @@ export const terminarLavado = async (req, res) => {
     res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (err instanceof ErrorFichas) return res.status(400).json({ message: err.message, code: err.code });
     if (respondioCorteCerrado(res, err)) return;
     console.error('terminarLavado error:', err);
     res.status(500).json({ message: 'No se pudo terminar el lavado. Intenta de nuevo.' });

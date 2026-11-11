@@ -89,6 +89,14 @@ export const soloFichasSql = (alias) => `COALESCE((
 ), FALSE)`;
 
 /**
+ * SQL: ¿al iniciar la máquina `alias` se pregunta cuántas fichas? Modelo de
+ * solo fichas en una sucursal que lleva inventario de fichas.
+ */
+export const pideFichasSql = (alias) => `(${soloFichasSql(alias)} AND COALESCE((
+  SELECT sf.usa_fichas FROM sucursales sf WHERE sf.slug = ${alias}.sucursal
+), FALSE))`;
+
+/**
  * SQL: ¿la máquina usa el botón "Iniciar"? (ver MARCA_CON_INICIAR). Con
  * temporizador no, salvo en la demo (ENTORNO_DEMO=1): sus Speed Queen también
  * arrancan con "Iniciar", sin "Encender".

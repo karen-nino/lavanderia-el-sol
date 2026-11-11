@@ -6,7 +6,7 @@
  */
 export default function ElegirTiempoModal({
   maquina, tiempos, guardando = false, error = '', onElegir, onCancelar,
-  titulo = '¿Con cuánto tiempo?', descripcion = null, etiqueta = (min) => `${min} min`,
+  titulo = '¿Con cuánto tiempo?', descripcion = null, etiqueta = (min) => `${min} min`, icono = null,
 }) {
   if (!maquina) return null;
   return (
@@ -14,11 +14,13 @@ export default function ElegirTiempoModal({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-modal overflow-y-auto p-7 space-y-6">
         <div className="flex items-center gap-3">
           <span className="flex-shrink-0 w-9 h-9 rounded-full bg-light-blue text-blue flex items-center justify-center">
-            {/* Reloj */}
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="9" strokeWidth={2} />
-              <path strokeLinecap="round" strokeWidth={2} d="M12 7v5l3 2" />
-            </svg>
+            {icono ?? (
+              /* Reloj */
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                <path strokeLinecap="round" strokeWidth={2} d="M12 7v5l3 2" />
+              </svg>
+            )}
           </span>
           <div>
             <h3 className="text-base font-bold text-gray-900">{titulo}</h3>

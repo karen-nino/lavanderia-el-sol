@@ -4,6 +4,7 @@ import { api, mensajeDeError } from '../lib/api';
 import InstalarApp from '../components/InstalarApp';
 import ActualizarApp from '../components/ActualizarApp';
 import LlamadasSonoff from '../components/LlamadasSonoff';
+import { IconoFicha } from '../components/ElegirFichasModal';
 import MiPerfil from './MiPerfil';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
@@ -107,6 +108,7 @@ const SectionIcon = {
         d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
   ),
+  fichas: <IconoFicha className="w-7 h-7" />,
   // Audífonos con micrófono: alguien que contesta.
   soporte: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,6 +279,12 @@ const SECCION_SONOFFS = {
   detalle: 'Cuántas llamadas van y cuántas quedan en el mes', icon: SectionIcon.sonoffs,
 };
 
+/** Qué sucursales llevan inventario de fichas; se guarda al tocar el interruptor. */
+const SECCION_FICHAS = {
+  id: 'fichas', label: 'Fichas', subtitle: 'Inventario de fichas por sucursal',
+  detalle: 'Qué sucursales usan fichas en sus máquinas', icon: SectionIcon.fichas,
+};
+
 /** Escribir por WhatsApp a quien da soporte a la app; la tienen todos. */
 const SECCION_SOPORTE = {
   id: 'soporte', label: 'Soporte', subtitle: 'Ayuda con la app',
@@ -286,11 +294,11 @@ const SECCION_SOPORTE = {
 const TELEFONO_SOPORTE = '9615791159';
 
 /** Todas las secciones de Ajustes, en el orden del menú del celular. */
-const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_SONOFFS, SECCION_INSTALAR, SECCION_ACTUALIZAR, SECCION_SOPORTE];
+const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_FICHAS, SECCION_MANUAL, SECCION_SONOFFS, SECCION_INSTALAR, SECCION_ACTUALIZAR, SECCION_SOPORTE];
 const seccionPorId = (id) => SECCIONES_AJUSTES.find(s => s.id === id);
 
 /** Secciones del admin que la demo no enseña: sin Sonoff y sin app que instalar. */
-const OCULTAS_DEMO = ES_DEMO ? ['sonoffs', 'instalar', 'soporte'] : [];
+const OCULTAS_DEMO = ES_DEMO ? ['sonoffs', 'instalar', 'soporte', 'fichas'] : [];
 /** Sección del admin por id, salvo las ocultas en la demo. */
 const seccionAdminPorId = (id) => (OCULTAS_DEMO.includes(id) ? undefined : seccionPorId(id));
 
@@ -298,7 +306,7 @@ const seccionAdminPorId = (id) => (OCULTAS_DEMO.includes(id) ? undefined : secci
 const GRUPOS_AJUSTES = [
   { titulo: 'Cuenta',    ids: ['perfil'] },
   { titulo: 'Negocio',   ids: ['negocio', 'ticket', 'whatsapp'] },
-  { titulo: 'Operación', ids: ['maquinas', 'cargas', 'etiquetas', 'inventario'] },
+  { titulo: 'Operación', ids: ['maquinas', 'fichas', 'cargas', 'etiquetas', 'inventario'] },
   { titulo: 'Sistema',   ids: ['alertas', 'sonoffs', 'manual', 'actualizar', 'instalar'] },
   { titulo: 'Ayuda',     ids: ['soporte'] },
 ].map(g => ({ ...g, ids: g.ids.filter(id => !OCULTAS_DEMO.includes(id)) }));
@@ -337,7 +345,7 @@ const ALERTAS_APAGABLES = [
 ];
 
 /** Secciones sin nada que guardar con el botón general. */
-const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'manual', 'sonoffs', 'instalar', 'actualizar', 'soporte'];
+const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'fichas', 'manual', 'sonoffs', 'instalar', 'actualizar', 'soporte'];
 
 /** Encabezado de un grupo de campos (por encima de las etiquetas, que son bold). */
 function TituloGrupo({ children }) {
@@ -459,6 +467,100 @@ function HorarioSemana({ value, onChange }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Ajustes → Operación → Fichas: un interruptor por sucursal (se guarda al
+ * tocarlo) y, encendida, cuántas fichas hay. Encendida, sus máquinas de fichas
+ * preguntan cuántas al iniciar e Inventario tiene la categoría Fichas.
+ */
+function FichasSucursales({ soloConsulta = false }) {
+  const [sucursales, setSucursales] = useState(null);
+  const [error, setError] = useState('');
+  const [guardando, setGuardando] = useState(null);
+  // Total que se está escribiendo, por sucursal (slug → texto).
+  const [totales, setTotales] = useState({});
+  const [guardadoOk, setGuardadoOk] = useState(null);
+  useEffect(() => {
+    api.get('/fichas/sucursales').then(setSucursales).catch(err => setError(err.message));
+  }, []);
+  const cambiar = async (slug, cambios) => {
+    setGuardando(slug);
+    setError('');
+    try {
+      const fila = await api.patch(`/fichas/sucursales/${slug}`, cambios);
+      if (fila) {
+        setSucursales(prev => prev.map(s => (s.slug === slug ? fila : s)));
+        setTotales(prev => { const { [slug]: _ya, ...resto } = prev; return resto; });
+        if (cambios.fichas_disponibles !== undefined) {
+          setGuardadoOk(slug);
+          setTimeout(() => setGuardadoOk(actual => (actual === slug ? null : actual)), 2200);
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGuardando(null);
+    }
+  };
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">
+        Encendida: las máquinas que trabajan con fichas preguntan cuántas al iniciar (1, 2 o 3), se descuentan del
+        inventario e Inventario muestra la categoría Fichas para verlas y recogerlas.
+      </p>
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>}
+      {!sucursales ? (
+        !error && <p className="text-sm text-gray-400">Cargando…</p>
+      ) : (
+        <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+          {sucursales.map(s => {
+            const total = totales[s.slug] ?? String(s.fichas_disponibles);
+            const cambio = total !== String(s.fichas_disponibles);
+            return (
+              <div key={s.slug} className="px-4 py-4 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-base font-medium text-gray-800">{s.nombre}</p>
+                    <p className="text-sm text-gray-500">{s.usa_fichas ? 'Usa fichas' : 'No usa fichas'}</p>
+                  </div>
+                  <div className={soloConsulta || guardando === s.slug ? 'opacity-60 pointer-events-none' : ''}>
+                    <Toggle checked={s.usa_fichas} onChange={(v) => cambiar(s.slug, { usa_fichas: v })} />
+                  </div>
+                </div>
+                {/* Encendida: cuántas fichas hay para usar (queda en el historial de Inventario). */}
+                {s.usa_fichas && (
+                  <Field
+                    label="Fichas disponibles"
+                    hint={`Las que hay para usar, sin contar las que están dentro de las máquinas${s.fichas_dentro > 0 ? ` (${s.fichas_dentro})` : ''}.`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" inputMode="numeric" min="0" step="1" value={total}
+                        aria-label={`Fichas disponibles en ${s.nombre}`}
+                        disabled={soloConsulta}
+                        onChange={e => setTotales(prev => ({ ...prev, [s.slug]: e.target.value }))}
+                        className={INPUT_CLS}
+                      />
+                      <span className="text-sm text-gray-500 flex-shrink-0">fichas</span>
+                      <button
+                        type="button"
+                        disabled={soloConsulta || !cambio || total === '' || guardando === s.slug}
+                        onClick={() => cambiar(s.slug, { fichas_disponibles: Number(total) })}
+                        className="flex-shrink-0 px-5 py-3.5 rounded-lg bg-blue text-white text-base font-medium hover:opacity-90 disabled:opacity-40"
+                      >
+                        {guardadoOk === s.slug ? 'Guardado ✓' : guardando === s.slug ? 'Guardando…' : 'Guardar'}
+                      </button>
+                    </div>
+                  </Field>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -3397,6 +3499,7 @@ function AjustesAdmin() {
     instalar: <InstalarApp variant="mobile" />,
     actualizar: <ActualizarApp variant="mobile" />,
     soporte: <TarjetaSoporte />,
+    fichas: <FichasSucursales soloConsulta={soloConsultaPruebas} />,
   };
 
   // Éxitos: banner verde. Errores: modal.
@@ -3624,6 +3727,7 @@ function AjustesAdmin() {
               instalar:   <InstalarApp />,
               actualizar: <ActualizarApp />,
               soporte:    <TarjetaSoporte />,
+              fichas:     <FichasSucursales soloConsulta={soloConsultaPruebas} />,
             }[seccionVista]}
             </div>
             )}
