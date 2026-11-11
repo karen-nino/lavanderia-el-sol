@@ -88,19 +88,29 @@ export default function SucursalSelector({ variant = 'header' }) {
         >
           {sucursales.map((s) => {
             const activo = s.slug === activa;
+            const enMenu = variant === 'menu';
             return (
               <button
                 key={s.slug}
                 type="button"
                 onClick={() => seleccionar(s.slug)}
-                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-card-sm text-left text-sm transition-colors ${
-                  activo ? 'bg-light-blue text-blue font-semibold' : 'text-dark-blue hover:bg-light-blue/50'
-                }`}
+                className={`w-full flex items-center rounded-card-sm text-left transition-colors ${
+                  enMenu ? 'gap-3 px-3 py-3 text-base' : 'gap-2 px-3 py-2.5 text-sm'
+                } ${activo ? 'bg-light-blue text-blue font-semibold' : 'text-dark-blue font-medium hover:bg-light-blue/50'}`}
               >
-                <span className={activo ? 'text-blue' : 'text-grey'}>{PinIcon}</span>
+                {/* En el menú, del alto de los demás renglones (cuadro de 40 px). */}
+                {enMenu ? (
+                  <span className={`w-10 h-10 rounded-card-sm flex items-center justify-center ${
+                    activo ? 'bg-white/70 text-blue' : 'bg-light-blue/60 text-blue'
+                  }`}>
+                    {PinIcon}
+                  </span>
+                ) : (
+                  <span className={activo ? 'text-blue' : 'text-grey'}>{PinIcon}</span>
+                )}
                 <span className="flex-1">{s.nombre}</span>
                 {activo && (
-                  <svg className="w-4 h-4 text-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`${enMenu ? 'w-5 h-5' : 'w-4 h-4'} text-blue`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 )}
