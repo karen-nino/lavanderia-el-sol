@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { textoFichas } from '../lib/fichas';
 import { IconoFicha } from './ElegirFichasModal';
 import HistorialFichas from './HistorialFichas';
+import ConfirmacionModal from './ConfirmacionModal';
 
 /** Tipo y tamaño de la máquina: "Secadora mediana", "Lavadora chica". */
 const tipoMaquina = (m) => {
@@ -17,6 +18,8 @@ const tipoMaquina = (m) => {
 export default function FichasPanel({ resumen, onResumen, esAdmin }) {
   const [recogiendo, setRecogiendo] = useState(null); // id de máquina o 'todas'
   const [error, setError] = useState('');
+  // Recoger pide confirmación: la máquina (o null = todas) que se va a vaciar.
+  const [porRecoger, setPorRecoger] = useState(undefined);
 
   if (!resumen) return null;
   const negativo = resumen.disponibles < 0;
@@ -26,7 +29,10 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
     setError('');
     try {
       const r = await api.post('/fichas/recoger', maquinaId ? { maquina_id: maquinaId } : {});
-      if (r) onResumen(r);
+      if (r) {
+        onResumen(r);
+        setPorRecoger(undefined);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -55,7 +61,7 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
           {resumen.dentro > 0 && (
             <button
               type="button"
-              onClick={() => recoger()}
+              onClick={() => { setError(''); setPorRecoger(null); }}
               disabled={recogiendo != null}
               className="mt-2 text-sm font-medium text-blue hover:underline disabled:opacity-60"
             >
@@ -87,9 +93,14 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
                   </span>
                   <button
                     type="button"
-                    onClick={() => recoger(m.id)}
+                    onClick={() => { setError(''); setPorRecoger(m); }}
                     disabled={m.fichas_dentro === 0 || recogiendo != null}
-                    className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                    /* Con fichas dentro, de color: hay algo que recoger. */
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      m.fichas_dentro > 0
+                        ? 'bg-blue text-white hover:opacity-90 disabled:opacity-60'
+                        : 'border border-gray-300 text-gray-700 disabled:opacity-40'
+                    }`}
                   >
                     {recogiendo === m.id ? 'Recogiendo…' : 'Recoger'}
                   </button>
@@ -99,6 +110,29 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
           </div>
         )}
       </div>
+
+      {/* Advertencia antes de recoger: las fichas pasan de la máquina a Disponibles. */}
+      {porRecoger !== undefined && (() => {
+        const cantidad = porRecoger ? porRecoger.fichas_dentro : resumen.dentro;
+        return (
+          <ConfirmacionModal
+            tono="aviso"
+            titulo={porRecoger ? `Recoger fichas de ${porRecoger.nombre}` : 'Recoger todas las fichas'}
+            mensaje={porRecoger
+              ? `Hazlo cuando ya hayas sacado las fichas de ${porRecoger.nombre}: pasan a Disponibles y no se puede deshacer.`
+              : 'Hazlo cuando ya hayas sacado las fichas de todas las máquinas: pasan a Disponibles y no se puede deshacer.'}
+            detalle={[
+              { etiqueta: porRecoger ? 'Dentro de la máquina' : 'Dentro de las máquinas', valor: textoFichas(cantidad) },
+              { etiqueta: 'Disponibles después', valor: textoFichas(resumen.disponibles + cantidad) },
+            ]}
+            textoConfirmar="Recoger"
+            procesando={recogiendo != null}
+            error={error}
+            onClose={() => { setPorRecoger(undefined); setError(''); }}
+            onConfirm={() => recoger(porRecoger ? porRecoger.id : null)}
+          />
+        );
+      })()}
 
       {/* Historial en tabla, con su período; se recarga tras recoger. */}
       <HistorialFichas recarga={resumen} />

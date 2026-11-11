@@ -8,14 +8,13 @@ import SelectorPeriodo from './SelectorPeriodo';
 /** Qué pasó en un movimiento. */
 const TIPO = {
   uso:     { label: 'Uso',        cls: 'bg-light-blue text-blue' },
-  recoger: { label: 'Recogidas',  cls: 'bg-green-100 text-green-700' },
+  recoger: { label: 'Recolección', cls: 'bg-green-100 text-green-700' },
   ajuste:  { label: 'Corrección', cls: 'bg-gray-100 text-gray-600' },
 };
 
 /**
  * Historial de fichas en tabla, filtrado por período (como el de Caja): fecha,
- * movimiento, máquina, nota, fichas (+ entran / − salen), cuántas quedaron y
- * quién. `recarga` cambia cuando hubo un movimiento nuevo (recoger).
+ * movimiento, máquina, nota, fichas (+ entran / − salen) y quién. `recarga` cambia cuando hubo un movimiento nuevo (recoger).
  */
 export default function HistorialFichas({ recarga }) {
   const [periodo, setPeriodo] = useState(periodoInicial);
@@ -62,7 +61,6 @@ export default function HistorialFichas({ recarga }) {
                 <th className={th}>Máquina</th>
                 <th className={th}>Nota</th>
                 <th className={`${th} text-right`}>Fichas</th>
-                <th className={`${th} text-right`}>Quedan</th>
                 <th className={th}>Quién</th>
               </tr>
             </thead>
@@ -84,7 +82,6 @@ export default function HistorialFichas({ recarga }) {
                     <td className={`${td} text-right tabular-nums font-semibold ${mv.cantidad < 0 ? 'text-red-600' : 'text-green-700'}`}>
                       {mv.cantidad > 0 ? `+${mv.cantidad}` : mv.cantidad}
                     </td>
-                    <td className={`${td} text-right tabular-nums text-gray-700`}>{mv.disponibles_despues}</td>
                     <td className={`${td} text-gray-600`}>{mv.usuario || '—'}</td>
                   </tr>
                 );
