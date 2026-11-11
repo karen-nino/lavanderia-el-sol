@@ -58,9 +58,12 @@ const TIPOS = [
 ];
 
 const TAMANOS = [
+  { v: 'chica',   label: 'Chica'   },
   { v: 'mediana', label: 'Mediana' },
+  { v: 'grande',  label: 'Grande'  },
   { v: 'jumbo',   label: 'Jumbo'   },
 ];
+const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
 const CAPACIDADES = [
   { v: '20kg', label: '20kg' },
@@ -79,6 +82,8 @@ const capitalizar = (s) => {
 
 const descomponerTipo = (tipoDb) => {
   if (tipoDb === 'lavadora_mediana') return { tipo: 'lavadora', tamano: 'mediana' };
+  if (tipoDb === 'lavadora_chica')   return { tipo: 'lavadora', tamano: 'chica'   };
+  if (tipoDb === 'lavadora_grande')  return { tipo: 'lavadora', tamano: 'grande'  };
   if (tipoDb === 'lavadora_jumbo')   return { tipo: 'lavadora', tamano: 'jumbo'   };
   return { tipo: 'secadora', tamano: 'mediana' };
 };
@@ -525,7 +530,7 @@ export default function GestionMaquinas() {
             // El tamaño también en secadoras: decide su precio, su tiempo y sus modelos.
             const tamanoVal = m.tamano ?? tamano;
             const tamanoLabel = tamanoVal
-              ? (tamanoVal === 'jumbo' ? 'Jumbo' : 'Mediana')
+              ? (TAMANO_LABEL[tamanoVal] ?? 'Mediana')
               : null;
             // La pastilla siempre (aquí se enlazan), salvo en modelos de fichas.
             const sonoffCfg = m.solo_fichas ? null

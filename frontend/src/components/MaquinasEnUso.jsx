@@ -54,7 +54,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const navigate = useNavigate();
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
-  const [tiempos, setTiempos]   = useState({ mediana: 30, jumbo: 45, secadora: 30 });
+  const [tiempos, setTiempos]   = useState({ chica: 30, mediana: 30, grande: 30, jumbo: 45, secadora: 30 });
   const [loading, setLoading]   = useState(true);
   const [now, setNow]           = useState(() => Date.now());
   const [confirmTerminar, setConfirmTerminar] = useState(null);
@@ -130,6 +130,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         if (a) {
           setTiempos({
             mediana:  a.tiempo_carga_mediana  != null ? Number(a.tiempo_carga_mediana)  : 30,
+            chica:    a.tiempo_carga_chica    != null ? Number(a.tiempo_carga_chica)    : 30,
+            grande:   a.tiempo_carga_grande   != null ? Number(a.tiempo_carga_grande)   : 30,
             jumbo:    a.tiempo_carga_jumbo    != null ? Number(a.tiempo_carga_jumbo)    : 45,
             secadora: a.tiempo_carga_secadora != null ? Number(a.tiempo_carga_secadora) : 30,
           });
@@ -300,6 +302,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                   : m.ciclo_minutos != null ? m.ciclo_minutos
                   : m.tipo === 'secadora'       ? tiempos.secadora
                   : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
+                  : m.tipo === 'lavadora_grande' ? tiempos.grande
+                  : m.tipo === 'lavadora_chica'  ? tiempos.chica
                   : tiempos.mediana;
     const duracionSeg = Math.max(0, Number(minutos) || 0) * 60;
     const inicio = m.en_uso_desde ? new Date(m.en_uso_desde).getTime() : null;

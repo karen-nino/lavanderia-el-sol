@@ -170,7 +170,7 @@ export default function Salidas() {
   const [confirmTerminarMaq, setConfirmTerminarMaq] = useState(null); // máquina por cerrar
 
   // Tiempos por tipo (Ajustes) y reloj, para saber si un ciclo ya se cumplió.
-  const [tiempos, setTiempos] = useState({ mediana: 30, jumbo: 45, secadora: 30 });
+  const [tiempos, setTiempos] = useState({ chica: 30, mediana: 30, grande: 30, jumbo: 45, secadora: 30 });
   const [now, setNow] = useState(() => Date.now());
 
   // Si un cambio devuelve a PENDIENTE una nota cobrada, se deja la señal con los
@@ -198,6 +198,8 @@ export default function Salidas() {
       if (ajustes) {
         setTiempos({
           mediana:  ajustes.tiempo_carga_mediana  != null ? Number(ajustes.tiempo_carga_mediana)  : 30,
+          chica:    ajustes.tiempo_carga_chica    != null ? Number(ajustes.tiempo_carga_chica)    : 30,
+          grande:   ajustes.tiempo_carga_grande   != null ? Number(ajustes.tiempo_carga_grande)   : 30,
           jumbo:    ajustes.tiempo_carga_jumbo    != null ? Number(ajustes.tiempo_carga_jumbo)    : 45,
           secadora: ajustes.tiempo_carga_secadora != null ? Number(ajustes.tiempo_carga_secadora) : 30,
         });
@@ -836,6 +838,8 @@ export default function Salidas() {
     const minutos = m.ciclo_minutos != null ? m.ciclo_minutos
                   : m.tipo === 'secadora'       ? tiempos.secadora
                   : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
+                  : m.tipo === 'lavadora_grande' ? tiempos.grande
+                  : m.tipo === 'lavadora_chica'  ? tiempos.chica
                   : tiempos.mediana;
     return now - new Date(m.en_uso_desde).getTime() >= Math.max(0, Number(minutos) || 0) * 60000;
   };

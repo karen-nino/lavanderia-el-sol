@@ -5,7 +5,7 @@ import { desgloseCaja } from './desgloseCaja';
 const turno = {
   monto_inicial: 200, entradas: 100, salidas: 45,
   ventas_desglose: { total: 210, efectivo: 210, transferencia: 0 },
-  ingresos: { lavadoras_medianas: 70, lavadoras_jumbo: 90, secadoras: 50, productos: 0, por_encargo: 0, edredon: 0 },
+  ingresos: { lavadoras_chicas: 0, lavadoras_medianas: 70, lavadoras_grandes: 0, lavadoras_jumbo: 90, secadoras: 50, productos: 0, por_encargo: 0, edredon: 0 },
   spe_debe: 40,
 };
 
@@ -43,7 +43,7 @@ describe('desgloseCaja', () => {
 
   it('lleva las líneas en el orden pedido', () => {
     expect(desgloseCaja(turno).ingresos.map((l) => l.label)).toEqual([
-      'Caja inicial', 'Entradas', 'Lav. Medianas', 'Lav. Jumbo', 'Secadoras',
+      'Caja inicial', 'Entradas', 'Lav. Chicas', 'Lav. Medianas', 'Lav. Grandes', 'Lav. Jumbo', 'Secadoras',
       'SPE', 'Edredón', 'Productos',
     ]);
     expect(desgloseCaja(conTransferencia).comoSeCobro.map((l) => [l.label, l.value])).toEqual([
@@ -55,7 +55,7 @@ describe('desgloseCaja', () => {
   it('con transferencia: lo vendido (sin caja inicial) y aparte lo del cajón', () => {
     const d = desgloseCaja(conTransferencia);
     expect(d.ingresos.map((l) => l.label)).toEqual([
-      'Lav. Medianas', 'Lav. Jumbo', 'Secadoras', 'SPE', 'Edredón', 'Productos',
+      'Lav. Chicas', 'Lav. Medianas', 'Lav. Grandes', 'Lav. Jumbo', 'Secadoras', 'SPE', 'Edredón', 'Productos',
       'Total vendido',
       'Cómo se cobró', 'Efectivo', 'Transferencia',
       'En el cajón', 'Caja inicial', 'Entradas', 'Ventas en efectivo',

@@ -33,6 +33,28 @@ describe('POST /api/maquinas — validaciones', () => {
     expect(res.body.sucursal).toBe('centro');
   });
 
+  it('crea lavadora y secadora chicas', async () => {
+    const lav = await request(app).post('/api/maquinas').set(auth(admin.token))
+      .send({ nombre: 'LC1', tipo: 'lavadora_chica', tamano: 'chica' });
+    expect(lav.status).toBe(201);
+    expect([lav.body.tipo, lav.body.tamano]).toEqual(['lavadora_chica', 'chica']);
+    const sec = await request(app).post('/api/maquinas').set(auth(admin.token))
+      .send({ nombre: 'SC1', tipo: 'secadora', tamano: 'chica' });
+    expect(sec.status).toBe(201);
+    expect(sec.body.tamano).toBe('chica');
+  });
+
+  it('crea lavadora y secadora grandes', async () => {
+    const lav = await request(app).post('/api/maquinas').set(auth(admin.token))
+      .send({ nombre: 'LG1', tipo: 'lavadora_grande', tamano: 'grande' });
+    expect(lav.status).toBe(201);
+    expect([lav.body.tipo, lav.body.tamano]).toEqual(['lavadora_grande', 'grande']);
+    const sec = await request(app).post('/api/maquinas').set(auth(admin.token))
+      .send({ nombre: 'SG1', tipo: 'secadora', tamano: 'grande' });
+    expect(sec.status).toBe(201);
+    expect(sec.body.tamano).toBe('grande');
+  });
+
   it('sin nombre o tipo → 400', async () => {
     const res = await request(app).post('/api/maquinas').set(auth(admin.token))
       .send({ nombre: 'L9' });

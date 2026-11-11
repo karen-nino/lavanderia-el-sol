@@ -17,7 +17,7 @@ export const filtrarPorEstado = (maquinas, filtro) =>
  * "Marca · Tamaño" ("LG · Mediana"). El tamaño sale de `tamano` o, si falta, del
  * tipo de lavadora; lo que no se sepa se omite y sin nada, null.
  */
-const TAMANO_POR_TIPO = { lavadora_mediana: 'mediana', lavadora_jumbo: 'jumbo' };
+const TAMANO_POR_TIPO = { lavadora_chica: 'chica', lavadora_mediana: 'mediana', lavadora_grande: 'grande', lavadora_jumbo: 'jumbo' };
 export const marcaYTamano = (m) => {
   const marca = String(m?.marca ?? '').trim();
   const t = String(m?.tamano ?? TAMANO_POR_TIPO[m?.tipo] ?? '').trim();

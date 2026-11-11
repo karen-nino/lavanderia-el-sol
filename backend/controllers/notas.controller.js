@@ -33,7 +33,7 @@ const normalizarFormaPago = (v) => {
 const TAMANOS_VALIDOS     = ['chico', 'mediano', 'grande', 'jumbo'];
 const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
 /** Tipo de máquina previsto por carga; la máquina física se asigna en Salidas. */
-const TIPOS_MAQUINA_VALIDOS = ['mediana', 'jumbo', 'edredon'];
+const TIPOS_MAQUINA_VALIDOS = ['chica', 'mediana', 'grande', 'jumbo', 'edredon'];
 /** Día en que estará lista la ropa (opcional). OTRA usa `fecha_entrega`. */
 const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'DOS_DIAS', 'OTRA'];
 
@@ -454,7 +454,7 @@ async function desmarcarPagoPorCambio(client, nota, antes, ahora, usuarioId, suc
 /** Tarifas y precios de servicio desde Ajustes, con valores por defecto. */
 async function tarifasCarga(client) {
   const { rows } = await client.query(
-    `SELECT precio_carga_mediana, precio_carga_jumbo,
+    `SELECT precio_carga_chica, precio_carga_mediana, precio_carga_grande, precio_carga_jumbo,
             precio_carga_secadora, precio_secadora_jumbo, precio_edredon_jumbo,
             tope_carga_chico, tope_carga_mediano, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon
        FROM ajustes WHERE id = 1`
@@ -462,6 +462,8 @@ async function tarifasCarga(client) {
   const c = rows[0] ?? {};
   return {
     mediana:         c.precio_carga_mediana    != null ? Number(c.precio_carga_mediana)    : 70,
+    chica:           c.precio_carga_chica      != null ? Number(c.precio_carga_chica)      : 70,
+    grande:          c.precio_carga_grande     != null ? Number(c.precio_carga_grande)     : 70,
     jumbo:           c.precio_carga_jumbo      != null ? Number(c.precio_carga_jumbo)      : 70,
     // precio_carga_secadora es la secadora mediana.
     secadora:       c.precio_carga_secadora   != null ? Number(c.precio_carga_secadora)   : 45,
@@ -552,18 +554,22 @@ function nombreServicio(prenda, tamano, tamanoEdredon) {
  */
 async function tiemposCarga(client) {
   const { rows } = await client.query(
-    `SELECT tiempo_carga_mediana, tiempo_carga_jumbo,
-            tiempo_carga_secadora, tiempo_secadora_jumbo
+    `SELECT tiempo_carga_chica, tiempo_carga_mediana, tiempo_carga_grande, tiempo_carga_jumbo,
+            tiempo_carga_secadora, tiempo_secadora_chica, tiempo_secadora_grande, tiempo_secadora_jumbo
        FROM ajustes WHERE id = 1`
   );
   const c = rows[0] ?? {};
-  // `tiempo_carga_secadora` es la secadora mediana; la jumbo cae en ella si no
-  // tiene tiempo propio.
+  // `tiempo_carga_secadora` es la secadora mediana; las demás caen en ella si no
+  // tienen tiempo propio.
   const secMediana = c.tiempo_carga_secadora != null ? Number(c.tiempo_carga_secadora) : 30;
   return {
     mediana:    c.tiempo_carga_mediana  != null ? Number(c.tiempo_carga_mediana)  : 30,
+    chica:      c.tiempo_carga_chica    != null ? Number(c.tiempo_carga_chica)    : 30,
+    grande:     c.tiempo_carga_grande   != null ? Number(c.tiempo_carga_grande)   : 30,
     jumbo:      c.tiempo_carga_jumbo    != null ? Number(c.tiempo_carga_jumbo)    : 45,
     secMediana,
+    secChica:   c.tiempo_secadora_chica  != null ? Number(c.tiempo_secadora_chica)  : secMediana,
+    secGrande:  c.tiempo_secadora_grande != null ? Number(c.tiempo_secadora_grande) : secMediana,
     secJumbo:   c.tiempo_secadora_jumbo != null ? Number(c.tiempo_secadora_jumbo) : secMediana,
   };
 }
@@ -572,6 +578,8 @@ async function tiemposCarga(client) {
 function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
   if (String(tipoPrenda).toUpperCase() === 'EDREDON') return t.edredonJumbo;
   if (tipoMaquina === 'lavadora_jumbo') return t.jumbo;
+  if (tipoMaquina === 'lavadora_grande') return t.grande;
+  if (tipoMaquina === 'lavadora_chica')  return t.chica;
   return t.mediana;
 }
 
@@ -605,7 +613,9 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
                      ELSE COALESCE(
                        ${MINUTOS_DEL_MODELO('mo')},
                        tm.minutos,
-                       CASE WHEN ml.tipo = 'lavadora_jumbo' THEN $2::int ELSE $3::int END
+                       CASE ml.tipo WHEN 'lavadora_jumbo' THEN $2::int
+                                    WHEN 'lavadora_grande' THEN $6::int
+                                    WHEN 'lavadora_chica'  THEN $8::int ELSE $3::int END
                      )
                 END AS minutos
            FROM nota_cargas nc
@@ -625,7 +635,9 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
                 CASE WHEN COALESCE(mo.solo_fichas, FALSE) THEN NULL
                      ELSE COALESCE(
                        ${MINUTOS_DEL_MODELO('mo')}, tm.minutos,
-                       CASE WHEN ms.tamano = 'jumbo' THEN $5::int ELSE $4::int END
+                       CASE ms.tamano WHEN 'jumbo' THEN $5::int
+                                      WHEN 'grande' THEN $7::int
+                                      WHEN 'chica'  THEN $9::int ELSE $4::int END
                      )
                 END AS minutos
            FROM nota_cargas nc
@@ -639,7 +651,7 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
             AND nc.secadora_iniciada_at IS NOT NULL
        ) ciclos
       WHERE m.id = ciclos.mid AND m.estado = 'en_uso'`,
-    [notaId, ti.jumbo, ti.mediana, ti.secMediana, ti.secJumbo]
+    [notaId, ti.jumbo, ti.mediana, ti.secMediana, ti.secJumbo, ti.grande, ti.secGrande, ti.chica, ti.secChica]
   );
 
   if (elegido) {
@@ -1165,7 +1177,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
           }
         }
         // El tipo sale de la máquina (para el ticket y el trabajo pendiente).
-        if (lavadoraId) lavadoraTipo = tipoPorId.get(lavadoraId) === 'lavadora_jumbo' ? 'jumbo' : 'mediana';
+        if (lavadoraId) lavadoraTipo = String(tipoPorId.get(lavadoraId)).replace('lavadora_', '');
         if (secadoraId) secadoraTipo = 'mediana';
       }
       // En Autoservicio se cobra la máquina: sin ella no hay nada que cobrar.
@@ -1180,7 +1192,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       if (lavadoraTipo && tarifaAlCrear) {
         precioLavadora = lavadoraId
           ? tarifaLavadora(tipoPorId.get(lavadoraId), prendaCarga, t)
-          : tarifaLavadora(lavadoraTipo === 'jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', prendaCarga, t);
+          : tarifaLavadora(['jumbo', 'grande', 'chica'].includes(lavadoraTipo) ? `lavadora_${lavadoraTipo}` : 'lavadora_mediana', prendaCarga, t);
       }
       if (secadoraTipo && tarifaAlCrear) {
         precioSecadora = tarifaSecadora(secadoraId ? tamanoPorId.get(secadoraId) : secadoraTipo, prendaCarga, t);
@@ -3185,7 +3197,7 @@ export const asignarCargaMaquina = async (req, res) => {
     const col = slot === 'lavadora' ? 'lavadora_id' : 'secadora_id';
     const colUsada = slot === 'lavadora' ? 'lavadora_usada_id' : 'secadora_usada_id';
     await registrarMaquinaEnCarga(client, carga_id, slot, maquina_id);
-    // Autoservicio: se cobra con la tarifa de esta máquina (mediana o jumbo).
+    // Autoservicio: se cobra con la tarifa de esta máquina (chica, mediana, grande o jumbo).
     if (tarifaAlAsignar) {
       const t = await tarifasCarga(client);
       if (slot === 'lavadora') {

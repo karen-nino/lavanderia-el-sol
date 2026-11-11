@@ -253,7 +253,7 @@ export const tamanosBolsa = crearControladorEtiqueta('tamanos_bolsa', {
 
 /** Tipo y tamaño válidos de un modelo o de un tiempo por marca. */
 const TIPOS_TIEMPO = ['lavadora', 'secadora'];
-const TAMANOS_TIEMPO = ['mediana', 'jumbo'];
+const TAMANOS_TIEMPO = ['chica', 'mediana', 'grande', 'jumbo'];
 
 // ── Modelos de máquina ──────────────────────────────────────────────────────
 // Cuelgan de una marca (todo se filtra por `marca_id`); por lo demás son un
@@ -313,7 +313,7 @@ export const crearModeloMaquina = async (req, res) => {
     return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
   }
   if (!TAMANOS_TIEMPO.includes(tamano)) {
-    return res.status(400).json({ message: 'El tamaño debe ser mediana o jumbo.' });
+    return res.status(400).json({ message: 'El tamaño debe ser chica, mediana, grande o jumbo.' });
   }
   const minutos = leerMinutos(req.body.minutos);
   if (minutos.error) return res.status(400).json({ message: minutos.error });
@@ -380,7 +380,7 @@ export const actualizarModeloMaquina = async (req, res) => {
   }
   if (tamano !== undefined) {
     if (!TAMANOS_TIEMPO.includes(tamano)) {
-      return res.status(400).json({ message: 'El tamaño debe ser mediana o jumbo.' });
+      return res.status(400).json({ message: 'El tamaño debe ser chica, mediana, grande o jumbo.' });
     }
     updates.push(`tamano = $${i++}`);
     values.push(tamano);
@@ -501,7 +501,7 @@ export const getTiemposMarca = async (req, res) => {
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
         -- El de fichas no pide tiempos.
         WHERE mo.activo AND mm.activo AND NOT mo.solo_fichas
-        ORDER BY mo.tipo, CASE mo.tamano WHEN 'mediana' THEN 0 ELSE 1 END,
+        ORDER BY mo.tipo, CASE mo.tamano WHEN 'chica' THEN 0 WHEN 'mediana' THEN 1 WHEN 'grande' THEN 2 ELSE 3 END,
                  mm.orden NULLS LAST, mm.id, mo.orden NULLS LAST, mo.id`
     );
     res.json(rows);
@@ -589,7 +589,7 @@ export const guardarTiempoMarca = async (req, res) => {
     return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
   }
   if (!TAMANOS_TIEMPO.includes(tamano)) {
-    return res.status(400).json({ message: 'El tamaño debe ser mediana o jumbo.' });
+    return res.status(400).json({ message: 'El tamaño debe ser chica, mediana, grande o jumbo.' });
   }
 
   const vacio = minutos === null || minutos === undefined || minutos === '';

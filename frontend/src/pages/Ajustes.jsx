@@ -957,7 +957,9 @@ const CAMPOS_MODELO = [
     { v: 'secadora', label: 'Secadora' },
   ] },
   { name: 'tamano', defecto: 'mediana', opciones: [
+    { v: 'chica',   label: 'Chica'   },
     { v: 'mediana', label: 'Mediana' },
+    { v: 'grande',  label: 'Grande'  },
     { v: 'jumbo',   label: 'Jumbo'   },
   ] },
   // Modelos con varios programas: se declara aquí para no cargar a los demás.
@@ -1873,6 +1875,8 @@ function AjustesAdmin() {
   // Payload de PATCH /ajustes con todo `config` (lo no editado va con su valor).
   const buildConfigPayload = () => ({
     precio_carga_mediana:  Number(config.precio_carga_mediana),
+    precio_carga_chica:    Number(config.precio_carga_chica),
+    precio_carga_grande:   Number(config.precio_carga_grande),
     precio_carga_jumbo:    Number(config.precio_carga_jumbo),
     precio_carga_secadora: Number(config.precio_carga_secadora),
     precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
@@ -1884,8 +1888,12 @@ function AjustesAdmin() {
     // El Edredón se cobra por tamaño (catálogo). Jumbo de ropa no se captura.
     precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
     tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
+    tiempo_carga_chica:    Number(config.tiempo_carga_chica),
+    tiempo_carga_grande:   Number(config.tiempo_carga_grande),
     tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
     tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
+    tiempo_secadora_chica:  Number(config.tiempo_secadora_chica),
+    tiempo_secadora_grande: Number(config.tiempo_secadora_grande),
     tiempo_secadora_jumbo: Number(config.tiempo_secadora_jumbo),
     // En la demo no se mandan los textos del negocio (van deshabilitados).
     ...(ES_DEMO ? {} : {
@@ -2203,10 +2211,24 @@ function AjustesAdmin() {
   const seccionPreciosDesktop = (
     <>
     <Section titulo="Lavadora">
+      {subTitulo('Chica')}
+      {campoPrecio('precio_carga_chica', 'Aplica a lavadoras chicas en autoservicio.')}
+      {campoTiempo('tiempo_carga_chica', ayudaTiempoGeneral('lavadoras chicas'))}
+      {camposTiempoMarca('lavadora', 'chica')}
+
+      <div className="border-t border-gray-100" />
+
       {subTitulo('Mediana')}
       {campoPrecio('precio_carga_mediana', 'Aplica a lavadoras medianas en autoservicio y por encargo.')}
       {campoTiempo('tiempo_carga_mediana', ayudaTiempoGeneral('lavadoras medianas'))}
       {camposTiempoMarca('lavadora', 'mediana')}
+
+      <div className="border-t border-gray-100" />
+
+      {subTitulo('Grande')}
+      {campoPrecio('precio_carga_grande', 'Aplica a lavadoras grandes en autoservicio.')}
+      {campoTiempo('tiempo_carga_grande', ayudaTiempoGeneral('lavadoras grandes'))}
+      {camposTiempoMarca('lavadora', 'grande')}
 
       <div className="border-t border-gray-100" />
 
@@ -2227,10 +2249,24 @@ function AjustesAdmin() {
 
     {/* Secadora: Mediana y Jumbo. El precio es de la carga; el tiempo, de la máquina. */}
     <Section titulo="Secadora">
+      {/* El secado tiene un solo precio: la chica solo lleva su tiempo. */}
+      {subTitulo('Chica')}
+      {campoTiempo('tiempo_secadora_chica', ayudaTiempoGeneral('secadoras chicas'))}
+      {camposTiempoMarca('secadora', 'chica')}
+
+      <div className="border-t border-gray-100" />
+
       {subTitulo('Mediana')}
       {campoPrecio('precio_carga_secadora', 'Precio del secado de una carga mediana.')}
       {campoTiempo('tiempo_carga_secadora', ayudaTiempoGeneral('secadoras medianas'))}
       {camposTiempoMarca('secadora', 'mediana')}
+
+      <div className="border-t border-gray-100" />
+
+      {/* El secado tiene un solo precio: la grande solo lleva su tiempo. */}
+      {subTitulo('Grande')}
+      {campoTiempo('tiempo_secadora_grande', ayudaTiempoGeneral('secadoras grandes'))}
+      {camposTiempoMarca('secadora', 'grande')}
 
       <div className="border-t border-gray-100" />
 
@@ -2973,10 +3009,20 @@ function AjustesAdmin() {
       <div className="space-y-6">
         <TituloGrupoMobile>Lavadora</TituloGrupoMobile>
         <div className="space-y-4">
+        <TarjetaMobile titulo="Chica">
+          {campoPrecioM('precio_carga_chica', 'Aplica a lavadoras chicas (autoservicio).')}
+          {campoTiempoM('tiempo_carga_chica', ayudaTiempoGeneral('lavadoras chicas'))}
+          {camposTiempoMarcaM('lavadora', 'chica')}
+        </TarjetaMobile>
         <TarjetaMobile titulo="Mediana">
           {campoPrecioM('precio_carga_mediana', 'Aplica a lavadoras medianas (autoservicio y por encargo).')}
           {campoTiempoM('tiempo_carga_mediana', ayudaTiempoGeneral('lavadoras medianas'))}
           {camposTiempoMarcaM('lavadora', 'mediana')}
+        </TarjetaMobile>
+        <TarjetaMobile titulo="Grande">
+          {campoPrecioM('precio_carga_grande', 'Aplica a lavadoras grandes (autoservicio).')}
+          {campoTiempoM('tiempo_carga_grande', ayudaTiempoGeneral('lavadoras grandes'))}
+          {camposTiempoMarcaM('lavadora', 'grande')}
         </TarjetaMobile>
         <TarjetaMobile titulo="Jumbo">
           {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
@@ -2995,10 +3041,20 @@ function AjustesAdmin() {
       <div className="border-t border-light-blue/60 pt-8 space-y-6">
         <TituloGrupoMobile>Secadora</TituloGrupoMobile>
         <div className="space-y-4">
+        {/* El secado tiene un solo precio: la chica solo lleva su tiempo. */}
+        <TarjetaMobile titulo="Chica">
+          {campoTiempoM('tiempo_secadora_chica', ayudaTiempoGeneral('secadoras chicas'))}
+          {camposTiempoMarcaM('secadora', 'chica')}
+        </TarjetaMobile>
         <TarjetaMobile titulo="Mediana">
           {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga mediana.')}
           {campoTiempoM('tiempo_carga_secadora', ayudaTiempoGeneral('secadoras medianas'))}
           {camposTiempoMarcaM('secadora', 'mediana')}
+        </TarjetaMobile>
+        {/* El secado tiene un solo precio: la grande solo lleva su tiempo. */}
+        <TarjetaMobile titulo="Grande">
+          {campoTiempoM('tiempo_secadora_grande', ayudaTiempoGeneral('secadoras grandes'))}
+          {camposTiempoMarcaM('secadora', 'grande')}
         </TarjetaMobile>
         <TarjetaMobile titulo="Jumbo">
           {campoPrecioM('precio_secadora_jumbo', 'Precio del secado de una carga jumbo.')}

@@ -56,7 +56,9 @@ export const updateAjustes = async (req, res) => {
   }
 
   const {
+    precio_carga_chica,
     precio_carga_mediana,
+    precio_carga_grande,
     precio_carga_jumbo,
     precio_carga_secadora,
     precio_secadora_jumbo,
@@ -67,9 +69,13 @@ export const updateAjustes = async (req, res) => {
     tope_carga_grande,
     tope_carga_jumbo,
     tope_carga_edredon,
+    tiempo_carga_chica,
     tiempo_carga_mediana,
+    tiempo_carga_grande,
     tiempo_carga_jumbo,
     tiempo_carga_secadora,
+    tiempo_secadora_chica,
+    tiempo_secadora_grande,
     tiempo_secadora_jumbo,
     precarga_medidas_chico,
     precarga_medidas_mediano,
@@ -100,7 +106,9 @@ export const updateAjustes = async (req, res) => {
 
   // Cada ajuste como se ve en pantalla, para los mensajes.
   const ETIQUETA = {
+    precio_carga_chica:      'El precio de la carga chica',
     precio_carga_mediana:    'El precio de la carga mediana',
+    precio_carga_grande:     'El precio de la carga grande',
     precio_carga_jumbo:      'El precio de la carga jumbo',
     precio_carga_secadora:   'El precio del secado',
     precio_secadora_jumbo:   'El precio del secado jumbo',
@@ -118,13 +126,17 @@ export const updateAjustes = async (req, res) => {
     precarga_bolsas_chico:    'Las bolsas del servicio Chico',
     precarga_bolsas_mediano:  'Las bolsas del servicio Mediano',
     precarga_bolsas_grande:   'Las bolsas del servicio Grande',
+    tiempo_carga_chica:      'El tiempo de la carga chica',
+    tiempo_carga_grande:     'El tiempo de la carga grande',
     tiempo_carga_jumbo:      'El tiempo de la carga jumbo',
     tiempo_carga_secadora:   'El tiempo del secado',
+    tiempo_secadora_chica:   'El tiempo del secado chico',
+    tiempo_secadora_grande:  'El tiempo del secado grande',
     tiempo_secadora_jumbo:   'El tiempo del secado jumbo',
   };
   const nombreDe = (campo) => ETIQUETA[campo] ?? `El ajuste "${campo}"`;
 
-  const precios = { precio_carga_mediana, precio_carga_jumbo, precio_carga_secadora,
+  const precios = { precio_carga_chica, precio_carga_mediana, precio_carga_grande, precio_carga_jumbo, precio_carga_secadora,
                     precio_secadora_jumbo, precio_secadora_edredon, precio_edredon_jumbo };
   for (const [campo, valor] of Object.entries(precios)) {
     if (valor !== undefined && (!esNumero(valor) || Number(valor) < 0)) {
@@ -151,8 +163,8 @@ export const updateAjustes = async (req, res) => {
   const topeONull = (v) => (v === null || v === '' ? null : v);
 
   // Tiempos de respaldo por tamaño (el edredón usa el de su tamaño).
-  const tiempos = { tiempo_carga_mediana, tiempo_carga_jumbo,
-                    tiempo_carga_secadora, tiempo_secadora_jumbo };
+  const tiempos = { tiempo_carga_chica, tiempo_carga_mediana, tiempo_carga_grande, tiempo_carga_jumbo,
+                    tiempo_carga_secadora, tiempo_secadora_chica, tiempo_secadora_grande, tiempo_secadora_jumbo };
   for (const [campo, valor] of Object.entries(tiempos)) {
     if (valor !== undefined && (!esNumero(valor) || !Number.isInteger(Number(valor)) || Number(valor) < 1)) {
       return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número entero de 1 minuto o más.` });
@@ -194,6 +206,8 @@ export const updateAjustes = async (req, res) => {
   let i = 1;
 
   if (precio_carga_mediana  !== undefined) { updates.push(`precio_carga_mediana = $${i++}`);  values.push(precio_carga_mediana); }
+  if (precio_carga_chica    !== undefined) { updates.push(`precio_carga_chica = $${i++}`);    values.push(precio_carga_chica); }
+  if (precio_carga_grande   !== undefined) { updates.push(`precio_carga_grande = $${i++}`);   values.push(precio_carga_grande); }
   if (precio_carga_jumbo    !== undefined) { updates.push(`precio_carga_jumbo = $${i++}`);    values.push(precio_carga_jumbo); }
   if (precio_carga_secadora !== undefined) { updates.push(`precio_carga_secadora = $${i++}`); values.push(precio_carga_secadora); }
   if (precio_secadora_jumbo   !== undefined) { updates.push(`precio_secadora_jumbo = $${i++}`);   values.push(precio_secadora_jumbo); }
@@ -205,8 +219,12 @@ export const updateAjustes = async (req, res) => {
   if (tope_carga_jumbo      !== undefined) { updates.push(`tope_carga_jumbo = $${i++}`);      values.push(topeONull(tope_carga_jumbo)); }
   if (tope_carga_edredon    !== undefined) { updates.push(`tope_carga_edredon = $${i++}`);    values.push(topeONull(tope_carga_edredon)); }
   if (tiempo_carga_mediana  !== undefined) { updates.push(`tiempo_carga_mediana = $${i++}`);  values.push(tiempo_carga_mediana); }
+  if (tiempo_carga_chica    !== undefined) { updates.push(`tiempo_carga_chica = $${i++}`);    values.push(tiempo_carga_chica); }
+  if (tiempo_carga_grande   !== undefined) { updates.push(`tiempo_carga_grande = $${i++}`);   values.push(tiempo_carga_grande); }
   if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
   if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }
+  if (tiempo_secadora_chica   !== undefined) { updates.push(`tiempo_secadora_chica = $${i++}`);   values.push(tiempo_secadora_chica); }
+  if (tiempo_secadora_grande  !== undefined) { updates.push(`tiempo_secadora_grande = $${i++}`);  values.push(tiempo_secadora_grande); }
   if (tiempo_secadora_jumbo   !== undefined) { updates.push(`tiempo_secadora_jumbo = $${i++}`);   values.push(tiempo_secadora_jumbo); }
   for (const [campo, valor] of Object.entries(precargas)) {
     if (valor !== undefined) { updates.push(`${campo} = $${i++}`); values.push(Number(valor)); }

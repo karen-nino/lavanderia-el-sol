@@ -7,8 +7,12 @@ import { formatHora12 } from './fecha';
 /** Tipo de máquina en texto: "Lavadora mediana", "Secadora jumbo". */
 export function tipoMaquinaTexto(m) {
   if (m?.tipo === 'lavadora_jumbo') return 'Lavadora jumbo';
+  if (m?.tipo === 'lavadora_grande') return 'Lavadora grande';
+  if (m?.tipo === 'lavadora_chica') return 'Lavadora chica';
   if (m?.tipo === 'lavadora_mediana') return 'Lavadora mediana';
-  if (m?.tipo === 'secadora') return m.tamano === 'jumbo' ? 'Secadora jumbo' : 'Secadora mediana';
+  if (m?.tipo === 'secadora') {
+    return { jumbo: 'Secadora jumbo', grande: 'Secadora grande', chica: 'Secadora chica' }[m.tamano] ?? 'Secadora mediana';
+  }
   return 'Máquina';
 }
 

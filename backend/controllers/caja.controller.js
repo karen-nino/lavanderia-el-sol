@@ -53,8 +53,8 @@ export async function ventasDeSesion(client, cajaId) {
  * reparte entre las partes de su nota en proporción a lo que vale cada una:
  * - Por Encargo: `edredon` (servicios de Edredón), `por_encargo` (los demás) y
  *   `productos` (lo que se cobra encima del servicio).
- * - Lo demás: lavadoras medianas / jumbo (por la primera máquina del hueco o el
- *   tamaño pedido; el edredón cuenta como jumbo), secadoras y productos.
+ * - Lo demás: lavadoras chicas / medianas / grandes / jumbo (por la primera máquina del
+ *   hueco o el tamaño pedido; el edredón cuenta como jumbo), secadoras y productos.
  * Se trabaja en centavos y el residuo va a la parte más grande: la suma es
  * exactamente el total cobrado. Los cortes congelados antes del 2026-10-19
  * repartían solo el efectivo (ver `ingresos_solo_efectivo` en leerCortes).
@@ -93,7 +93,9 @@ export async function repartirCobros(client, cobrosSql, params) {
      SELECT pn.monto, n.tipo_servicio,
             COALESCE(c.encargo_edredon, 0) AS edredon,
             COALESCE(c.encargo_otros, 0) AS por_encargo,
+            COALESCE(c.lav_chica, 0)   AS lavadoras_chicas,
             COALESCE(c.lav_mediana, 0) AS lavadoras_medianas,
+            COALESCE(c.lav_grande, 0)  AS lavadoras_grandes,
             COALESCE(c.lav_jumbo, 0)   AS lavadoras_jumbo,
             COALESCE(c.secadoras, 0)   AS secadoras,
             -- En Por Encargo solo cuenta aparte lo cobrado encima (marca, polvo y bolsas de más).
@@ -104,8 +106,10 @@ export async function repartirCobros(client, cobrosSql, params) {
        FROM por_nota pn
        JOIN notas n ON n.id = pn.nota_id
        LEFT JOIN LATERAL (
-         SELECT SUM(nc.precio_lavadora) FILTER (WHERE NOT t.jumbo) AS lav_mediana,
-                SUM(nc.precio_lavadora) FILTER (WHERE t.jumbo)     AS lav_jumbo,
+         SELECT SUM(nc.precio_lavadora) FILTER (WHERE t.tam = 'chica')   AS lav_chica,
+                SUM(nc.precio_lavadora) FILTER (WHERE t.tam = 'mediana') AS lav_mediana,
+                SUM(nc.precio_lavadora) FILTER (WHERE t.tam = 'grande')  AS lav_grande,
+                SUM(nc.precio_lavadora) FILTER (WHERE t.tam = 'jumbo')   AS lav_jumbo,
                 -- La secadora con sus fichas de más (como recalcularPrecioTotal).
                 SUM(nc.precio_secadora + nc.precio_fichas_extra)   AS secadoras,
                 SUM(pc.todos)                                      AS productos,
@@ -138,15 +142,20 @@ export async function repartirCobros(client, cobrosSql, params) {
              -- El edredón cuenta como jumbo en cualquier lavadora.
              SELECT COALESCE(
                       CASE WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON'
-                             OR nc.lavadora_tipo = 'edredon' THEN TRUE END,
-                      (SELECT p.maquina_tipo = 'lavadora_jumbo'
+                             OR nc.lavadora_tipo = 'edredon' THEN 'jumbo' END,
+                      (SELECT CASE p.maquina_tipo WHEN 'lavadora_jumbo' THEN 'jumbo'
+                                                  WHEN 'lavadora_grande' THEN 'grande'
+                                                  WHEN 'lavadora_chica' THEN 'chica' ELSE 'mediana' END
                          FROM nota_carga_maquinas p
                         WHERE p.carga_id = nc.id AND p.slot = 'lavadora'
                           AND p.maquina_tipo IS NOT NULL
                         ORDER BY p.asignada_at, p.id LIMIT 1),
-                      ml.tipo::text = 'lavadora_jumbo',
-                      nc.lavadora_tipo IN ('jumbo', 'edredon'),
-                      FALSE) AS jumbo
+                      CASE ml.tipo::text WHEN 'lavadora_jumbo' THEN 'jumbo'
+                                         WHEN 'lavadora_grande' THEN 'grande'
+                                         WHEN 'lavadora_chica' THEN 'chica'
+                                         WHEN 'lavadora_mediana' THEN 'mediana' END,
+                      CASE WHEN nc.lavadora_tipo IN ('jumbo', 'grande', 'chica') THEN nc.lavadora_tipo END,
+                      'mediana') AS tam
            ) t
           WHERE nc.nota_id = n.id
        ) c ON TRUE
@@ -160,10 +169,10 @@ export async function repartirCobros(client, cobrosSql, params) {
     params
   );
 
-  const MOSTRADOR = ['productos', 'lavadoras_medianas', 'lavadoras_jumbo', 'secadoras'];
+  const MOSTRADOR = ['productos', 'lavadoras_chicas', 'lavadoras_medianas', 'lavadoras_grandes', 'lavadoras_jumbo', 'secadoras'];
   const ENCARGO = ['por_encargo', 'edredon', 'productos'];
   const cent = {
-    lavadoras_medianas: 0, lavadoras_jumbo: 0, secadoras: 0, productos: 0, edredon: 0, por_encargo: 0,
+    lavadoras_chicas: 0, lavadoras_medianas: 0, lavadoras_grandes: 0, lavadoras_jumbo: 0, secadoras: 0, productos: 0, edredon: 0, por_encargo: 0,
   };
   for (const r of rows) {
     const monto = Math.round(parseFloat(r.monto) * 100);

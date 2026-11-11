@@ -20,9 +20,9 @@ import { esAdmin } from '../middleware/roles.js';
 import { recalcularPrecioTotal, respondioCorteCerrado } from './notas.controller.js';
 
 const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
-const TIPOS_VALIDOS   = ['lavadora_mediana', 'lavadora_jumbo', 'secadora'];
+const TIPOS_VALIDOS   = ['lavadora_chica', 'lavadora_mediana', 'lavadora_grande', 'lavadora_jumbo', 'secadora'];
 const CAPACIDADES_VALIDAS = ['20kg', '35kg'];
-const TAMANOS_VALIDOS = ['mediana', 'jumbo'];
+const TAMANOS_VALIDOS = ['chica', 'mediana', 'grande', 'jumbo'];
 
 /** ['lavadora_mediana', 'secadora'] → "lavadora mediana o secadora" */
 const enPalabras = (valores) => {
@@ -231,7 +231,7 @@ export const getMaquinas = async (req, res) => {
 
 // ── GET /maquinas/:id/uso ───────────────────────────────────
 /** Orden de las máquinas en el reporte: lavadoras, luego secadoras; por nombre con números. */
-const ORDEN_TIPO_MAQUINA = { lavadora_mediana: 0, lavadora_jumbo: 1, secadora: 2 };
+const ORDEN_TIPO_MAQUINA = { lavadora_chica: 0, lavadora_mediana: 1, lavadora_grande: 2, lavadora_jumbo: 3, secadora: 4 };
 
 /**
  * Reporte diario de máquinas (cualquier rol): por máquina, las vueltas que
@@ -291,6 +291,8 @@ export const getReporteDiarioMaquinas = async (req, res) => {
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'
                                AND COALESCE(v.maquina_tamano, m.tamano::text) = 'jumbo' THEN aj.precio_secadora_jumbo
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'       THEN aj.precio_carga_secadora
+                          WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'lavadora_grande' THEN aj.precio_carga_grande
+                          WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'lavadora_chica'  THEN aj.precio_carga_chica
                           WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'lavadora_jumbo' THEN aj.precio_carga_jumbo
                           ELSE aj.precio_carga_mediana
                         END
@@ -405,6 +407,8 @@ export const getUsoMaquina = async (req, res) => {
                    ELSE CASE
                           WHEN mx.tipo = 'secadora' AND mx.tamano = 'jumbo' THEN aj.precio_secadora_jumbo
                           WHEN mx.tipo = 'secadora'                         THEN aj.precio_carga_secadora
+                          WHEN mx.tipo = 'lavadora_grande'                  THEN aj.precio_carga_grande
+                          WHEN mx.tipo = 'lavadora_chica'                   THEN aj.precio_carga_chica
                           WHEN mx.tipo = 'lavadora_jumbo'                   THEN aj.precio_carga_jumbo
                           ELSE aj.precio_carga_mediana
                         END
@@ -1145,8 +1149,14 @@ export const otroCiclo = async (req, res) => {
                           -- Respaldo por tamaño; la columna plana es la mediana.
                           WHEN m.tipo = 'secadora' AND m.tamano = 'jumbo'
                             THEN COALESCE(a.tiempo_secadora_jumbo, a.tiempo_carga_secadora)
-                          WHEN m.tipo = 'secadora'       THEN a.tiempo_carga_secadora
-                          WHEN m.tipo = 'lavadora_jumbo' THEN a.tiempo_carga_jumbo
+                          WHEN m.tipo = 'secadora' AND m.tamano = 'grande'
+                            THEN COALESCE(a.tiempo_secadora_grande, a.tiempo_carga_secadora)
+                          WHEN m.tipo = 'secadora' AND m.tamano = 'chica'
+                            THEN COALESCE(a.tiempo_secadora_chica, a.tiempo_carga_secadora)
+                          WHEN m.tipo = 'secadora'        THEN a.tiempo_carga_secadora
+                          WHEN m.tipo = 'lavadora_grande' THEN a.tiempo_carga_grande
+                          WHEN m.tipo = 'lavadora_chica'  THEN a.tiempo_carga_chica
+                          WHEN m.tipo = 'lavadora_jumbo'  THEN a.tiempo_carga_jumbo
                           ELSE a.tiempo_carga_mediana END
                    FROM ajustes a WHERE a.id = 1)
               )

@@ -147,13 +147,15 @@ const BADGE_MAQUINA_ESTADO = {
 };
 
 const MAQUINA_TIPO_LABEL = {
+  lavadora_chica:   'Chica',
   lavadora_mediana: 'Mediana',
+  lavadora_grande:  'Grande',
   lavadora_jumbo:   'Jumbo',
   secadora:         'Secadora',
 };
 
-/** Abreviatura del tamaño para el desglose de cargas (M, J, E). */
-const TAMANO_ABBR = { Mediana: 'M', Jumbo: 'J', Edredón: 'E' };
+/** Abreviatura del tamaño para el desglose de cargas (C, M, G, J, E). */
+const TAMANO_ABBR = { Chica: 'C', Mediana: 'M', Grande: 'G', Jumbo: 'J', Edredón: 'E' };
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
@@ -1415,7 +1417,7 @@ export default function DetalleNota() {
                     };
                   });
                   // Por Encargo: huecos con tipo y sin máquina (se asignan en Salidas).
-                  const TIPO_MAQ_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo', edredon: 'Edredón' };
+                  const TIPO_MAQ_LABEL = { chica: 'Chica', mediana: 'Mediana', grande: 'Grande', jumbo: 'Jumbo', edredon: 'Edredón' };
                   const hayDelSlot = (slot) => usadas.some(u => u.slot === slot);
                   const slotsPrevistos = [
                     !hayDelSlot('lavadora') && cg.lavadora_tipo_previsto && {

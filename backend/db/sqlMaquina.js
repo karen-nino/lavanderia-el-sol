@@ -196,6 +196,8 @@ export const CICLOS_DE_PASADAS = (filtro) => `SELECT nc.nota_id, nc.orden AS car
                           WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'
                                AND COALESCE(p.maquina_tamano, mx.tamano::text) = 'jumbo'         THEN aj.precio_secadora_jumbo
                           WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'          THEN aj.precio_carga_secadora
+                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'lavadora_grande'   THEN aj.precio_carga_grande
+                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'lavadora_chica'    THEN aj.precio_carga_chica
                           WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'lavadora_jumbo'    THEN aj.precio_carga_jumbo
                           ELSE aj.precio_carga_mediana
                         END

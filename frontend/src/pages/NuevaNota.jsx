@@ -68,6 +68,9 @@ const TAMANOS = [
   { v: 'jumbo',  label: 'Jumbo'  },
 ];
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
+/** Tamaño de una lavadora por su tipo: 'lavadora_grande' → "Grande". */
+const tamanoDeLavadora = (tipo) =>
+  ({ lavadora_chica: 'Chica', lavadora_grande: 'Grande', lavadora_jumbo: 'Jumbo' })[tipo] ?? 'Mediana';
 
 /**
  * Servicios de Por Encargo: el precio de Ajustes ya incluye lavado, secado,
@@ -178,7 +181,7 @@ export default function NuevaNota() {
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
-  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45, edredon: 80 });
+  const [precios,           setPrecios]           = useState({ chica: 70, mediana: 70, grande: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45, edredon: 80 });
   // Precio de cada servicio (Ajustes); null = sin configurar.
   const [topes,             setTopes]             = useState({ chico: null, mediano: null, grande: null, jumbo: null, edredon: null });
   // Lo que trae puesto cada servicio de ropa (los de edredón, en su catálogo).
@@ -264,6 +267,8 @@ export default function NuevaNota() {
   const precioPorTipo = (tipoMaquina) => {
     if (tipoMaquina === 'secadora') return precios.secadora;
     if (tipoMaquina === 'lavadora_jumbo') return precios.jumbo;
+    if (tipoMaquina === 'lavadora_grande') return precios.grande;
+    if (tipoMaquina === 'lavadora_chica')  return precios.chica;
     return precios.mediana;
   };
   // Secado: precio único.
@@ -271,6 +276,8 @@ export default function NuevaNota() {
   // Precio por tipo de lavadora en Por Encargo.
   const precioLavadoTipo = (tipo, prenda) =>
     tipo === 'jumbo'   ? precioPorTipo('lavadora_jumbo', prenda)
+    : tipo === 'grande'  ? precioPorTipo('lavadora_grande', prenda)
+    : tipo === 'chica'   ? precioPorTipo('lavadora_chica', prenda)
     : tipo === 'mediana' ? precioPorTipo('lavadora_mediana', prenda)
     : 0;
   const precioSecadoTipo = (tipo, prenda) => (tipo ? precioSecado(tipo, prenda) : 0);
@@ -280,7 +287,7 @@ export default function NuevaNota() {
     // La que cobra por programa (Sec49) queda por definir: $0 hasta iniciarla.
     if (m.tipo === 'secadora' && tipoServicio === 'AUTOSERVICIO' && cobraPorPrograma(m)) return 0;
     if (m.tipo === 'secadora') return precioSecado();
-    return precioPorTipo(m.tipo === 'lavadora_jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', 'ROPA');
+    return precioPorTipo(m.tipo, 'ROPA');
   };
   // Un renglón es una máquina (las notas viejas pueden traer dos). El "Edredón"
   // cobra su tarifa, con lavadora o sin ella.
@@ -308,7 +315,7 @@ export default function NuevaNota() {
   const tipoDeRenglon = (c) => {
     if (esEdredonAuto(c)) return 'Edredón';
     const partes = [];
-    if (c.lavadora) partes.push(`Lavadora ${c.lavadora.tipo === 'lavadora_jumbo' ? 'Jumbo' : 'Mediana'}`);
+    if (c.lavadora) partes.push(`Lavadora ${tamanoDeLavadora(c.lavadora.tipo)}`);
     if (c.secadora) partes.push('Secadora');
     if (partes.length === 0 && c.lavadora_tipo) partes.push('Lavadora (sin asignar)');
     if (partes.length === 0 && c.secadora_tipo) partes.push('Secadora (sin asignar)');
@@ -319,7 +326,7 @@ export default function NuevaNota() {
     // Edredón: "Edredón" hasta tener lavadora; luego "L8 · Edredón".
     if (esEdredonAuto(c)) return c.lavadora ? `${c.lavadora.nombre} · Edredón` : 'Edredón';
     const partes = [];
-    if (c.lavadora) partes.push(`${c.lavadora.nombre} · ${c.lavadora.tipo === 'lavadora_jumbo' ? 'Jumbo' : 'Mediana'}`);
+    if (c.lavadora) partes.push(`${c.lavadora.nombre} · ${tamanoDeLavadora(c.lavadora.tipo)}`);
     if (c.secadora) partes.push(`${c.secadora.nombre} · Secadora`);
     if (partes.length === 0 && c.lavadora_tipo) partes.push('Lavadora (sin asignar)');
     if (partes.length === 0 && c.secadora_tipo) partes.push('Secadora (sin asignar)');
@@ -453,6 +460,8 @@ export default function NuevaNota() {
         if (cfg) {
           setPrecios({
             mediana:         cfg.precio_carga_mediana    != null ? Number(cfg.precio_carga_mediana)    : 70,
+            chica:           cfg.precio_carga_chica      != null ? Number(cfg.precio_carga_chica)      : 70,
+            grande:          cfg.precio_carga_grande     != null ? Number(cfg.precio_carga_grande)     : 70,
             jumbo:           cfg.precio_carga_jumbo      != null ? Number(cfg.precio_carga_jumbo)      : 70,
             // precio_carga_secadora es la secadora mediana.
             secadora:        cfg.precio_carga_secadora   != null ? Number(cfg.precio_carga_secadora)   : 45,

@@ -14,7 +14,7 @@ beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
-  await seedAjustes({ precio_carga_mediana: 70, precio_carga_jumbo: 90, precio_carga_secadora: 50 });
+  await seedAjustes({ precio_carga_chica: 60, precio_carga_mediana: 70, precio_carga_grande: 80, precio_carga_jumbo: 90, precio_carga_secadora: 50 });
   await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 200 }).expect(201);
 });
 const api = (m, url, body) => request(app)[m](url).set(auth(admin.token)).send(body);
@@ -24,7 +24,7 @@ async function autoservicio({ tipo, secadora = false, forma_pago = 'EFECTIVO' })
   const nota = await api('post', '/api/notas', {
     tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
     cargas: [{
-      lavadora_tipo: tipo === 'lavadora_jumbo' ? 'jumbo' : 'mediana',
+      lavadora_tipo: tipo.replace('lavadora_', ''),
       ...(secadora ? { secadora_tipo: 'mediana' } : {}),
     }],
   }).expect(201);
@@ -44,6 +44,8 @@ describe('GET /api/caja/actual — ingresos', () => {
   it('reparte lo cobrado (también transferencia) por tipo de máquina, productos y Por Encargo', async () => {
     await autoservicio({ tipo: 'lavadora_mediana', secadora: true });      // 70 + 50
     await autoservicio({ tipo: 'lavadora_jumbo' });                         // 90
+    await autoservicio({ tipo: 'lavadora_grande' });                        // 80
+    await autoservicio({ tipo: 'lavadora_chica' });                         // 60
     await autoservicio({ tipo: 'lavadora_mediana', forma_pago: 'TRANSFERENCIA' }); // 70 también
 
     const jabon = await seedProducto({ nombre: 'Jabón', precio_unitario: 5, precio_botella: 27, stock_actual: 40 });
@@ -61,7 +63,7 @@ describe('GET /api/caja/actual — ingresos', () => {
 
     const { totales } = (await api('get', '/api/caja/actual')).body;
     expect(totales.ingresos).toEqual({
-      lavadoras_medianas: 140, lavadoras_jumbo: 90, secadoras: 50, productos: 27, edredon: 0, por_encargo: 30,
+      lavadoras_chicas: 60, lavadoras_medianas: 140, lavadoras_grandes: 80, lavadoras_jumbo: 90, secadoras: 50, productos: 27, edredon: 0, por_encargo: 30,
     });
     const suma = Object.values(totales.ingresos).reduce((a, b) => a + b, 0);
     expect(suma).toBeCloseTo(totales.ventas_desglose.total, 2);
@@ -167,7 +169,7 @@ describe('GET /api/caja/actual — ingresos', () => {
 
     const { corte } = (await api('get', '/api/ventas/resumen?periodo=hoy')).body;
     expect(corte.conceptos).toEqual({
-      lavadoras_medianas: 70, lavadoras_jumbo: 90, secadoras: 50, productos: 0, por_encargo: 30, edredon: 0,
+      lavadoras_chicas: 0, lavadoras_medianas: 70, lavadoras_grandes: 0, lavadoras_jumbo: 90, secadoras: 50, productos: 0, por_encargo: 30, edredon: 0,
     });
     const suma = Object.values(corte.conceptos).reduce((a, b) => a + b, 0);
     expect(suma).toBeCloseTo(corte.total_cobrado, 2);

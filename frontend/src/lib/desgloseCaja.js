@@ -31,7 +31,9 @@ const num = (v) => Number(v ?? 0) || 0;
  * turno y Ventas → Por concepto).
  */
 export const CONCEPTOS = [
+  { key: 'lavadoras_chicas',   label: 'Lav. Chicas' },
   { key: 'lavadoras_medianas', label: 'Lav. Medianas' },
+  { key: 'lavadoras_grandes',  label: 'Lav. Grandes' },
   { key: 'lavadoras_jumbo',    label: 'Lav. Jumbo' },
   { key: 'secadoras',          label: 'Secadoras' },
   // Servicios Por Encargo; en la demo, con el nombre más a la vista.

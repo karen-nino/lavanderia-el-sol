@@ -226,6 +226,8 @@ function FilaModal({ left, sub, sub2, right, rightSub, onClick }) {
 const tipoMaquinaLabel = (tipo) =>
   tipo === 'secadora'         ? 'Secadora'
   : tipo === 'lavadora_jumbo' ? 'Lavadora jumbo'
+  : tipo === 'lavadora_grande' ? 'Lavadora grande'
+  : tipo === 'lavadora_chica'  ? 'Lavadora chica'
   : tipo                      ? 'Lavadora'
   :                             '';
 

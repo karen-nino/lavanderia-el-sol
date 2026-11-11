@@ -1,7 +1,9 @@
 // Cómo se listan las cargas en el ticket (aparte para probarlo y para Fast Refresh).
 
 const MAQUINA_TIPO_LABEL = {
+  lavadora_chica:   'Chica',
   lavadora_mediana: 'Mediana',
+  lavadora_grande:  'Grande',
   lavadora_jumbo:   'Jumbo',
   secadora:         'Secadora',
 };

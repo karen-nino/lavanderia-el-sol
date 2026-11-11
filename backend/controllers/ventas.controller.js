@@ -421,7 +421,7 @@ export async function getResumen(req, res) {
         total:           parseFloat(r.total),
       })),
       corte: {
-        // Lavadoras medianas / jumbo, secadoras, productos, SPE y edredón.
+        // Lavadoras chicas / medianas / grandes / jumbo, secadoras, productos, SPE y edredón.
         conceptos,
         total_servicios,
         total_cargas,
