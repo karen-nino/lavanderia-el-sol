@@ -174,13 +174,15 @@ export const getMaquinas = async (req, res) => {
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,
+              -- Para "Liberar" (admin): un Autoservicio cobrado puede finalizarse ahí.
+              (r.tipo_servicio = 'AUTOSERVICIO' AND r.estado_pago = 'PAGADO') AS reservada_finalizable,
               u.folio               AS en_uso_folio,
               u.id                  AS en_uso_nota_id,
               c.ciclos              AS ciclos_carga,
               c.ciclo_unico         AS ciclo_unico
          FROM maquinas m
          LEFT JOIN LATERAL (
-           SELECT n.id, n.folio
+           SELECT n.id, n.folio, n.tipo_servicio, n.estado_pago
              FROM notas n
             WHERE m.estado = 'disponible'
               AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')

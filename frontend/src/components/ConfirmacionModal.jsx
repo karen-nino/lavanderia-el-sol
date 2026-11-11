@@ -15,6 +15,7 @@
  * @param textoCerrar el texto de ese único botón.
  * @param cerrarArriba cierra con una ✕ arriba a la derecha en vez de "Cancelar":
  *   el botón de abajo queda solo, a todo lo ancho.
+ * @param secundaria { texto, onClick }: con cerrarArriba, otra salida debajo del botón principal.
  */
 const TONOS = {
   peligro: {
@@ -39,6 +40,7 @@ export default function ConfirmacionModal({
   textoConfirmar = 'Continuar',
   textoCerrar = 'Entendido',
   cerrarArriba = false,
+  secundaria = null,
   procesando = false,
   error = '',
   onClose,
@@ -101,10 +103,18 @@ export default function ConfirmacionModal({
               {textoCerrar}
             </button>
           ) : cerrarArriba ? (
-            <button type="button" onClick={onConfirm} disabled={procesando}
-              className={`w-full ${t.boton} disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors`}>
-              {textoConfirmar}
-            </button>
+            <div className="space-y-3">
+              <button type="button" onClick={onConfirm} disabled={procesando}
+                className={`w-full ${t.boton} disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors`}>
+                {textoConfirmar}
+              </button>
+              {secundaria && (
+                <button type="button" onClick={secundaria.onClick} disabled={procesando}
+                  className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors">
+                  {secundaria.texto}
+                </button>
+              )}
+            </div>
           ) : (
           <div className="flex gap-3">
             <button type="button" onClick={onClose} disabled={procesando}

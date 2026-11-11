@@ -3634,6 +3634,111 @@ export const cambiarMaquina = async (req, res) => {
   }
 };
 
+// ── PATCH /maquinas/:id/liberar ─────────────────────────────
+/**
+ * Admin: suelta una máquina reservada que la nota nunca arrancó (Gestión de
+ * máquinas). No toca lo cobrado, así que vale con el corte cerrado y con notas
+ * de otro día. Con `finalizar`, un Autoservicio cobrado sin otra máquina se cierra.
+ */
+export const liberarMaquinaReservada = async (req, res) => {
+  const { id } = req.params;
+  const notaId = Number(req.body?.nota_id);
+  const finalizar = req.body?.finalizar === true;
+  if (!Number.isInteger(notaId) || notaId <= 0) {
+    return res.status(400).json({ message: 'Falta la nota que tiene apartada la máquina.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: maqRows } = await client.query(
+      'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (maqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = maqRows[0];
+    if (maq.estado !== 'disponible') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: `La ${maq.nombre} no está libre: solo se suelta una máquina que no se ha encendido.` });
+    }
+
+    const { rows: notaRows } = await client.query(
+      `SELECT folio, estado, estado_pago, tipo_servicio FROM notas
+        WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
+      [notaId, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    const nota = notaRows[0];
+    if (!['EN_ESPERA', 'LAVANDO', 'SECANDO'].includes(nota.estado)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: `La nota ${nota.folio} ya no tiene máquinas apartadas.` });
+    }
+
+    const esSecadora = maq.tipo === 'secadora';
+    const cargaCol   = esSecadora ? 'secadora_id'          : 'lavadora_id';
+    const usadaCol   = esSecadora ? 'secadora_usada_id'    : 'lavadora_usada_id';
+    const iniciadaCol = esSecadora ? 'secadora_iniciada_at' : 'lavadora_iniciada_at';
+    const { rows: cargaRows } = await client.query(
+      `SELECT id, ${iniciadaCol} AS iniciada_at FROM nota_cargas
+        WHERE nota_id = $1 AND ${cargaCol} = $2 FOR UPDATE`,
+      [notaId, maq.id]
+    );
+    if (cargaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: `La ${maq.nombre} ya no está apartada para la nota ${nota.folio}.` });
+    }
+    if (cargaRows.some(c => c.iniciada_at)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: `La ${maq.nombre} ya se inició en esta nota: finalízala desde Salidas.` });
+    }
+
+    // Igual que el cierre del día: sin arrancar no cuenta como usada.
+    await client.query(
+      `UPDATE nota_cargas
+          SET ${usadaCol} = CASE WHEN ${usadaCol} = ${cargaCol} THEN NULL ELSE ${usadaCol} END,
+              ${cargaCol} = NULL
+        WHERE id = ANY($1)`,
+      [cargaRows.map(c => c.id)]
+    );
+
+    let estado = nota.estado;
+    if (finalizar) {
+      if (nota.tipo_servicio !== 'AUTOSERVICIO' || nota.estado_pago !== 'PAGADO') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: 'Solo se finaliza así un Autoservicio ya cobrado.' });
+      }
+      const { rows: [{ otras }] } = await client.query(
+        `SELECT EXISTS (SELECT 1 FROM nota_cargas
+                         WHERE nota_id = $1 AND (lavadora_id IS NOT NULL OR secadora_id IS NOT NULL)) AS otras`,
+        [notaId]
+      );
+      if (otras) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: `La nota ${nota.folio} tiene otra máquina asignada o en uso: no se puede finalizar todavía.` });
+      }
+      await consumirProductosDeNota(client, notaId, req.sucursal, req.user?.id);
+      await client.query(`UPDATE notas SET estado = 'FINALIZADA' WHERE id = $1`, [notaId]);
+      estado = 'FINALIZADA';
+    }
+
+    await client.query('COMMIT');
+    res.json({ maquina: maq.nombre, folio: nota.folio, estado });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('liberarMaquinaReservada error:', err);
+    res.status(500).json({ message: 'No se pudo liberar la máquina. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── PATCH /notas/:id/terminar-lavado ────────────────────────
 /**
  * Termina el lavado de una lavadora y arranca el secado de sus cargas en la

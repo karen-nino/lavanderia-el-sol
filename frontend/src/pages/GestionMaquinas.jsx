@@ -120,6 +120,8 @@ export default function GestionMaquinas() {
   const [desconectando, setDesconectando] = useState(false);
   // Olvidar la cuenta de eWeLink, esperando confirmación.
   const [porConfirmar, setPorConfirmar] = useState(null);
+  // Admin: máquina reservada por soltar ({ m, procesando, error }).
+  const [porLiberar, setPorLiberar] = useState(null);
   const [filtro, setFiltro] = useState('todos');
   const [cuentaSonoff, setCuentaSonoff] = useState(null);
   const [conectando, setConectando] = useState(false);
@@ -258,6 +260,19 @@ export default function GestionMaquinas() {
   };
 
   // La advertencia la pone el modal.
+  /** Suelta la máquina de `porLiberar` de su nota; con `finalizar`, cierra también la nota. */
+  const liberarReservada = async (finalizar) => {
+    const { m } = porLiberar;
+    setPorLiberar(p => ({ ...p, procesando: true, error: '' }));
+    try {
+      await api.patch(`/maquinas/${m.id}/liberar`, { nota_id: m.reservada_nota_id, finalizar });
+      setMaquinas(await api.get('/maquinas'));
+      setPorLiberar(null);
+    } catch (err) {
+      setPorLiberar(p => p && { ...p, procesando: false, error: err.message });
+    }
+  };
+
   const handleDesconectarSonoff = async () => {
     setDesconectando(true);
     try {
@@ -585,6 +600,19 @@ export default function GestionMaquinas() {
                           {m.reservada_folio}
                         </button>
                       ) : m.reservada_folio}
+                      {/* Admin: soltarla si su nota nunca la arrancó (p. ej., el cliente no regresó). */}
+                      {esAdmin && m.reservada_nota_id && (
+                        <>
+                          {' · '}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setPorLiberar({ m, procesando: false, error: '' }); }}
+                            className="font-semibold text-blue underline underline-offset-2 hover:text-blue-700"
+                          >
+                            Liberar
+                          </button>
+                        </>
+                      )}
                     </p>
                   )}
                   {esAdmin && CON_SONOFF && sonoffCfg && (
@@ -623,6 +651,30 @@ export default function GestionMaquinas() {
             await handleDesconectarSonoff();
             setPorConfirmar(null);
           }}
+        />
+      )}
+
+      {/* Liberar una máquina reservada; un Autoservicio cobrado puede además finalizarse. */}
+      {porLiberar && (
+        <ConfirmacionModal
+          tono="aviso"
+          titulo={`¿Liberar la ${porLiberar.m.nombre}?`}
+          mensaje={`Está apartada para la nota ${porLiberar.m.reservada_folio} y nunca se encendió. Queda disponible y no cuenta como usada.`}
+          puntos={[
+            'Lo cobrado no cambia: si hay que devolver dinero, va como salida de caja.',
+            porLiberar.m.reservada_finalizable
+              ? 'Si el cliente ya no va a usarla, finaliza la nota; si va a regresar, déjala abierta para asignarle otra máquina en Salidas.'
+              : 'La nota sigue abierta: en Salidas se le puede asignar otra máquina.',
+          ]}
+          cerrarArriba
+          textoConfirmar={porLiberar.m.reservada_finalizable ? 'Liberar y finalizar la nota' : 'Liberar'}
+          secundaria={porLiberar.m.reservada_finalizable
+            ? { texto: 'Liberar y dejar la nota abierta', onClick: () => liberarReservada(false) }
+            : null}
+          procesando={porLiberar.procesando}
+          error={porLiberar.error}
+          onClose={() => setPorLiberar(null)}
+          onConfirm={() => liberarReservada(Boolean(porLiberar.m.reservada_finalizable))}
         />
       )}
 

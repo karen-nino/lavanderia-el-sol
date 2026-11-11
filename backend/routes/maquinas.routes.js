@@ -21,6 +21,7 @@ import {
   otraFicha,
   revisarSonoff,
 } from '../controllers/maquinas.controller.js';
+import { liberarMaquinaReservada } from '../controllers/notas.controller.js';
 
 const router = Router();
 
@@ -40,6 +41,8 @@ router.post('/', requireAdmin, createMaquina);
 router.put('/:id', requireAdmin, updateMaquina);
 router.delete('/:id', requireAdmin, deleteMaquina);
 router.patch('/:id/estado', cambiarEstadoMaquina);
+// Admin: suelta una máquina reservada que su nota nunca arrancó (sin caja: no toca dinero).
+router.patch('/:id/liberar', requireAdmin, liberarMaquinaReservada);
 router.patch('/:id/detener-ciclo', detenerCiclo);
 // Sin requireAdmin: el segundo ciclo lo da el empleado del mostrador.
 router.patch('/:id/otro-ciclo', conCaja, otroCiclo);
