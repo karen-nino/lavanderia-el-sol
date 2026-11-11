@@ -77,11 +77,11 @@ router.patch('/:id/referencia', guardarReferencia);
 router.patch('/:id/ajuste', ajustarNota);
 router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   conCaja, addProductoToNota);
-// Cambiar la cantidad la hace cualquiera; quitar el producto es de admin.
+// Cambiar la cantidad o quitar el producto lo hace cualquiera.
 router.patch('/:id/productos/:productoId', conCaja, cambiarCantidadProducto);
 router.post('/:id/bolsas-servicio', conCaja, cambiarBolsasServicio);
 // El granel de un servicio Por Encargo lo elige el empleado en Salidas.
 router.put('/:id/cargas/:cargaId/granel/:tipoId', conCaja, elegirGranelDeCarga);
-router.delete('/:id/productos/:productoId', requireAdmin, conCaja, removeProductoFromNota);
+router.delete('/:id/productos/:productoId', conCaja, removeProductoFromNota);
 
 export default router;

@@ -78,7 +78,7 @@ export default function Salidas() {
   const [error,            setError]            = useState('');
   const [loadingMaquina,   setLoadingMaquina]   = useState(false);
   const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
-  // Producto por quitar, esperando confirmación (solo admin).
+  // Producto por quitar, esperando confirmación.
   const [confirmQuitarProd, setConfirmQuitarProd] = useState(null);
   // Producto al que no se le pudo servir más: { producto, error? }. Va en modal
   // porque desde la tarjeta no se ve el aviso de arriba.
@@ -649,7 +649,7 @@ export default function Salidas() {
     cambiarCantidadProducto(p.producto_id, Number(p.cantidad) + 1);
   }
 
-  // Quita un producto (admin): vuelve al inventario y el total baja.
+  // Quita un producto: vuelve al inventario y el total baja.
   async function eliminarProducto(productoId) {
     setLoadingProducto(productoId);
     setErrorAccion('');
@@ -1399,7 +1399,7 @@ export default function Salidas() {
           Se esconde si la nota no lleva granel. */}
       <GranelPorServicio nota={nota} puedeEditar={puedeTocarProductos} onCambio={cargarDatos} />
 
-      {/* Sección 2 — Productos: también se agregan aquí; el admin puede quitar uno. */}
+      {/* Sección 2 — Productos: también se agregan y se quitan aquí. */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
@@ -1492,7 +1492,7 @@ export default function Salidas() {
                         {fmtMonto(cobradoProducto(p))}
                       </span>
                     )}
-                    {esAdmin && !cobroCongelado && (
+                    {!cobroCongelado && (
                       <button
                         onClick={() => setConfirmQuitarProd(p)}
                         disabled={loadingProducto === p.producto_id}
