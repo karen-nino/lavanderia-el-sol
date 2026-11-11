@@ -174,15 +174,30 @@ export const getMaquinas = async (req, res) => {
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,
-              -- Para "Liberar" (admin): un Autoservicio cobrado puede finalizarse ahí.
-              (r.tipo_servicio = 'AUTOSERVICIO' AND r.estado_pago = 'PAGADO') AS reservada_finalizable,
+              -- "Liberar" (admin) solo si la nota nunca la arrancó; un Autoservicio
+              -- cobrado sin otra máquina puede además finalizarse ahí.
+              r.sin_arrancar        AS reservada_liberable,
+              (r.tipo_servicio = 'AUTOSERVICIO' AND r.estado_pago = 'PAGADO'
+               AND r.sin_arrancar AND NOT r.otra_maquina) AS reservada_finalizable,
               u.folio               AS en_uso_folio,
               u.id                  AS en_uso_nota_id,
               c.ciclos              AS ciclos_carga,
               c.ciclo_unico         AS ciclo_unico
          FROM maquinas m
          LEFT JOIN LATERAL (
-           SELECT n.id, n.folio, n.tipo_servicio, n.estado_pago
+           SELECT n.id, n.folio, n.tipo_servicio, n.estado_pago,
+                  NOT EXISTS (
+                    SELECT 1 FROM nota_cargas nc
+                     WHERE nc.nota_id = n.id
+                       AND ((nc.lavadora_id = m.id AND nc.lavadora_iniciada_at IS NOT NULL)
+                         OR (nc.secadora_id = m.id AND nc.secadora_iniciada_at IS NOT NULL))
+                  ) AS sin_arrancar,
+                  EXISTS (
+                    SELECT 1 FROM nota_cargas nc
+                     WHERE nc.nota_id = n.id
+                       AND ((nc.lavadora_id IS NOT NULL AND nc.lavadora_id <> m.id)
+                         OR (nc.secadora_id IS NOT NULL AND nc.secadora_id <> m.id))
+                  ) AS otra_maquina
              FROM notas n
             WHERE m.estado = 'disponible'
               AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')

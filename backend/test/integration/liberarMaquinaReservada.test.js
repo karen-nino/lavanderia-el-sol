@@ -66,6 +66,22 @@ describe('liberar una máquina reservada', () => {
     expect((await maquina(sec)).reservada).toBe(false);
   });
 
+  it('con otra máquina en la nota no ofrece finalizar', async () => {
+    const { sec, nota: id } = await reservada();
+    const lav = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana' });
+    await pool.query('UPDATE nota_cargas SET lavadora_id = $1 WHERE nota_id = $2', [lav, id]);
+    const m = await maquina(sec);
+    expect(m.reservada_liberable).toBe(true);
+    expect(m.reservada_finalizable).toBe(false);
+  });
+
+  it('si la nota ya la arrancó, no se ofrece liberar', async () => {
+    const { sec, nota: id } = await reservada();
+    await pool.query('UPDATE nota_cargas SET secadora_iniciada_at = NOW() WHERE nota_id = $1', [id]);
+    expect((await maquina(sec)).reservada_liberable).toBe(false);
+    await api('patch', `/api/maquinas/${sec}/liberar`, { nota_id: id }).expect(409);
+  });
+
   it('no suelta una máquina que ya está en uso', async () => {
     const { sec, nota: id } = await reservada();
     await pool.query("UPDATE maquinas SET estado = 'en_uso' WHERE id = $1", [sec]);

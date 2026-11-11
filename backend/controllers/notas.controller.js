@@ -3671,20 +3671,6 @@ export const liberarMaquinaReservada = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const { rows: maqRows } = await client.query(
-      'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
-      [id, req.sucursal]
-    );
-    if (maqRows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Máquina no encontrada.' });
-    }
-    const maq = maqRows[0];
-    if (maq.estado !== 'disponible') {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ message: `La ${maq.nombre} no está libre: solo se suelta una máquina que no se ha encendido.` });
-    }
-
     const { rows: notaRows } = await client.query(
       `SELECT folio, estado, estado_pago, tipo_servicio FROM notas
         WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
@@ -3698,6 +3684,20 @@ export const liberarMaquinaReservada = async (req, res) => {
     if (!['EN_ESPERA', 'LAVANDO', 'SECANDO'].includes(nota.estado)) {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: `La nota ${nota.folio} ya no tiene máquinas apartadas.` });
+    }
+
+    const { rows: maqRows } = await client.query(
+      'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (maqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = maqRows[0];
+    if (maq.estado !== 'disponible') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: `La ${maq.nombre} no está libre: solo se suelta una máquina que no se ha encendido.` });
     }
 
     const esSecadora = maq.tipo === 'secadora';

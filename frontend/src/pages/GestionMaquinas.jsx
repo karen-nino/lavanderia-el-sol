@@ -560,6 +560,8 @@ export default function GestionMaquinas() {
                 tabIndex={esAdmin ? 0 : undefined}
                 onClick={esAdmin ? verUso : undefined}
                 onKeyDown={esAdmin ? (e) => {
+                  /* Solo la tarjeta: Enter en el folio o en Liberar es de ese botón. */
+                  if (e.target !== e.currentTarget) return;
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); verUso(); }
                 } : undefined}
                 className={`relative bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col ${
@@ -601,7 +603,7 @@ export default function GestionMaquinas() {
                         </button>
                       ) : m.reservada_folio}
                       {/* Admin: soltarla si su nota nunca la arrancó (p. ej., el cliente no regresó). */}
-                      {esAdmin && m.reservada_nota_id && (
+                      {esAdmin && m.reservada_nota_id && m.reservada_liberable && (
                         <>
                           {' · '}
                           <button
