@@ -153,6 +153,35 @@ describe('otra vuelta sin arrancar (Relavado / Más secado) en Por Encargo', () 
     expect(await vueltas(carga)).toEqual(['L1']);
   });
 
+  it('al marcarla Procesado (Por Entregar), Más secado sin arrancar no borra el primer secado', async () => {
+    const l1 = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
+    const s1 = await seedMaquina({ nombre: 'S1', tipo: 'secadora' });
+    const s2 = await seedMaquina({ nombre: 'S2', tipo: 'secadora' });
+    const n = await api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana', secadora_tipo: 'mediana' }],
+    }).expect(201);
+    const id = n.body.id;
+    const carga = n.body.cargas[0].id;
+    await api('patch', `/api/notas/${id}/asignar-carga-maquina`, { carga_id: carga, slot: 'lavadora', maquina_id: l1 }).expect(200);
+    await api('patch', `/api/notas/${id}/activar-pendientes`, { maquina_id: l1 }).expect(200);
+    await api('patch', `/api/notas/${id}/terminar-lavado-final`, { lavadora_id: l1 }).expect(200);
+    await api('patch', `/api/notas/${id}/asignar-carga-maquina`, { carga_id: carga, slot: 'secadora', maquina_id: s1 }).expect(200);
+    await api('patch', `/api/notas/${id}/activar-pendientes`, { maquina_id: s1 }).expect(200);
+    await api('patch', `/api/notas/${id}/terminar-secado`, { secadora_id: s1 }).expect(200);
+    await api('patch', `/api/notas/${id}/asignar-maquina`, { maquina_ids: [s2], carga_id: carga, cobrar: false }).expect(200);
+
+    await api('patch', `/api/notas/${id}/estado`, { estado: 'LISTA' }).expect(200);
+    const { rows: [c] } = await pool.query(
+      'SELECT secadora_id, secadora_usada_id, secadora_iniciada_at FROM nota_cargas WHERE id = $1', [carga]);
+    expect(c.secadora_id).toBeNull();
+    expect(c.secadora_usada_id).toBe(s1);
+    expect(c.secadora_iniciada_at).not.toBeNull();
+    const { rows } = await pool.query(
+      "SELECT maquina_nombre FROM nota_carga_maquinas WHERE carga_id = $1 AND slot = 'secadora'", [carga]);
+    expect(rows.map(r => r.maquina_nombre)).toEqual(['S1']);
+  });
+
   it('el cierre de medianoche también conserva el primer lavado', async () => {
     const { l1, carga } = await relavadoSinArrancar();
     const { liberarMaquinasCierreDelDia } = await import('../../jobs/cierreDelDia.js');

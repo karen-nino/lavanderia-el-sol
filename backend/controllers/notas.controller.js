@@ -2730,9 +2730,15 @@ export const cambiarEstadoNota = async (req, res) => {
       estado === 'CANCELADA' ? [estado, id, motivoCancel] : [estado, id]
     );
 
-    // Al pasar a Por Entregar o cancelar, la nota suelta sus máquinas.
+    // Al pasar a Por Entregar o cancelar, la nota suelta sus máquinas; la vuelta
+    // asignada sin arrancar (Relavado, Más secado) se deshace y queda la anterior.
     if (estado === 'LISTA' || estado === 'CANCELADA') {
       await liberarMaquinasDeNota(client, id);
+      const { rows: cargas } = await client.query(
+        'SELECT id FROM nota_cargas WHERE nota_id = $1 FOR UPDATE', [id]
+      );
+      await soltarVueltaSinArrancar(client, cargas.map(r => r.id), 'lavadora');
+      await soltarVueltaSinArrancar(client, cargas.map(r => r.id), 'secadora');
     }
 
     if (estado === 'CANCELADA') {
