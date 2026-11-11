@@ -92,7 +92,10 @@ describe('maquinasDeCarga', () => {
     expect(maquinasDeCarga(carga({ secadora_tipo_previsto: 'mediana' }), 'AUTOSERVICIO')).toEqual([]);
   });
 
-  it('la secadora va sin calificativo: es de un solo tamaño', () => {
+  it('la secadora lleva el tamaño de la que se usó', () => {
+    expect(maquinasDeCarga(carga({
+      secadora_usada_id: 9, secadora_usada_nombre: 'S1', secadora_usada_tamano: 'grande', precio_secadora: 60,
+    }))).toEqual([{ nombre: 'Secadora', tipo: 'Grande', precio: 60, porDefinir: false }]);
     expect(maquinasDeCarga(carga({
       secadora_usada_id: 9, secadora_usada_nombre: 'S1', precio_secadora: 45,
     }))).toEqual([{ nombre: 'Secadora', tipo: '', precio: 45, porDefinir: false }]);

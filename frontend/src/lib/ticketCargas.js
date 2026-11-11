@@ -27,9 +27,10 @@ export function maquinasDeCarga(cg, tipoServicio) {
           precio: Number(cg.precio_lavadora) }
       : null;
 
-  // La secadora es de un solo tamaño: no lleva calificativo.
+  // La secadora con el tamaño de la que se usó (cada tamaño cobra su precio).
   const secadora = (cg.secadora_usada_id || (cg.secadora_tipo_previsto && !soloAsignadas))
-    ? { nombre: 'Secadora', tipo: '', precio: Number(cg.precio_secadora),
+    ? { nombre: 'Secadora', tipo: cg.secadora_usada_id ? capitalizar(cg.secadora_usada_tamano) : '',
+        precio: Number(cg.precio_secadora),
         // Autoservicio: cobra por programa y aún no se inicia.
         porDefinir: Boolean(cg.secadora_por_definir) }
     : null;

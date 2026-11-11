@@ -1473,8 +1473,10 @@ export default function DetalleNota() {
                       ) : (
                         maquinasCarga.map((m, i) => {
                           const cfg = BADGE_MAQUINA_ESTADO[m.estado];
-                          // El tamaño (M/J) solo en lavadoras.
-                          const tamanoLabel = m.tipo === 'secadora' ? null : MAQUINA_TIPO_LABEL[m.tipo];
+                          // El tamaño (C/M/G/J): la lavadora por su tipo; la secadora, por el suyo.
+                          const tamanoLabel = m.tipo === 'secadora'
+                            ? (m.tamano ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1) : null)
+                            : MAQUINA_TIPO_LABEL[m.tipo];
                           const tipoLabel = tamanoLabel ? (TAMANO_ABBR[tamanoLabel] ?? tamanoLabel) : null;
                           return (
                             <div key={i} className="flex items-start justify-between gap-2">
