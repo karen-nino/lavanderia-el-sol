@@ -162,7 +162,7 @@ const BADGE_ESTADO = {
 const BADGE_DOBLADO = { label: 'Doblado', cls: 'bg-purple-100 text-purple-700' };
 
 /** Por Encargo de puro edredón ya lavado, esperando "Procesado" (solo Retiro; sigue EN_ESPERA). */
-const BADGE_EDREDON = { label: 'Edredón', cls: 'bg-teal-100 text-teal-700' };
+const BADGE_EDREDON = { label: 'Edredón', cls: 'bg-purple-100 text-purple-700' };
 
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
