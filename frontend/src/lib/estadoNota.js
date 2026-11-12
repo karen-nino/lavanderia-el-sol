@@ -13,9 +13,11 @@ export function etiquetaEstadoNota(estado, tipoServicio, labelBase) {
 }
 
 /**
- * ¿La nota espera a que el cliente pase por ella? Listas o pagadas sin entregar,
- * salvo Autoservicio: ahí LISTA es "Por Cobrar" (el cliente ya se llevó su ropa).
+ * ¿La nota espera a que el cliente pase por ella? Listas o pagadas sin entregar
+ * (salvo Autoservicio: ahí LISTA es "Por Cobrar"), más las Doblado y Edredón que
+ * esperan "Procesado".
  */
 export function esPorEntregar(nota) {
+  if (nota.doblado || nota.edredon) return true;
   return ['LISTA', 'PAGADA'].includes(nota.estado) && nota.tipo_servicio !== 'AUTOSERVICIO';
 }

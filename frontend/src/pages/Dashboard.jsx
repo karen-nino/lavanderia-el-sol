@@ -124,7 +124,7 @@ export default function Dashboard() {
       && n.estado_pago   === 'PENDIENTE'
       && n.estado        !== 'CANCELADA'
   ).length;
-  // "Para Entregar": las que esperan al cliente, de cualquier día (sin Autoservicio por cobrar).
+  // "Para Entregar": las que esperan al cliente o "Procesado" (Doblado y Edredón), de cualquier día.
   const paraEntregar     = notas.filter(esPorEntregar).length;
   const ventasHoy        = ventas?.tarjetas?.total_cobrado ?? 0;
 
