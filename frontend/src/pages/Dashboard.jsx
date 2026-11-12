@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin } from '../lib/roles';
-import { esAutoservicioPorCobrar, esPorEntregar } from '../lib/estadoNota';
+import { esAutoservicioPorCobrar, esPagada, esPorEntregar } from '../lib/estadoNota';
 import KpiCard from '../components/KpiCard';
 import SalesCard from '../components/SalesCard';
 import CashCutCard from '../components/CashCutCard';
@@ -116,7 +116,7 @@ export default function Dashboard() {
   // KPIs de la sección "Hoy": solo notas creadas hoy (se reinician a medianoche).
   const notasDeHoy       = notas.filter(n => esDeHoy(n.created_at, now));
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
-  const notasPagadas     = notasDeHoy.filter(n => n.estado_pago === 'PAGADO').length;
+  const notasPagadas     = notasDeHoy.filter(esPagada).length;
   // "Por Cobrar": notas de Autoservicio de hoy pendientes de pago (Por Encargo,
   // Edredón y productos se cobran al entregar). Sin canceladas.
   const notasPorCobrar   = notasDeHoy.filter(esAutoservicioPorCobrar).length;
@@ -161,7 +161,7 @@ export default function Dashboard() {
             value={notasPagadas}
             color="green"
             icon={KpiIcon.paid}
-            to="/notas"
+            to="/notas?estado=PAGADAS&fecha=HOY"
           />
           <KpiCard
             label="Notas"

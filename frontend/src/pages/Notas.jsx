@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { esAutoservicioPorCobrar, esPorEntregar, etiquetaEstadoNota } from '../lib/estadoNota';
+import { esAutoservicioPorCobrar, esPagada, esPorEntregar, etiquetaEstadoNota } from '../lib/estadoNota';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { recordarListaNotas } from '../lib/filtrosNotas';
@@ -15,7 +15,7 @@ const ESTADOS = ['TODOS', 'EN_ESPERA', 'POR_ENTREGAR', 'PENDIENTE', 'FINALIZADA'
   'AUTOSERVICIO', 'POR_ENCARGO'];
 
 /** Filtros internos: llegan por la URL desde un KPI y no salen en el menú de Estado. */
-const FILTROS_INTERNOS = ['AUTOSERVICIO_POR_COBRAR'];
+const FILTROS_INTERNOS = ['AUTOSERVICIO_POR_COBRAR', 'PAGADAS'];
 
 /** Opciones del filtro por tipo de servicio (no son un estado). */
 const FILTROS_SERVICIO = ['AUTOSERVICIO', 'POR_ENCARGO'];
@@ -57,6 +57,7 @@ const FILTRO_LABEL = {
   AUTOSERVICIO: 'Autoservicio',
   POR_ENCARGO:  'Por Encargo',
   AUTOSERVICIO_POR_COBRAR: 'Autoservicio por cobrar',
+  PAGADAS:      'Pagadas',
 };
 
 /** Mensaje del estado vacío según el filtro ("No hay notas por cobrar"). */
@@ -70,6 +71,7 @@ const FILTRO_VACIO = {
   AUTOSERVICIO: 'No hay notas de autoservicio',
   POR_ENCARGO:  'No hay notas por encargo',
   AUTOSERVICIO_POR_COBRAR: 'No hay autoservicios por cobrar',
+  PAGADAS:      'No hay notas pagadas',
 };
 
 const RANGOS_FECHA = [
@@ -376,6 +378,8 @@ export default function Notas() {
     } else if (filtro === 'EN_ESPERA') {
       /* Doblado y Edredón siguen EN_ESPERA pero van en Por Entregar. */
       if (n.estado !== 'EN_ESPERA' || esPorEntregar(n)) return false;
+    } else if (filtro === 'PAGADAS') {
+      if (!esPagada(n)) return false;
     } else if (filtro === 'AUTOSERVICIO_POR_COBRAR') {
       if (!esAutoservicioPorCobrar(n)) return false;
     } else if (filtro === 'POR_ENTREGAR') {

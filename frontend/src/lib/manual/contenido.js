@@ -166,7 +166,7 @@ El filtro de fecha arranca en Hoy. Cámbialo a Ayer, Últimos 7 días, Este mes,
 
 El filtro de estado te deja ver solo las que están Por Entregar, las que están Por Cobrar, las canceladas, etc. En Espera son las que todavía no terminan de lavarse; las Doblado${E(' y Edredón')} ya salen en Por Entregar.
 
-Los recuadros del Inicio abren la lista ya filtrada: Para Entregar, con todo lo que espera al cliente de cualquier día; Por Cobrar, solo con los Autoservicios de hoy que todavía deben.
+Los recuadros del Inicio abren la lista ya filtrada: Pagadas, solo con las notas de hoy ya pagadas completas; Por Cobrar, solo con los Autoservicios de hoy que todavía deben; Para Entregar, con todo lo que espera al cliente de cualquier día.
 
 Los filtros se quedan puestos: si entras a una nota y regresas con la flecha, la lista sigue como la dejaste.`,
       },

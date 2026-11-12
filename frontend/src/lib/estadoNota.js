@@ -28,3 +28,8 @@ export function esAutoservicioPorCobrar(nota) {
     && nota.estado_pago === 'PENDIENTE'
     && nota.estado !== 'CANCELADA';
 }
+
+/** Nota con el pago completo (KPI "Pagadas"); sin canceladas. */
+export function esPagada(nota) {
+  return nota.estado_pago === 'PAGADO' && nota.estado !== 'CANCELADA';
+}
