@@ -153,21 +153,26 @@ const SQL_SUCURSALES_ETIQUETA_EDREDON =
  */
 async function hayCargasPendientes(client, notaId) {
   const { rows } = await client.query(
-    `SELECT EXISTS (
-       SELECT 1 FROM nota_cargas nc
-        WHERE nc.nota_id = $1
-          AND (
-            nc.lavadora_id IS NOT NULL
-            OR nc.secadora_id IS NOT NULL
-            OR (nc.lavadora_tipo IS NOT NULL AND nc.lavadora_iniciada_at IS NULL
-                AND nc.lavadora_usada_id IS NULL)
-            OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_iniciada_at IS NULL
-                AND nc.secadora_usada_id IS NULL)
-          )
-     ) AS pendientes`,
+    `SELECT ${sqlHayCargasPendientes('$1')} AS pendientes`,
     [notaId]
   );
   return rows[0].pendientes;
+}
+
+/** Condición SQL de `hayCargasPendientes` para la nota `notaRef` (id o columna). */
+function sqlHayCargasPendientes(notaRef) {
+  return `EXISTS (
+       SELECT 1 FROM nota_cargas pc
+        WHERE pc.nota_id = ${notaRef}
+          AND (
+            pc.lavadora_id IS NOT NULL
+            OR pc.secadora_id IS NOT NULL
+            OR (pc.lavadora_tipo IS NOT NULL AND pc.lavadora_iniciada_at IS NULL
+                AND pc.lavadora_usada_id IS NULL)
+            OR (pc.secadora_tipo IS NOT NULL AND pc.secadora_iniciada_at IS NULL
+                AND pc.secadora_usada_id IS NULL)
+          )
+     )`;
 }
 
 /**
@@ -1844,18 +1849,11 @@ export const getNotas = async (req, res) => {
                 AND EXISTS (SELECT 1 FROM nota_cargas nc
                              WHERE nc.nota_id = n.id
                                AND (nc.secadora_usada_id IS NOT NULL OR nc.secadora_iniciada_at IS NOT NULL))
-                AND NOT EXISTS (SELECT 1 FROM nota_cargas nc
-                                 WHERE nc.nota_id = n.id
-                                   AND (nc.lavadora_id IS NOT NULL
-                                     OR nc.secadora_id IS NOT NULL
-                                     OR (nc.lavadora_tipo IS NOT NULL AND nc.lavadora_iniciada_at IS NULL
-                                         AND nc.lavadora_usada_id IS NULL)
-                                     OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_iniciada_at IS NULL
-                                         AND nc.secadora_usada_id IS NULL)))
+                AND NOT ${sqlHayCargasPendientes('n.id')}
               ) AS doblado,
               -- "Edredón": Por Encargo de puro edredón (las máquinas extra no
-              -- cuentan) con alguna lavadora terminada, esperando "Procesado".
-              -- Sigue EN_ESPERA; solo cambia cómo se ve.
+              -- cuentan) con alguna lavadora terminada y sin máquinas pendientes,
+              -- esperando "Procesado". Sigue EN_ESPERA; solo cambia cómo se ve.
               (n.tipo_servicio = 'POR_ENCARGO' AND n.estado = 'EN_ESPERA'
                 AND n.sucursal = ANY(${SQL_SUCURSALES_ETIQUETA_EDREDON})
                 AND EXISTS (SELECT 1 FROM nota_cargas nc
@@ -1865,6 +1863,7 @@ export const getNotas = async (req, res) => {
                                  WHERE nc.nota_id = n.id AND NOT nc.es_adicional
                                    AND nc.tipo_prenda IS DISTINCT FROM 'EDREDON')
                 AND ${sqlAlgunaLavadoraTermino('n.id')}
+                AND NOT ${sqlHayCargasPendientes('n.id')}
               ) AS edredon,
               -- Máquinas que esta nota arrancó y siguen corriendo.
               (SELECT COALESCE(json_agg(DISTINCT mm.nombre), '[]'::json)

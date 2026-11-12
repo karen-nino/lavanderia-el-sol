@@ -979,6 +979,18 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
         expect((await enLista(adminRetiro, notaId)).edredon).toBe(false);
       });
 
+      it('con una máquina asignada sin iniciar (p. ej. una secadora), todavía no', async () => {
+        const { notaId } = await trasLavar('edr4', {
+          usuario: adminRetiro, sucursal: 'retiro', cargas: [EDREDON],
+        });
+        const sec = await seedMaquina({ nombre: 'S-edr4', tipo: 'secadora', tamano: 'mediana', sucursal: 'retiro' });
+        await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+          .set(auth(adminRetiro.token, 'retiro')).send({ maquina_ids: [sec], cobrar: false }).expect(200);
+        const nota = await enLista(adminRetiro, notaId);
+        expect(nota.estado).toBe('EN_ESPERA');
+        expect(nota.edredon).toBe(false);
+      });
+
       it('sin lavadora terminada, todavía no', async () => {
         const clienteId = await seedCliente({ sucursal: 'retiro' });
         const nota = await request(app).post('/api/notas').set(auth(adminRetiro.token, 'retiro')).send({
