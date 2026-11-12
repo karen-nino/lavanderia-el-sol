@@ -137,7 +137,7 @@ Si cambias algo que mueve el total de una nota ya cobrada (agregas un producto, 
       {
         id: 'estados-de-una-nota',
         titulo: 'Qué significa cada estado',
-        claves: ['en espera', 'lavando', 'secando', 'por entregar', 'finalizada', 'colores'],
+        claves: ['en espera', 'lavando', 'secando', 'por entregar', 'doblado', 'por cobrar', 'finalizada', 'colores'],
         cuerpo: `EN ESPERA — la nota está capturada pero ninguna máquina ha arrancado.
 
 LAVANDO — al menos una lavadora de la nota está corriendo.
@@ -146,7 +146,11 @@ SECANDO — ya no hay lavadoras corriendo, pero sí una secadora.
 
 POR ENTREGAR — la ropa está lista y espera al cliente. En POR ENCARGO la nota NO llega sola: llega cuando tocas Procesado (ya doblada y empacada).${E(' En EDREDÓN llega sola al terminar su última carga.')}
 
-FINALIZADA — se acabó. En AUTOSERVICIO la nota llega aquí SOLA en cuanto termina su última carga, si ya está pagada: el cliente está en el local y se lleva su ropa él mismo. Si todavía debe, se queda en Por Entregar hasta que la cobras, y al cobrarla se finaliza sola. Una venta de PRODUCTOS nace directamente aquí: no hay nada que lavar ni que esperar.
+DOBLADO${E(' / EDREDÓN')} — una nota de Por Encargo que ya lavó y secó${E(' (o un edredón ya lavado)')} y espera que la dobles y toques Procesado. Ya sale en el filtro Por Entregar y en el recuadro Para Entregar del Inicio.
+
+POR COBRAR — un AUTOSERVICIO que terminó su última carga pero todavía debe: el cliente ya se llevó su ropa y solo falta cobrar. No sale en Por Entregar; se cuenta en el recuadro Por Cobrar del Inicio.
+
+FINALIZADA — se acabó. En AUTOSERVICIO la nota llega aquí SOLA en cuanto termina su última carga, si ya está pagada: el cliente está en el local y se lleva su ropa él mismo. Si todavía debe, se queda en Por Cobrar hasta que la cobras, y al cobrarla se finaliza sola. Una venta de PRODUCTOS nace directamente aquí: no hay nada que lavar ni que esperar.
 
 CANCELADA — la nota se anuló. Solo si todavía no se ha cobrado ni tiene abonos. Solo un administrador puede cancelarla.`,
       },
@@ -160,7 +164,9 @@ El buscador encuentra por FOLIO, por nombre del cliente o por teléfono. No hace
 
 El filtro de fecha arranca en Hoy. Cámbialo a Ayer, Últimos 7 días, Este mes, o elige un mes o un año concretos.
 
-El filtro de estado te deja ver solo las que están Por Entregar, las que están Por Cobrar, las canceladas, etc.
+El filtro de estado te deja ver solo las que están Por Entregar, las que están Por Cobrar, las canceladas, etc. En Espera son las que todavía no terminan de lavarse; las Doblado${E(' y Edredón')} ya salen en Por Entregar.
+
+Los recuadros del Inicio abren la lista ya filtrada: Para Entregar, con todo lo que espera al cliente de cualquier día; Por Cobrar, solo con los Autoservicios de hoy que todavía deben.
 
 Los filtros se quedan puestos: si entras a una nota y regresas con la flecha, la lista sigue como la dejaste.`,
       },

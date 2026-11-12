@@ -373,6 +373,9 @@ export default function Notas() {
     if (n.estado === 'CANCELADA' && filtro !== 'CANCELADA') return false;
     if (filtro === 'PENDIENTE') {
       if (n.estado_pago !== 'PENDIENTE') return false;
+    } else if (filtro === 'EN_ESPERA') {
+      /* Doblado y Edredón siguen EN_ESPERA pero van en Por Entregar. */
+      if (n.estado !== 'EN_ESPERA' || esPorEntregar(n)) return false;
     } else if (filtro === 'AUTOSERVICIO_POR_COBRAR') {
       if (!esAutoservicioPorCobrar(n)) return false;
     } else if (filtro === 'POR_ENTREGAR') {
