@@ -11,6 +11,7 @@ import { COBRO_APARTE_ENCARGO, GRANEL_POR_ELEGIR } from '../db/sqlProductos.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, PRECIOS_DE_PROGRAMAS, OPCIONES_DE_MARCA,
   esCronometroSql, conIniciarSql, soloFichasSql, cronometroActivo, TOPE_RELOJ, PRECIO_DEL_MODELO, pideFichasSql,
+  TOPE_DE_FICHAS,
 } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
@@ -623,8 +624,12 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
   const ti = await tiemposCarga(client);
   await client.query(
     `UPDATE maquinas m
-        -- Una que ya corría con fichas de más conserva el tope que le subieron.
+        -- Una que ya corría con fichas de más conserva el tope que le subieron; la
+        -- de fichas con tiempos, el de sus fichas.
         SET ciclo_minutos = CASE WHEN m.minutos_pagados IS NOT NULL AND m.en_uso_desde <> NOW()
+                                 THEN m.ciclo_minutos
+                                 WHEN ciclos.fichas_con_tiempo AND m.en_uso_desde <> NOW()
+                                      AND m.ciclo_minutos IS NOT NULL
                                  THEN m.ciclo_minutos ELSE ciclos.minutos END,
             -- Si arrancó en esta transacción (en_uso_desde = NOW()), limpia el
             -- programa y lo sumado de la vuelta anterior.
@@ -635,8 +640,9 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
        FROM (
          -- Lavadoras de la nota
          SELECT nc.lavadora_id AS mid,
-                -- El modelo de solo fichas no tiene tope.
-                CASE WHEN COALESCE(mo.solo_fichas, FALSE) THEN NULL
+                -- El de fichas sin tiempos no tiene tope; el de con tiempos, sus fichas.
+                CASE WHEN COALESCE(mo.fichas_con_tiempo, FALSE) THEN ${TOPE_DE_FICHAS('ml')}
+                     WHEN COALESCE(mo.solo_fichas, FALSE) THEN NULL
                      ELSE COALESCE(
                        ${MINUTOS_DEL_MODELO('mo')},
                        tm.minutos,
@@ -644,7 +650,8 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
                                     WHEN 'lavadora_grande' THEN $6::int
                                     WHEN 'lavadora_chica'  THEN $8::int ELSE $3::int END
                      )
-                END AS minutos
+                END AS minutos,
+                COALESCE(mo.fichas_con_tiempo, FALSE) AS fichas_con_tiempo
            FROM nota_cargas nc
            JOIN maquinas ml ON ml.id = nc.lavadora_id
            -- La máquina guarda marca y modelo por nombre. Misma cadena que
@@ -659,14 +666,16 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
          UNION ALL
          -- Secadoras de la nota, con el mismo criterio.
          SELECT nc.secadora_id AS mid,
-                CASE WHEN COALESCE(mo.solo_fichas, FALSE) THEN NULL
+                CASE WHEN COALESCE(mo.fichas_con_tiempo, FALSE) THEN ${TOPE_DE_FICHAS('ms')}
+                     WHEN COALESCE(mo.solo_fichas, FALSE) THEN NULL
                      ELSE COALESCE(
                        ${MINUTOS_DEL_MODELO('mo')}, tm.minutos,
                        CASE ms.tamano WHEN 'jumbo' THEN $5::int
                                       WHEN 'grande' THEN $7::int
                                       WHEN 'chica'  THEN $9::int ELSE $4::int END
                      )
-                END AS minutos
+                END AS minutos,
+                COALESCE(mo.fichas_con_tiempo, FALSE) AS fichas_con_tiempo
            FROM nota_cargas nc
            JOIN maquinas ms ON ms.id = nc.secadora_id
            LEFT JOIN marcas_maquina mm ON mm.nombre = ms.marca

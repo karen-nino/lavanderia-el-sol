@@ -72,16 +72,17 @@ export const esCronometroSql = () => (cronometroActivo() ? 'TRUE' : 'FALSE');
  * - todas las Speed Queen;
  * - el modelo que arranca solo al recibir corriente (la Girbau);
  * - el modelo que pregunta su programa (se pregunta al iniciar);
- * - el modelo de solo fichas (sin Sonoff: solo arranca el cronómetro).
+ * - los modelos de fichas sin Sonoff (solo arranca el cronómetro).
  */
 export const MARCA_CON_INICIAR = 'speed queen';
 
 /**
- * ¿El modelo trabaja solo con fichas? Sin Sonoff ni tiempos: no se enciende, no
- * tiene tope y su cronómetro corre hasta finalizarla.
+ * ¿El modelo trabaja con fichas sin Sonoff? No se enciende ni se apaga. El de
+ * "sin tiempos" no tiene tope y su cronómetro corre hasta finalizarla; el de
+ * "con tiempos" (fichas_con_tiempo) tiene tope = fichas × "Cada ficha".
  */
 export const soloFichasSql = (alias) => `COALESCE((
-  SELECT mof.solo_fichas
+  SELECT mof.solo_fichas OR mof.fichas_con_tiempo
     FROM marcas_maquina mmf
     JOIN modelos_maquina mof ON mof.marca_id = mmf.id
    WHERE mmf.nombre = ${alias}.marca
@@ -113,6 +114,7 @@ export const conIniciarSql = (alias) => (!cronometroActivo() && process.env.ENTO
        AND moc.nombre = ${alias}.modelo
        AND ((moc.pregunta_tiempo AND cardinality(${PROGRAMAS_DEL_MODELO('moc')}) > 1)
             OR moc.solo_fichas
+            OR moc.fichas_con_tiempo
             OR moc.arranca_con_corriente)
   )
 )` : 'FALSE');
@@ -150,6 +152,25 @@ export const MINUTOS_POR_FICHA = `(
      AND mo.nombre = m.modelo
      -- Solo con la casilla "Trabaja con fichas: con Sonoff y con tiempos".
      AND mo.fichas_sonoff
+)`;
+
+/**
+ * Tope de la máquina `a` si su modelo es "Trabaja con fichas: sin Sonoff y con
+ * tiempos": fichas × "Cada ficha"; o NULL (sin minutos por ficha, sin tope).
+ * Las fichas son `fichas` (SQL) o, si no llega, las de su pasada viva (1 si la
+ * sucursal no lleva inventario de fichas).
+ */
+export const TOPE_DE_FICHAS = (a, fichas = null) => `(
+  SELECT mo.minutos_por_ficha * GREATEST(1, COALESCE(${fichas ?? `(
+           SELECT p.fichas FROM nota_carga_maquinas p
+            WHERE p.maquina_id = ${a}.id AND p.finalizada_at IS NULL
+            ORDER BY p.asignada_at DESC, p.id DESC LIMIT 1
+         )`}, 1))
+    FROM marcas_maquina mm
+    JOIN modelos_maquina mo ON mo.marca_id = mm.id
+   WHERE mm.nombre = ${a}.marca
+     AND mo.nombre = ${a}.modelo
+     AND mo.fichas_con_tiempo
 )`;
 
 /** Costo de cada ficha de la secadora de fichas (su modelo), o NULL. */

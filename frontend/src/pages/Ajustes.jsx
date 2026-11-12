@@ -1068,19 +1068,23 @@ const CAMPOS_MODELO = [
     { v: 'jumbo',   label: 'Jumbo'   },
   ] },
   // Modelos con varios programas: se declara aquí para no cargar a los demás.
-  { name: 'pregunta_tiempo', defecto: false, tipo: 'check', excluye: 'solo_fichas',
+  { name: 'pregunta_tiempo', defecto: false, tipo: 'check', excluye: ['solo_fichas', 'fichas_con_tiempo'],
     label: 'Varios programas: se elige cuál al iniciar', chip: 'varios programas' },
   // De fichas con Sonoff (la Sec49), lavadora o secadora: solo con ella salen
   // "Cada ficha" y "Costo ficha" en los tiempos. Va con varios programas.
-  { name: 'fichas_sonoff', defecto: false, tipo: 'check', excluye: 'solo_fichas',
+  { name: 'fichas_sonoff', defecto: false, tipo: 'check', excluye: ['solo_fichas', 'fichas_con_tiempo'],
     label: 'Trabaja con fichas: con Sonoff y con tiempos', chip: 'fichas con Sonoff' },
   // Arranca en cuanto le llega la luz (la Girbau): un solo botón, "Iniciar", como las Speed Queen.
-  { name: 'arranca_con_corriente', defecto: false, tipo: 'check', excluye: 'solo_fichas',
+  { name: 'arranca_con_corriente', defecto: false, tipo: 'check', excluye: ['solo_fichas', 'fichas_con_tiempo'],
     label: 'Arranca sola al recibir corriente: un solo botón, Iniciar', chip: 'arranca con corriente' },
   // Solo fichas: sin Sonoff ni tiempos; no va con varios programas.
   { name: 'solo_fichas', defecto: false, tipo: 'check',
-    excluye: ['pregunta_tiempo', 'fichas_sonoff', 'arranca_con_corriente'],
+    excluye: ['pregunta_tiempo', 'fichas_sonoff', 'arranca_con_corriente', 'fichas_con_tiempo'],
     label: 'Trabaja con fichas: sin Sonoff y sin tiempos', chip: 'fichas' },
+  // Fichas sin Sonoff con tope = fichas × "Cada ficha"; al llegar se finaliza sola (el Maytag1).
+  { name: 'fichas_con_tiempo', defecto: false, tipo: 'check',
+    excluye: ['pregunta_tiempo', 'fichas_sonoff', 'arranca_con_corriente', 'solo_fichas'],
+    label: 'Trabaja con fichas: sin Sonoff y con tiempos', chip: 'fichas con tiempos' },
   // "Una carga corre 2 ciclos" no se muestra con cronómetro. Para el temporizador:
   //   { name: 'dos_ciclos', defecto: false, tipo: 'check',
   //     label: 'Una carga corre 2 ciclos', chip: '2 ciclos' },
@@ -1521,6 +1525,7 @@ function AjustesAdmin() {
       return mo ? {
         ...t, modelo: mo.nombre, tipo: mo.tipo, tamano: mo.tamano,
         pregunta_tiempo: mo.pregunta_tiempo, fichas_sonoff: mo.fichas_sonoff, solo_fichas: mo.solo_fichas,
+        fichas_con_tiempo: mo.fichas_con_tiempo,
       } : t;
     };
     setTiemposMarca(prev => prev.filter(sigue).map(alDia));
@@ -1700,6 +1705,21 @@ function AjustesAdmin() {
   /** Modelo marcado "Trabaja con fichas: con Sonoff y con tiempos". */
   const esDeFichas = (t) => Boolean(t?.fichas_sonoff);
 
+  /** "Cada ficha" del modelo de fichas sin Sonoff con tiempos: su tope es fichas × estos minutos. */
+  const campoFichaSinSonoff = (t, inputCls, unidadCls) => (
+    <div className="flex items-center gap-2">
+      <span className={`${unidadCls} flex-shrink-0 w-24`}>Cada ficha</span>
+      <input
+        type="number" inputMode="numeric" min="1" step="1" placeholder="—"
+        aria-label={`Minutos por ficha de ${etiquetaTiempo(t)}`}
+        value={t.minutos_por_ficha ?? ''}
+        onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, 'minutos_por_ficha')}
+        className={`${inputCls} text-center`}
+      />
+      <span className={`${unidadCls} flex-shrink-0`}>min</span>
+    </div>
+  );
+
   // Máquinas de fichas: al iniciarla se mete una ficha por cada tantos minutos
   // del programa (o del tope). Las demás (Samsung: se encienden y se aprieta
   // Start) no llevan estos campos.
@@ -1817,7 +1837,9 @@ function AjustesAdmin() {
     </div>
   );
   /** Ayuda del renglón del modelo: tope y programas (si tiene) y su precio propio. */
-  const ayudaModelo = (t) => (t.solo_fichas
+  const ayudaModelo = (t) => (t.fichas_con_tiempo
+    ? 'Trabaja con fichas sin Sonoff. Cada ficha: su tope son las fichas que se le meten por estos minutos; al llegar se finaliza sola. Vacío = sin tope. Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.'
+    : t.solo_fichas
     ? 'Trabaja con fichas: no tiene tope. Precio por carga de este modelo; vacío = usa el precio de arriba.'
     : `${ayudaTiempo(t)} Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.`);
 
@@ -2318,8 +2340,9 @@ function AjustesAdmin() {
         label={etiquetaTiempo(t)}
         hint={ayudaModelo(t)}
       >
-        {/* El de fichas no tiene tope: solo su precio. */}
-        {!t.solo_fichas && (
+        {/* El de fichas sin tiempos no tiene tope: solo su precio; el de con tiempos, minutos por ficha. */}
+        {t.fichas_con_tiempo && campoFichaSinSonoff(t, INPUT_CLS, 'text-sm text-gray-500')}
+        {!t.solo_fichas && !t.fichas_con_tiempo && (
           <>
             <div className="flex items-center gap-2">
               <input
@@ -3122,8 +3145,9 @@ function AjustesAdmin() {
         label={etiquetaTiempo(t)}
         hint={ayudaModelo(t)}
       >
-        {/* El de fichas no tiene tope: solo su precio. */}
-        {!t.solo_fichas && (
+        {/* El de fichas sin tiempos no tiene tope: solo su precio; el de con tiempos, minutos por ficha. */}
+        {t.fichas_con_tiempo && campoFichaSinSonoff(t, MOBILE_INPUT_CLS, 'text-base text-grey')}
+        {!t.solo_fichas && !t.fichas_con_tiempo && (
           <>
             <div className="flex items-center gap-2">
               <input

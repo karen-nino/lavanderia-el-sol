@@ -319,9 +319,9 @@ export default function GestionMaquinas() {
   const modeloFueraDeLista = Boolean(form.modelo) && !modelosVisibles.some(mo => mo.nombre === form.modelo);
   // Apagado si no hay nada que elegir, salvo que la máquina ya traiga modelo.
   const modeloBloqueado = modelosVisibles.length === 0 && !form.modelo;
-  // Modelo de fichas: no lleva Sonoff.
+  // Modelo de fichas sin Sonoff (con o sin tiempos): no lleva Sonoff.
   const modeloDeFichas = Boolean(form.modelo) && modelos.some(mo => (
-    mo.marca === form.marca && mo.nombre === form.modelo && mo.solo_fichas
+    mo.marca === form.marca && mo.nombre === form.modelo && (mo.solo_fichas || mo.fichas_con_tiempo)
   ));
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));

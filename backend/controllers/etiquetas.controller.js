@@ -308,7 +308,11 @@ export const crearModeloMaquina = async (req, res) => {
   if (!nombre) {
     return res.status(400).json({ message: 'El nombre es requerido.' });
   }
-  const { tipo, tamano, pregunta_tiempo, dos_ciclos, solo_fichas, fichas_sonoff, arranca_con_corriente } = req.body;
+  const { tipo, tamano, pregunta_tiempo, dos_ciclos, fichas_sonoff, arranca_con_corriente } = req.body;
+  // Las dos casillas de fichas sin Sonoff se excluyen: gana la de con tiempos.
+  const conTiempo = Boolean(req.body.fichas_con_tiempo);
+  const soloFichas = Boolean(req.body.solo_fichas) && !conTiempo;
+  const sinSonoff = soloFichas || conTiempo;
   if (!TIPOS_TIEMPO.includes(tipo)) {
     return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
   }
@@ -322,14 +326,14 @@ export const crearModeloMaquina = async (req, res) => {
     // El orden es dentro de la marca.
     const { rows } = await pool.query(
       `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, solo_fichas,
-                                    fichas_sonoff, arranca_con_corriente, orden)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                                    fichas_sonoff, arranca_con_corriente, fichas_con_tiempo, orden)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
                (SELECT COALESCE(MAX(orden), 0) + 1 FROM modelos_maquina WHERE marca_id = $1))
        RETURNING *`,
       // El de fichas sin Sonoff no tiene programas ni fichas con Sonoff.
       [marcaId, nombre, tipo, tamano, minutos.valor,
-       Boolean(pregunta_tiempo) && !solo_fichas, Boolean(dos_ciclos), Boolean(solo_fichas),
-       Boolean(fichas_sonoff) && !solo_fichas, Boolean(arranca_con_corriente) && !solo_fichas]
+       Boolean(pregunta_tiempo) && !sinSonoff, Boolean(dos_ciclos), soloFichas,
+       Boolean(fichas_sonoff) && !sinSonoff, Boolean(arranca_con_corriente) && !sinSonoff, conTiempo]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -352,8 +356,12 @@ export const actualizarModeloMaquina = async (req, res) => {
   if (!/^\d+$/.test(String(id))) {
     return res.status(404).json({ message: 'No se encontró el modelo.' });
   }
-  const { nombre, activo, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, solo_fichas, fichas_sonoff,
-          arranca_con_corriente } = req.body;
+  const { nombre, activo, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, fichas_sonoff,
+          arranca_con_corriente, fichas_con_tiempo } = req.body;
+  // Las dos casillas de fichas sin Sonoff se excluyen: marcar una apaga la otra.
+  const solo_fichas = req.body.solo_fichas === undefined ? undefined
+    : Boolean(req.body.solo_fichas) && !fichas_con_tiempo;
+  const sinSonoff = Boolean(solo_fichas) || Boolean(fichas_con_tiempo);
 
   const updates = [];
   const values  = [];
@@ -386,24 +394,28 @@ export const actualizarModeloMaquina = async (req, res) => {
     values.push(tamano);
   }
   // "Varios programas" es parte del modelo. Marcarlo de fichas lo apaga.
-  if (pregunta_tiempo !== undefined || solo_fichas) {
+  if (pregunta_tiempo !== undefined || sinSonoff) {
     updates.push(`pregunta_tiempo = $${i++}`);
-    values.push(Boolean(pregunta_tiempo) && !solo_fichas);
+    values.push(Boolean(pregunta_tiempo) && !sinSonoff);
   }
-  if (solo_fichas !== undefined) {
+  if (solo_fichas !== undefined || fichas_con_tiempo) {
     updates.push(`solo_fichas = $${i++}`);
     values.push(Boolean(solo_fichas));
   }
+  if (fichas_con_tiempo !== undefined || solo_fichas) {
+    updates.push(`fichas_con_tiempo = $${i++}`);
+    values.push(Boolean(fichas_con_tiempo) && !solo_fichas);
+  }
   // "Trabaja con fichas: con Sonoff y con tiempos" (lavadoras y secadoras); la
   // de sin Sonoff la apaga.
-  if (fichas_sonoff !== undefined || solo_fichas) {
+  if (fichas_sonoff !== undefined || sinSonoff) {
     updates.push(`fichas_sonoff = $${i++}`);
-    values.push(Boolean(fichas_sonoff) && !solo_fichas);
+    values.push(Boolean(fichas_sonoff) && !sinSonoff);
   }
   // Arranca al recibir corriente: un solo botón, "Iniciar". Sin Sonoff no aplica.
-  if (arranca_con_corriente !== undefined || solo_fichas) {
+  if (arranca_con_corriente !== undefined || sinSonoff) {
     updates.push(`arranca_con_corriente = $${i++}`);
-    values.push(Boolean(arranca_con_corriente) && !solo_fichas);
+    values.push(Boolean(arranca_con_corriente) && !sinSonoff);
   }
   // Si el modelo corre dos ciclos por carga.
   if (dos_ciclos !== undefined) {
@@ -497,7 +509,7 @@ export const getTiemposMarca = async (req, res) => {
               mo.minutos, mo.minutos_2, mo.minutos_3, mo.minutos_4, mo.pregunta_tiempo, mo.dos_ciclos,
               mo.minutos_por_ficha, mo.precio_por_ficha, mo.fichas_sonoff,
               mo.precio_programa_2, mo.precio_programa_3, mo.precio_programa_4,
-              mo.precio_carga, mo.solo_fichas
+              mo.precio_carga, mo.solo_fichas, mo.fichas_con_tiempo
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
         -- El de fichas también: no pide tiempos, pero puede tener precio propio.
@@ -572,7 +584,8 @@ export const guardarTiempoMarca = async (req, res) => {
           WHERE id = $${i}
           RETURNING id AS modelo_id, marca_id, nombre AS modelo, tipo, tamano,
                     minutos, minutos_2, minutos_3, minutos_4, pregunta_tiempo, minutos_por_ficha, precio_por_ficha,
-                    precio_programa_2, precio_programa_3, precio_programa_4, precio_carga, solo_fichas`,
+                    precio_programa_2, precio_programa_3, precio_programa_4, precio_carga, solo_fichas,
+                    fichas_con_tiempo`,
         values
       );
       if (rows.length === 0) {

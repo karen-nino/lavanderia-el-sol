@@ -1231,7 +1231,9 @@ export default function Salidas() {
                         ) : (
                           <span className="text-sm font-medium text-green-700 basis-full">
                             {/* Botón Iniciar (Speed Queen, Sec49): mensaje corto. */}
-                            {m.solo_fichas
+                            {m.solo_fichas && m.ciclo_minutos
+                              ? `Corriendo: ${m.ciclo_minutos} min de fichas. Al llegar se finaliza sola.`
+                              : m.solo_fichas
                               ? 'Corriendo. Finalízala cuando termine.'
                               : m.con_iniciar
                               ? 'Encendida. Finalízala cuando termine.'

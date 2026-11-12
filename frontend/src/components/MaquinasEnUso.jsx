@@ -311,8 +311,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // sale cuando esta cumple su tiempo, aunque otras sigan corriendo.
   const datosDeCiclo = (m) => {
     // Ciclo sellado al arrancar (ciclo_minutos) o, si no hay, el de su tipo. La de
-    // fichas no tiene tope: su reloj solo sube.
-    const minutos = m.solo_fichas ? 0
+    // fichas sin tope (sin tiempos): su reloj solo sube.
+    const minutos = m.solo_fichas && m.ciclo_minutos == null ? 0
                   : m.ciclo_minutos != null ? m.ciclo_minutos
                   // La secadora, la de su tamaño (cae en la mediana), como el servidor.
                   : m.tipo === 'secadora'       ? (tiempos[`sec_${m.tamano}`] ?? tiempos.secadora)

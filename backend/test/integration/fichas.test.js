@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import { pool, limpiarBase, seedSucursal, seedUsuario, seedAjustes, auth } from '../helpers.js';
+import { finalizarMaquinasAlTope } from '../../jobs/finalizarAlTope.js';
 
 let admin;
 let empleado;
@@ -93,6 +94,48 @@ describe('iniciar una máquina de fichas', () => {
   it('la lista de máquinas dice cuál pide fichas', async () => {
     const { body } = await api('get', '/api/maquinas');
     expect(body.find(m => m.id === secadora).pide_fichas).toBe(true);
+  });
+});
+
+describe('fichas sin Sonoff y con tiempos (mig. 177)', () => {
+  beforeEach(async () => {
+    await pool.query('UPDATE modelos_maquina SET solo_fichas = FALSE, fichas_con_tiempo = TRUE, minutos_por_ficha = 15');
+  });
+  const ciclo = async () =>
+    (await pool.query('SELECT ciclo_minutos, estado FROM maquinas WHERE id = $1', [secadora])).rows[0];
+
+  it('el tope es fichas × "Cada ficha" y sigue pidiendo fichas', async () => {
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora })
+      .expect(400);
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
+    expect((await ciclo()).ciclo_minutos).toBe(30);
+    expect(await disponibles()).toBe(8);
+    const { body } = await api('get', '/api/maquinas');
+    expect(body.find(m => m.id === secadora)).toMatchObject({ solo_fichas: true, con_iniciar: true });
+  });
+
+  it('sin "Cada ficha" no tiene tope', async () => {
+    await pool.query('UPDATE modelos_maquina SET minutos_por_ficha = NULL');
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 1 }).expect(200);
+    expect((await ciclo()).ciclo_minutos).toBeNull();
+  });
+
+  it('al llegar al tope se finaliza sola', async () => {
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 1 }).expect(200);
+    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - INTERVAL '16 minutes' WHERE id = $1`, [secadora]);
+    await finalizarMaquinasAlTope();
+    expect((await ciclo()).estado).toBe('disponible');
+  });
+
+  it('las dos casillas de fichas sin Sonoff se excluyen', async () => {
+    const { rows: [mo] } = await pool.query('SELECT id FROM modelos_maquina');
+    const { body: a } = await api('put', `/api/etiquetas/modelos-maquina/${mo.id}`, { solo_fichas: true }).expect(200);
+    expect([a.solo_fichas, a.fichas_con_tiempo]).toEqual([true, false]);
+    const { body: b } = await api('put', `/api/etiquetas/modelos-maquina/${mo.id}`, { fichas_con_tiempo: true }).expect(200);
+    expect([b.solo_fichas, b.fichas_con_tiempo]).toEqual([false, true]);
   });
 });
 

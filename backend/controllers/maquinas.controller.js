@@ -4,7 +4,7 @@ import { sellarPasadasVivas } from '../db/pasadas.js';
 import { TZ_NEGOCIO, esFechaISO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, PRECIO_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql, PRECIO_DEL_MODELO, pideFichasSql } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, PRECIO_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql, PRECIO_DEL_MODELO, pideFichasSql, TOPE_DE_FICHAS } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -1179,13 +1179,15 @@ export const otroCiclo = async (req, res) => {
     }
 
     // Reiniciar en_uso_desde arranca el reloj. El ciclo se vuelve a sellar
-    // (encender lo dejó en NULL) con la misma cadena que el primero.
+    // (encender lo dejó en NULL) con la misma cadena que el primero; la de
+    // fichas con tiempos, con las fichas de esta vuelta.
     const { rows: upd } = await client.query(
       `UPDATE maquinas m
           SET en_uso_desde = NOW(),
               encendida_sin_iniciar_at = NULL,
               encendida_para_nota_id   = NULL,
               ciclo_minutos = COALESCE(
+                ${TOPE_DE_FICHAS('m', '$2::int')},
                 m.ciclo_minutos,
                 ${MINUTOS_CONFIGURADOS},
                 (SELECT CASE
@@ -1204,7 +1206,7 @@ export const otroCiclo = async (req, res) => {
                    FROM ajustes a WHERE a.id = 1)
               )
         WHERE m.id = $1 RETURNING *`,
-      [maq.id]
+      [maq.id, fichasPorMeter[0]?.fichas ?? null]
     );
 
     await client.query('COMMIT');
