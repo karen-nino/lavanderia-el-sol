@@ -862,22 +862,24 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
   // terminen no quiere decir que la ropa esté lista.
   describe('a Por Entregar solo por "Procesado"', () => {
     // Deja la nota con su lavado terminado y devuelve su id y su estado.
-    async function trasLavar(nombre) {
-      const clienteId = await seedCliente();
-      const lav = await seedMaquina({ nombre: `L-${nombre}`, tipo: 'lavadora_mediana', tamano: 'mediana' });
-      const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
-        tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
-        estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }],
+    async function trasLavar(nombre, {
+      usuario = admin, sucursal = 'centro', cargas = [{ tamano: 'chico', tipo_prenda: 'ROPA' }],
+    } = {}) {
+      const clienteId = await seedCliente({ sucursal });
+      const lav = await seedMaquina({ nombre: `L-${nombre}`, tipo: 'lavadora_mediana', tamano: 'mediana', sucursal });
+      const nota = await request(app).post('/api/notas').set(auth(usuario.token, usuario.sucursal)).send({
+        tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: cargas[0].tipo_prenda,
+        estado_pago: 'PENDIENTE', cargas,
       });
       expect(nota.status).toBe(201);
       const notaId = nota.body.id;
       await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
-        .set(auth(admin.token)).send({ maquina_ids: [lav], cobrar: false }).expect(200);
+        .set(auth(usuario.token, usuario.sucursal)).send({ maquina_ids: [lav], cobrar: false }).expect(200);
       await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
-        .set(auth(admin.token)).send({ maquina_id: lav }).expect(200);
+        .set(auth(usuario.token, usuario.sucursal)).send({ maquina_id: lav }).expect(200);
       await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
-        .set(auth(admin.token)).send({ lavadora_id: lav }).expect(200);
-      const res = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+        .set(auth(usuario.token, usuario.sucursal)).send({ lavadora_id: lav }).expect(200);
+      const res = await request(app).get(`/api/notas/${notaId}`).set(auth(usuario.token, usuario.sucursal));
       return { notaId, estado: res.body.estado, lav };
     }
 
@@ -936,6 +938,56 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
       await request(app).patch(`/api/notas/${notaId}/estado`)
         .set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
       expect(await dobladoEnLista(notaId)).toBe(false);
+    });
+
+    // "Edredón": en Retiro, Por Encargo de puro edredón con una lavadora terminada
+    // (en la base, EN_ESPERA). El edredón no pasa por secadora: nunca sería "Doblado".
+    describe('etiqueta "Edredón"', () => {
+      const EDREDON = { tamano: 'jumbo', tipo_prenda: 'EDREDON' };
+      let adminRetiro;
+      beforeEach(async () => {
+        await seedSucursal('retiro', 'Retiro');
+        adminRetiro = await seedUsuario({ rol: 'admin', sucursal: 'retiro', nombre: 'Retiro' });
+      });
+      const enLista = async (usuario, notaId) => {
+        const lista = await request(app).get('/api/notas').set(auth(usuario.token, usuario.sucursal));
+        return lista.body.find(x => x.id === notaId);
+      };
+
+      it('en Retiro, puro edredón ya lavado se ve "Edredón"; procesado, ya no', async () => {
+        const { notaId, estado } = await trasLavar('edr1', {
+          usuario: adminRetiro, sucursal: 'retiro', cargas: [EDREDON],
+        });
+        expect(estado).toBe('EN_ESPERA');
+        expect((await enLista(adminRetiro, notaId)).edredon).toBe(true);
+
+        await request(app).patch(`/api/notas/${notaId}/estado`)
+          .set(auth(adminRetiro.token, 'retiro')).send({ estado: 'LISTA' }).expect(200);
+        expect((await enLista(adminRetiro, notaId)).edredon).toBe(false);
+      });
+
+      it('en otra sucursal, el mismo edredón sigue En Espera', async () => {
+        const { notaId } = await trasLavar('edr2', { cargas: [EDREDON] });
+        expect((await enLista(admin, notaId)).edredon).toBe(false);
+      });
+
+      it('con edredón y ropa en la misma nota, no', async () => {
+        const { notaId } = await trasLavar('edr3', {
+          usuario: adminRetiro, sucursal: 'retiro',
+          cargas: [EDREDON, { tamano: 'chico', tipo_prenda: 'ROPA' }],
+        });
+        expect((await enLista(adminRetiro, notaId)).edredon).toBe(false);
+      });
+
+      it('sin lavadora terminada, todavía no', async () => {
+        const clienteId = await seedCliente({ sucursal: 'retiro' });
+        const nota = await request(app).post('/api/notas').set(auth(adminRetiro.token, 'retiro')).send({
+          tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
+          estado_pago: 'PENDIENTE', cargas: [EDREDON],
+        });
+        expect(nota.status).toBe(201);
+        expect((await enLista(adminRetiro, nota.body.id)).edredon).toBe(false);
+      });
     });
 
     it('terminar la última máquina NO la pasa a Por Entregar', async () => {

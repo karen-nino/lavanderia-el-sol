@@ -161,6 +161,9 @@ const BADGE_ESTADO = {
 /** Por Encargo lavada y secada, esperando "Procesado" (sigue EN_ESPERA; lo marca el backend). */
 const BADGE_DOBLADO = { label: 'Doblado', cls: 'bg-purple-100 text-purple-700' };
 
+/** Por Encargo de puro edredón ya lavado, esperando "Procesado" (solo Retiro; sigue EN_ESPERA). */
+const BADGE_EDREDON = { label: 'Edredón', cls: 'bg-teal-100 text-teal-700' };
+
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },
@@ -731,7 +734,8 @@ export default function Notas() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {paginadas.map(n => {
-                      const badgeEstado    = n.doblado ? BADGE_DOBLADO : (BADGE_ESTADO[n.estado] ?? BADGE_ESTADO.LAVANDO);
+                      const badgeEstado    = n.edredon ? BADGE_EDREDON
+                        : n.doblado ? BADGE_DOBLADO : (BADGE_ESTADO[n.estado] ?? BADGE_ESTADO.LAVANDO);
                       const badgeTipoServicio = BADGE_TIPO_SERVICIO[n.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
                       // Cancelada no tiene estado de pago: no se va a cobrar.
                       const badgePago      = n.estado === 'CANCELADA' ? null : BADGE_PAGO[n.estado_pago];
@@ -885,7 +889,8 @@ export default function Notas() {
                 {/* Una por fila en celular, dos en tableta. */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {grupo.notas.map(n => {
-              const badgeEstado    = n.doblado ? BADGE_DOBLADO : (BADGE_ESTADO[n.estado] ?? BADGE_ESTADO.LAVANDO);
+              const badgeEstado    = n.edredon ? BADGE_EDREDON
+                : n.doblado ? BADGE_DOBLADO : (BADGE_ESTADO[n.estado] ?? BADGE_ESTADO.LAVANDO);
               // Cancelada no tiene estado de pago: no se va a cobrar.
               const badgePago      = n.estado === 'CANCELADA' ? null : BADGE_PAGO[n.estado_pago];
               // Sin cliente, "Mostrador" (como la tabla y el detalle).

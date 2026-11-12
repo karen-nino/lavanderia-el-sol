@@ -113,23 +113,37 @@ async function faseProcesoDeNota(client, notaId) {
  */
 async function algunaLavadoraTermino(client, notaId) {
   const { rows } = await client.query(
-    `SELECT EXISTS (
-       SELECT 1 FROM nota_cargas nc
-         LEFT JOIN maquinas m ON m.id = nc.lavadora_id
-        WHERE nc.nota_id = $1
-          AND nc.lavadora_iniciada_at IS NOT NULL
-          AND (
-            nc.lavadora_id IS NULL
-            OR m.estado <> 'en_uso'
-            OR (m.en_uso_desde IS NOT NULL AND m.ciclo_minutos IS NOT NULL
-                AND NOT ${esCronometroSql('m')}
-                AND m.en_uso_desde + make_interval(mins => m.ciclo_minutos) <= NOW())
-          )
-     ) AS termino`,
+    `SELECT ${sqlAlgunaLavadoraTermino('$1')} AS termino`,
     [notaId]
   );
   return rows[0].termino;
 }
+
+/** Condición SQL de `algunaLavadoraTermino` para la nota `notaRef` (id o columna). */
+function sqlAlgunaLavadoraTermino(notaRef) {
+  return `EXISTS (
+       SELECT 1 FROM nota_cargas ltc
+         LEFT JOIN maquinas ltm ON ltm.id = ltc.lavadora_id
+        WHERE ltc.nota_id = ${notaRef}
+          AND ltc.lavadora_iniciada_at IS NOT NULL
+          AND (
+            ltc.lavadora_id IS NULL
+            OR ltm.estado <> 'en_uso'
+            OR (ltm.en_uso_desde IS NOT NULL AND ltm.ciclo_minutos IS NOT NULL
+                AND NOT ${esCronometroSql('ltm')}
+                AND ltm.en_uso_desde + make_interval(mins => ltm.ciclo_minutos) <= NOW())
+          )
+     )`;
+}
+
+/**
+ * Sucursales donde un Por Encargo de puro edredón se ve como "Edredón" en vez
+ * de En Espera en cuanto termina una lavadora: ahí el edredón no pasa por
+ * secadora, así que nunca llegaría a "Doblado".
+ */
+const SUCURSALES_ETIQUETA_EDREDON = ['retiro'];
+const SQL_SUCURSALES_ETIQUETA_EDREDON =
+  `ARRAY[${SUCURSALES_ETIQUETA_EDREDON.map(s => `'${s}'`).join(', ')}]::text[]`;
 
 /**
  * ¿A la nota le falta trabajo? Una carga está pendiente si tiene una máquina
@@ -1839,6 +1853,19 @@ export const getNotas = async (req, res) => {
                                      OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_iniciada_at IS NULL
                                          AND nc.secadora_usada_id IS NULL)))
               ) AS doblado,
+              -- "Edredón": Por Encargo de puro edredón (las máquinas extra no
+              -- cuentan) con alguna lavadora terminada, esperando "Procesado".
+              -- Sigue EN_ESPERA; solo cambia cómo se ve.
+              (n.tipo_servicio = 'POR_ENCARGO' AND n.estado = 'EN_ESPERA'
+                AND n.sucursal = ANY(${SQL_SUCURSALES_ETIQUETA_EDREDON})
+                AND EXISTS (SELECT 1 FROM nota_cargas nc
+                             WHERE nc.nota_id = n.id AND NOT nc.es_adicional
+                               AND nc.tipo_prenda = 'EDREDON')
+                AND NOT EXISTS (SELECT 1 FROM nota_cargas nc
+                                 WHERE nc.nota_id = n.id AND NOT nc.es_adicional
+                                   AND nc.tipo_prenda IS DISTINCT FROM 'EDREDON')
+                AND ${sqlAlgunaLavadoraTermino('n.id')}
+              ) AS edredon,
               -- Máquinas que esta nota arrancó y siguen corriendo.
               (SELECT COALESCE(json_agg(DISTINCT mm.nombre), '[]'::json)
                  FROM nota_cargas nc
