@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { esPorEntregar, etiquetaEstadoNota } from '../lib/estadoNota';
+import { esAutoservicioPorCobrar, esPorEntregar, etiquetaEstadoNota } from '../lib/estadoNota';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { recordarListaNotas } from '../lib/filtrosNotas';
@@ -13,6 +13,9 @@ import SucursalBar from '../components/SucursalBar';
  */
 const ESTADOS = ['TODOS', 'EN_ESPERA', 'POR_ENTREGAR', 'PENDIENTE', 'FINALIZADA', 'CANCELADA',
   'AUTOSERVICIO', 'POR_ENCARGO'];
+
+/** Filtros internos: llegan por la URL desde un KPI y no salen en el menú de Estado. */
+const FILTROS_INTERNOS = ['AUTOSERVICIO_POR_COBRAR'];
 
 /** Opciones del filtro por tipo de servicio (no son un estado). */
 const FILTROS_SERVICIO = ['AUTOSERVICIO', 'POR_ENCARGO'];
@@ -53,6 +56,7 @@ const FILTRO_LABEL = {
   CANCELADA:    'Canceladas',
   AUTOSERVICIO: 'Autoservicio',
   POR_ENCARGO:  'Por Encargo',
+  AUTOSERVICIO_POR_COBRAR: 'Autoservicio por cobrar',
 };
 
 /** Mensaje del estado vacío según el filtro ("No hay notas por cobrar"). */
@@ -65,6 +69,7 @@ const FILTRO_VACIO = {
   CANCELADA:    'No hay notas canceladas',
   AUTOSERVICIO: 'No hay notas de autoservicio',
   POR_ENCARGO:  'No hay notas por encargo',
+  AUTOSERVICIO_POR_COBRAR: 'No hay autoservicios por cobrar',
 };
 
 const RANGOS_FECHA = [
@@ -256,7 +261,7 @@ export default function Notas() {
   // Filtro inicial desde la URL (?estado=EN_ESPERA), si es válido (p. ej. desde
   // un KPI del Dashboard).
   const estadoParam = (searchParams.get('estado') || '').toUpperCase();
-  const estadoInicial = ESTADOS.includes(estadoParam) ? estadoParam : 'TODOS';
+  const estadoInicial = [...ESTADOS, ...FILTROS_INTERNOS].includes(estadoParam) ? estadoParam : 'TODOS';
 
   const [notas,             setNotas]             = useState([]);
   const [filtro,            setFiltro]            = useState(estadoInicial);
@@ -368,6 +373,8 @@ export default function Notas() {
     if (n.estado === 'CANCELADA' && filtro !== 'CANCELADA') return false;
     if (filtro === 'PENDIENTE') {
       if (n.estado_pago !== 'PENDIENTE') return false;
+    } else if (filtro === 'AUTOSERVICIO_POR_COBRAR') {
+      if (!esAutoservicioPorCobrar(n)) return false;
     } else if (filtro === 'POR_ENTREGAR') {
       if (!esPorEntregar(n)) return false;
     } else if (FILTROS_SERVICIO.includes(filtro)) {

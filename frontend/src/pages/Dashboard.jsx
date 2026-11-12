@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin } from '../lib/roles';
-import { esPorEntregar } from '../lib/estadoNota';
+import { esAutoservicioPorCobrar, esPorEntregar } from '../lib/estadoNota';
 import KpiCard from '../components/KpiCard';
 import SalesCard from '../components/SalesCard';
 import CashCutCard from '../components/CashCutCard';
@@ -119,11 +119,7 @@ export default function Dashboard() {
   const notasPagadas     = notasDeHoy.filter(n => n.estado_pago === 'PAGADO').length;
   // "Por Cobrar": notas de Autoservicio de hoy pendientes de pago (Por Encargo,
   // Edredón y productos se cobran al entregar). Sin canceladas.
-  const notasPorCobrar   = notasDeHoy.filter(
-    n => n.tipo_servicio === 'AUTOSERVICIO'
-      && n.estado_pago   === 'PENDIENTE'
-      && n.estado        !== 'CANCELADA'
-  ).length;
+  const notasPorCobrar   = notasDeHoy.filter(esAutoservicioPorCobrar).length;
   // "Para Entregar": las que esperan al cliente o "Procesado" (Doblado y Edredón), de cualquier día.
   const paraEntregar     = notas.filter(esPorEntregar).length;
   const ventasHoy        = ventas?.tarjetas?.total_cobrado ?? 0;
@@ -173,7 +169,7 @@ export default function Dashboard() {
             value={notasPorCobrar}
             color="red"
             icon={KpiIcon.waiting}
-            to="/notas?estado=PENDIENTE"
+            to="/notas?estado=AUTOSERVICIO_POR_COBRAR&fecha=HOY"
           />
           <KpiCard
             label="Notas"

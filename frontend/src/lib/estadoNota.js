@@ -21,3 +21,10 @@ export function esPorEntregar(nota) {
   if (nota.doblado || nota.edredon) return true;
   return ['LISTA', 'PAGADA'].includes(nota.estado) && nota.tipo_servicio !== 'AUTOSERVICIO';
 }
+
+/** Autoservicio con el pago pendiente (KPI "Por Cobrar"); sin canceladas. */
+export function esAutoservicioPorCobrar(nota) {
+  return nota.tipo_servicio === 'AUTOSERVICIO'
+    && nota.estado_pago === 'PENDIENTE'
+    && nota.estado !== 'CANCELADA';
+}
