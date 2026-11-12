@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin } from '../lib/roles';
+import { esPorEntregar } from '../lib/estadoNota';
 import KpiCard from '../components/KpiCard';
 import SalesCard from '../components/SalesCard';
 import CashCutCard from '../components/CashCutCard';
@@ -123,8 +124,8 @@ export default function Dashboard() {
       && n.estado_pago   === 'PENDIENTE'
       && n.estado        !== 'CANCELADA'
   ).length;
-  // "Para Entregar" cuenta todas las listas para entregar (LISTA/PAGADA), de cualquier día.
-  const paraEntregar     = notas.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
+  // "Para Entregar": las que esperan al cliente, de cualquier día (sin Autoservicio por cobrar).
+  const paraEntregar     = notas.filter(esPorEntregar).length;
   const ventasHoy        = ventas?.tarjetas?.total_cobrado ?? 0;
 
   if (loading) {

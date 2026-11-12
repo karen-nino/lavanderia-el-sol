@@ -11,3 +11,11 @@ export function etiquetaEstadoLista(tipoServicio) {
 export function etiquetaEstadoNota(estado, tipoServicio, labelBase) {
   return estado === 'LISTA' ? etiquetaEstadoLista(tipoServicio) : labelBase;
 }
+
+/**
+ * ¿La nota espera a que el cliente pase por ella? Listas o pagadas sin entregar,
+ * salvo Autoservicio: ahí LISTA es "Por Cobrar" (el cliente ya se llevó su ropa).
+ */
+export function esPorEntregar(nota) {
+  return ['LISTA', 'PAGADA'].includes(nota.estado) && nota.tipo_servicio !== 'AUTOSERVICIO';
+}

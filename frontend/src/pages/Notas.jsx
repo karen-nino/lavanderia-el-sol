@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { etiquetaEstadoNota } from '../lib/estadoNota';
+import { esPorEntregar, etiquetaEstadoNota } from '../lib/estadoNota';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { recordarListaNotas } from '../lib/filtrosNotas';
@@ -44,9 +44,6 @@ function rangoPaginas(actual, total) {
   }
   return out;
 }
-
-/** "Por Entregar": listas y pagadas sin entregar (como el KPI del Dashboard). */
-const ESTADOS_POR_ENTREGAR = ['LISTA', 'PAGADA'];
 
 const FILTRO_LABEL = {
   TODOS:        'Todos',
@@ -372,7 +369,7 @@ export default function Notas() {
     if (filtro === 'PENDIENTE') {
       if (n.estado_pago !== 'PENDIENTE') return false;
     } else if (filtro === 'POR_ENTREGAR') {
-      if (!ESTADOS_POR_ENTREGAR.includes(n.estado)) return false;
+      if (!esPorEntregar(n)) return false;
     } else if (FILTROS_SERVICIO.includes(filtro)) {
       if (n.tipo_servicio !== filtro) return false;
     } else if (filtro !== 'TODOS' && n.estado !== filtro) {
