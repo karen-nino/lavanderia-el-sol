@@ -56,7 +56,7 @@ const FILTRO_LABEL = {
   CANCELADA:    'Canceladas',
   AUTOSERVICIO: 'Autoservicio',
   POR_ENCARGO:  'Por Encargo',
-  AUTOSERVICIO_POR_COBRAR: 'Autoservicio por cobrar',
+  AUTOSERVICIO_POR_COBRAR: 'Por Cobrar',
   PAGADAS:      'Pagadas',
 };
 
