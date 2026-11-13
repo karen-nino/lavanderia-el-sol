@@ -94,6 +94,27 @@ describe('iniciar una máquina de fichas', () => {
   it('la lista de máquinas dice cuál pide fichas', async () => {
     const { body } = await api('get', '/api/maquinas');
     expect(body.find(m => m.id === secadora).pide_fichas).toBe(true);
+    expect(body.find(m => m.id === secadora).max_fichas).toBe(3);
+  });
+
+  it('el modelo limita cuántas fichas se ofrecen (mig. 178)', async () => {
+    await pool.query('UPDATE modelos_maquina SET max_fichas = 2');
+    const { body } = await api('get', '/api/maquinas');
+    expect(body.find(m => m.id === secadora).max_fichas).toBe(2);
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 3 }).expect(400);
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
+    expect(await dentro()).toBe(2);
+  });
+
+  it('el admin cambia el máximo de fichas del modelo en Ajustes, de 1 a 3', async () => {
+    const { rows: [mo] } = await pool.query('SELECT id FROM modelos_maquina');
+    const { body } = await api('put', '/api/etiquetas/tiempos-marca', { modelo_id: mo.id, max_fichas: 2 }).expect(200);
+    expect(body.max_fichas).toBe(2);
+    await api('put', '/api/etiquetas/tiempos-marca', { modelo_id: mo.id, max_fichas: 4 }).expect(400);
+    await api('put', '/api/etiquetas/tiempos-marca', { modelo_id: mo.id, max_fichas: 0 }).expect(400);
+    const { body: lista } = await api('get', '/api/etiquetas/tiempos-marca');
+    expect(lista.find(t => t.modelo_id === mo.id).max_fichas).toBe(2);
   });
 });
 

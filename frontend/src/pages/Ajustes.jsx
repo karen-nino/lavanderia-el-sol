@@ -269,6 +269,7 @@ const fotoTiempo = (t) => [
   aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
   aNumero(t.minutos_por_ficha), aNumero(t.precio_por_ficha),
   aNumero(t.precio_programa_2), aNumero(t.precio_programa_3), aNumero(t.precio_programa_4),
+  aNumero(t.max_fichas),
 ].join('|');
 /** Lo editable de una sucursal, para compararla con lo guardado. */
 const huellaSucursal = (s) => JSON.stringify([s.nombre ?? '', s.direccion ?? '', s.telefono ?? '', s.horario_semana ?? null]);
@@ -510,7 +511,7 @@ function FichasSucursales({ soloConsulta = false }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Encendida: las máquinas que trabajan con fichas preguntan cuántas al iniciar (1, 2 o 3), se descuentan de
+        Encendida: las máquinas que trabajan con fichas preguntan cuántas al iniciar (hasta el máximo de su modelo), se descuentan de
         las disponibles y el menú muestra el botón Fichas para verlas y recogerlas.
       </p>
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>}
@@ -1720,6 +1721,23 @@ function AjustesAdmin() {
     </div>
   );
 
+  /** Modelo de fichas sin Sonoff: al iniciarla se pregunta cuántas fichas lleva. */
+  const pideFichas = (t) => Boolean(t?.solo_fichas || t?.fichas_con_tiempo);
+
+  /** Hasta cuántas fichas ofrece "¿Cuántas fichas?" al iniciar (1 a 3). */
+  const campoMaxFichas = (t, inputCls, unidadCls) => (
+    <div className="flex items-center gap-2 mt-2">
+      <span className={`${unidadCls} flex-shrink-0 w-24`}>Máx. fichas</span>
+      <input
+        type="number" inputMode="numeric" min="1" max="3" step="1" placeholder="3"
+        aria-label={`Máximo de fichas de ${etiquetaTiempo(t)}`}
+        value={t.max_fichas ?? ''}
+        onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, 'max_fichas')}
+        className={`${inputCls} text-center`}
+      />
+    </div>
+  );
+
   // Máquinas de fichas: al iniciarla se mete una ficha por cada tantos minutos
   // del programa (o del tope). Las demás (Samsung: se encienden y se aprieta
   // Start) no llevan estos campos.
@@ -1838,9 +1856,9 @@ function AjustesAdmin() {
   );
   /** Ayuda del renglón del modelo: tope y programas (si tiene) y su precio propio. */
   const ayudaModelo = (t) => (t.fichas_con_tiempo
-    ? 'Trabaja con fichas sin Sonoff. Cada ficha: su tope son las fichas que se le meten por estos minutos; al llegar se finaliza sola. Vacío = sin tope. Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.'
+    ? 'Trabaja con fichas sin Sonoff. Cada ficha: su tope son las fichas que se le meten por estos minutos; al llegar se finaliza sola. Vacío = sin tope. Máx. fichas: hasta cuántas se ofrecen al iniciarla (1 a 3). Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.'
     : t.solo_fichas
-    ? 'Trabaja con fichas: no tiene tope. Precio por carga de este modelo; vacío = usa el precio de arriba.'
+    ? 'Trabaja con fichas: no tiene tope. Máx. fichas: hasta cuántas se ofrecen al iniciarla (1 a 3). Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.'
     : `${ayudaTiempo(t)} Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.`);
 
   const setMinutosMarca = (clave, valor, campo = 'minutos') =>
@@ -1893,6 +1911,8 @@ function AjustesAdmin() {
       minutos_4: aNumero(t.minutos_4),
       // Fichas: lavadoras y secadoras. Costo y precios: solo secadoras.
       minutos_por_ficha: aNumero(t.minutos_por_ficha),
+      // Máximo de fichas al iniciar: solo los de fichas sin Sonoff; vacío = 3.
+      ...(pideFichas(t) ? { max_fichas: aNumero(t.max_fichas) ?? 3 } : {}),
       ...(t.tipo === 'secadora'
         ? {
             precio_por_ficha: aNumero(t.precio_por_ficha),
@@ -1908,6 +1928,7 @@ function AjustesAdmin() {
       precio_por_ficha: aNumero(t.precio_por_ficha),
       precio_programa_2: aNumero(t.precio_programa_2), precio_programa_3: aNumero(t.precio_programa_3),
       precio_programa_4: aNumero(t.precio_programa_4), precio_carga: aNumero(t.precio_carga),
+      max_fichas: aNumero(t.max_fichas),
     }));
   };
 
@@ -2342,6 +2363,7 @@ function AjustesAdmin() {
       >
         {/* El de fichas sin tiempos no tiene tope: solo su precio; el de con tiempos, minutos por ficha. */}
         {t.fichas_con_tiempo && campoFichaSinSonoff(t, INPUT_CLS, 'text-sm text-gray-500')}
+        {pideFichas(t) && campoMaxFichas(t, INPUT_CLS, 'text-sm text-gray-500')}
         {!t.solo_fichas && !t.fichas_con_tiempo && (
           <>
             <div className="flex items-center gap-2">

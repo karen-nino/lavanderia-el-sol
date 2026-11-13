@@ -739,6 +739,7 @@ export default function Salidas() {
               solo_fichas: Boolean(u.solo_fichas),
               // Su sucursal lleva inventario de fichas: al iniciar se pregunta cuántas.
               pide_fichas: Boolean(u.pide_fichas),
+              max_fichas: u.max_fichas ?? null,
               fichas: u.fichas ?? null,
               ...(esLav ? {} : { tamano: u.tamano }),
               // La vuelta viva muestra el estado de su máquina; una cerrada, "terminado".

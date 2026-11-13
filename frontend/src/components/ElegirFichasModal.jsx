@@ -13,8 +13,9 @@ export const IconoFicha = ({ className = 'w-5 h-5' }) => (
 
 /**
  * "¿Cuántas fichas?" al iniciar una máquina que trabaja con fichas (inventario
- * de fichas de la sucursal): 1, 2 o 3. Dice cuántas quedan; si no alcanzan, la
- * máquina arranca igual y el conteo queda en negativo.
+ * de fichas de la sucursal): de 1 al máximo de su modelo (3 sin dato). Dice
+ * cuántas quedan; si no alcanzan, la máquina arranca igual y el conteo queda en
+ * negativo.
  */
 export default function ElegirFichasModal({ maquina, guardando = false, error = '', onElegir, onCancelar }) {
   const [disponibles, setDisponibles] = useState(null);
@@ -28,14 +29,16 @@ export default function ElegirFichasModal({ maquina, guardando = false, error = 
   }, [maquina]);
 
   if (!maquina) return null;
+  const max = Math.min(3, Math.max(1, Number(maquina.max_fichas) || 3));
+  const opciones = Array.from({ length: max }, (_, i) => i + 1);
   const quedan = disponibles == null ? null
-    : disponibles < 3
+    : disponibles < max
       ? `Quedan ${textoFichas(disponibles)}: si usas más, el conteo queda en negativo hasta que las recojan o lo corrijan en Fichas.`
       : `Quedan ${textoFichas(disponibles)} en la sucursal.`;
   return (
     <ElegirTiempoModal
       maquina={maquina}
-      tiempos={[1, 2, 3]}
+      tiempos={opciones}
       titulo="¿Cuántas fichas?"
       descripcion={`Las que le metes para arrancarla: salen del inventario y quedan dentro de la máquina hasta que las recojan.${quedan ? ` ${quedan}` : ''}`}
       etiqueta={textoFichas}

@@ -5,10 +5,10 @@
  * vuelven. Todo deja su renglón en `fichas_movimientos`. Las funciones reciben
  * el `client` de la transacción de quien las llama.
  */
-import { pideFichasSql } from '../db/sqlMaquina.js';
+import { pideFichasSql, maxFichasSql } from '../db/sqlMaquina.js';
 
-/** Fichas que se pueden meter en un arranque. */
-export const FICHAS_POR_ARRANQUE = [1, 2, 3];
+/** Tope de fichas por arranque; cada modelo puede pedir menos (`max_fichas`). */
+export const MAX_FICHAS_POR_ARRANQUE = 3;
 
 /** Error que el controlador devuelve tal cual (400). */
 export class ErrorFichas extends Error {
@@ -18,21 +18,24 @@ export class ErrorFichas extends Error {
   }
 }
 
-/** Ids (de `ids`) que al iniciar piden fichas. */
+/** Ids (de `ids`) que al iniciar piden fichas, con su máximo por arranque. */
 export async function maquinasQuePidenFichas(client, ids) {
   if (!ids || ids.length === 0) return [];
   const { rows } = await client.query(
-    `SELECT m.id, m.nombre FROM maquinas m WHERE m.id = ANY($1::int[]) AND ${pideFichasSql('m')}`,
+    `SELECT m.id, m.nombre, ${maxFichasSql('m')} AS max_fichas
+       FROM maquinas m WHERE m.id = ANY($1::int[]) AND ${pideFichasSql('m')}`,
     [ids.map(Number)]
   );
   return rows;
 }
 
-/** Lee `fichas` del body: 1, 2 o 3; si no, lanza ErrorFichas. */
-export function leerFichas(valor, nombreMaquina) {
+/** Lee `fichas` del body: de 1 a `max` (el del modelo); si no, lanza ErrorFichas. */
+export function leerFichas(valor, nombreMaquina, max = MAX_FICHAS_POR_ARRANQUE) {
   const n = Number(valor);
-  if (!FICHAS_POR_ARRANQUE.includes(n)) {
-    throw new ErrorFichas(`Elige cuántas fichas se le meten a ${nombreMaquina}: 1, 2 o 3.`, 'FICHAS_SIN_ELEGIR');
+  const tope = Math.min(MAX_FICHAS_POR_ARRANQUE, Math.max(1, Number(max) || MAX_FICHAS_POR_ARRANQUE));
+  if (!Number.isInteger(n) || n < 1 || n > tope) {
+    const opciones = tope === 1 ? '1' : `de 1 a ${tope}`;
+    throw new ErrorFichas(`Elige cuántas fichas se le meten a ${nombreMaquina}: ${opciones}.`, 'FICHAS_SIN_ELEGIR');
   }
   return n;
 }
@@ -83,7 +86,7 @@ export async function fichasDelArranque(client, ids, fichasBody) {
   if (ids.length > 1) {
     throw new ErrorFichas(`Inicia ${piden[0].nombre} sola: hay que decir cuántas fichas lleva.`, 'FICHAS_SIN_ELEGIR');
   }
-  return [{ maquinaId: piden[0].id, fichas: leerFichas(fichasBody, piden[0].nombre) }];
+  return [{ maquinaId: piden[0].id, fichas: leerFichas(fichasBody, piden[0].nombre, piden[0].max_fichas) }];
 }
 
 /** Recoge las fichas de una máquina (o de todas las de la sucursal) a las disponibles. */

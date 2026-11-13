@@ -509,7 +509,7 @@ export const getTiemposMarca = async (req, res) => {
               mo.minutos, mo.minutos_2, mo.minutos_3, mo.minutos_4, mo.pregunta_tiempo, mo.dos_ciclos,
               mo.minutos_por_ficha, mo.precio_por_ficha, mo.fichas_sonoff,
               mo.precio_programa_2, mo.precio_programa_3, mo.precio_programa_4,
-              mo.precio_carga, mo.solo_fichas, mo.fichas_con_tiempo
+              mo.precio_carga, mo.solo_fichas, mo.fichas_con_tiempo, mo.max_fichas
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
         -- El de fichas también: no pide tiempos, pero puede tener precio propio.
@@ -573,6 +573,15 @@ export const guardarTiempoMarca = async (req, res) => {
       updates.push(`${campo} = $${i++}`);
       values.push(precio === null ? null : Math.round(precio * 100) / 100);
     }
+    // Hasta cuántas fichas ofrece "¿Cuántas fichas?" al iniciarla.
+    if (req.body.max_fichas !== undefined) {
+      const max = Number(req.body.max_fichas);
+      if (!Number.isInteger(max) || max < 1 || max > 3) {
+        return res.status(400).json({ message: 'El máximo de fichas debe ser 1, 2 o 3.' });
+      }
+      updates.push(`max_fichas = $${i++}`);
+      values.push(max);
+    }
     if (updates.length === 0) {
       return res.status(400).json({ message: 'No hay cambios que guardar.' });
     }
@@ -585,7 +594,7 @@ export const guardarTiempoMarca = async (req, res) => {
           RETURNING id AS modelo_id, marca_id, nombre AS modelo, tipo, tamano,
                     minutos, minutos_2, minutos_3, minutos_4, pregunta_tiempo, minutos_por_ficha, precio_por_ficha,
                     precio_programa_2, precio_programa_3, precio_programa_4, precio_carga, solo_fichas,
-                    fichas_con_tiempo`,
+                    fichas_con_tiempo, max_fichas`,
         values
       );
       if (rows.length === 0) {

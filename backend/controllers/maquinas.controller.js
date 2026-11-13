@@ -4,7 +4,7 @@ import { sellarPasadasVivas } from '../db/pasadas.js';
 import { TZ_NEGOCIO, esFechaISO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, PRECIO_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql, PRECIO_DEL_MODELO, pideFichasSql, TOPE_DE_FICHAS } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, PRECIO_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql, PRECIO_DEL_MODELO, pideFichasSql, maxFichasSql, TOPE_DE_FICHAS } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -155,6 +155,8 @@ export const getMaquinas = async (req, res) => {
               ${PRECIO_DEL_MODELO('m')} AS precio_modelo,
               -- Al iniciarla se pregunta cuántas fichas (inventario de fichas).
               ${pideFichasSql('m')} AS pide_fichas,
+              -- Hasta cuántas fichas ofrece ese "¿Cuántas fichas?".
+              ${maxFichasSql('m')} AS max_fichas,
               -- Programas del modelo y si se pregunta cuál al iniciar.
               ${TIEMPOS_DEL_MODELO} AS modelo_tiempos,
               -- Opciones del modelo (dos ciclos).

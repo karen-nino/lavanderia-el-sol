@@ -11,7 +11,7 @@ import { COBRO_APARTE_ENCARGO, GRANEL_POR_ELEGIR } from '../db/sqlProductos.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, PRECIOS_DE_PROGRAMAS, OPCIONES_DE_MARCA,
   esCronometroSql, conIniciarSql, soloFichasSql, cronometroActivo, TOPE_RELOJ, PRECIO_DEL_MODELO, pideFichasSql,
-  TOPE_DE_FICHAS,
+  maxFichasSql, TOPE_DE_FICHAS,
 } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
@@ -1676,6 +1676,8 @@ async function cargasDeNota(client, notaId) {
                         -- Al iniciarla se pregunta cuántas fichas.
                         (SELECT ${pideFichasSql('mm7')} FROM maquinas mm7
                           WHERE mm7.id = ncm.maquina_id) AS pide_fichas,
+                        (SELECT ${maxFichasSql('mm8')} FROM maquinas mm8
+                          WHERE mm8.id = ncm.maquina_id) AS max_fichas,
                         ncm.fichas,
                         -- Actual = la última vuelta del hueco, si esa máquina
                         -- sigue puesta (un relavado repite máquina).

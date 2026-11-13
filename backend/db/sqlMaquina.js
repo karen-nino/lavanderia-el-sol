@@ -97,6 +97,15 @@ export const pideFichasSql = (alias) => `(${soloFichasSql(alias)} AND COALESCE((
   SELECT sf.usa_fichas FROM sucursales sf WHERE sf.slug = ${alias}.sucursal
 ), FALSE))`;
 
+/** SQL: hasta cuántas fichas se le meten a la máquina `alias` al iniciarla (3 sin modelo). */
+export const maxFichasSql = (alias) => `COALESCE((
+  SELECT mox.max_fichas
+    FROM marcas_maquina mmx
+    JOIN modelos_maquina mox ON mox.marca_id = mmx.id
+   WHERE mmx.nombre = ${alias}.marca
+     AND mox.nombre = ${alias}.modelo
+), 3)`;
+
 /**
  * SQL: ¿la máquina usa el botón "Iniciar"? (ver MARCA_CON_INICIAR). Con
  * temporizador no, salvo en la demo (ENTORNO_DEMO=1): sus Speed Queen también
