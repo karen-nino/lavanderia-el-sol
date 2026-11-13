@@ -1,7 +1,7 @@
 import pool from '../db/pool.js';
 import { esAdmin, esAdminMain } from '../middleware/roles.js';
 import { notaRequiereCaja } from '../middleware/cajaAbierta.js';
-import { fichasDelArranque, usarFichas, ErrorFichas } from '../services/fichas.js';
+import { fichasDelArranque, usarFichas, cobrarFichasDeMas, ErrorFichas } from '../services/fichas.js';
 import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
 // Encender y apagar normalmente lo dispara el trigger LISTEN/NOTIFY. "Encender
 // máquina" llama directo para no depender del listener; es idempotente.
@@ -3152,8 +3152,10 @@ export const activarMaquinasPendientes = async (req, res) => {
     );
     await marcarMaquinasIniciadas(client, id, libres);
     let fichasDisponibles = null;
+    let cobroFichas = 0;
     for (const f of fichasPorMeter) {
       fichasDisponibles = await usarFichas(client, { maquinaId: f.maquinaId, notaId: id, fichas: f.fichas, usuarioId: req.user?.id });
+      cobroFichas += await cobrarFichasDeMas(client, { notaId: id, maquinaId: f.maquinaId, fichas: f.fichas });
     }
 
     if (lavASoltar.length > 0) {
@@ -3177,6 +3179,9 @@ export const activarMaquinasPendientes = async (req, res) => {
     // El programa elegido le pone precio a la secadora por definir.
     if (porDefinir.length > 0) {
       await cobrarProgramaDeSecadora(client, id, elegido.maquinaId, elegido.minutos, await tarifasCarga(client));
+    }
+    // Con precio nuevo (programa o fichas de más), la pagada vuelve a cobrarse.
+    if (porDefinir.length > 0 || cobroFichas > 0) {
       await recalcularPrecioTotal(client, id, {
         desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
       });
@@ -3907,8 +3912,10 @@ export const terminarLavado = async (req, res) => {
       [secadora_id]
     );
     await marcarMaquinasIniciadas(client, id, [secadora_id]);
+    let cobroFichas = 0;
     for (const f of fichasSecadora) {
       await usarFichas(client, { maquinaId: f.maquinaId, notaId: id, fichas: f.fichas, usuarioId: req.user?.id });
+      cobroFichas += await cobrarFichasDeMas(client, { notaId: id, maquinaId: f.maquinaId, fichas: f.fichas });
     }
     await sellarCicloMaquinas(client, id, leido ? { maquinaId: secadora_id, minutos: leido.minutos } : null);
     // Terminó una lavadora: el granel de los servicios sale del inventario.
@@ -3916,7 +3923,10 @@ export const terminarLavado = async (req, res) => {
     const fase = await faseProcesoDeNota(client, id);
     await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [fase, id]);
 
-    await recalcularPrecioTotal(client, id);
+    // Las fichas de más suben el total: si ya estaba pagada, vuelve a cobrarse.
+    await recalcularPrecioTotal(client, id, cobroFichas > 0
+      ? { desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal }
+      : {});
     const errTope = await validarTopesCargas(client, id);
     if (errTope) {
       await client.query('ROLLBACK');

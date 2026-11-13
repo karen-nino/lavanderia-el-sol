@@ -118,6 +118,39 @@ describe('iniciar una máquina de fichas', () => {
   });
 });
 
+describe('cobro de las fichas de más al iniciar', () => {
+  const nota = async (id) => (await pool.query(
+    `SELECT n.precio_total, n.estado_pago, nc.fichas_extra, nc.precio_fichas_extra
+       FROM notas n JOIN nota_cargas nc ON nc.nota_id = n.id WHERE n.id = $1`, [id])).rows[0];
+
+  it('con 1 ficha cobra solo la carga', async () => {
+    const id = await notaConSecadora();
+    await api('patch', `/api/notas/${id}/activar-pendientes`, { maquina_id: secadora, fichas: 1 }).expect(200);
+    const n = await nota(id);
+    expect(Number(n.precio_total)).toBe(50);
+    expect([n.fichas_extra, Number(n.precio_fichas_extra)]).toEqual([0, 0]);
+  });
+
+  it('cada ficha de más cuesta lo mismo que la carga', async () => {
+    const id = await notaConSecadora();
+    await api('patch', `/api/notas/${id}/activar-pendientes`, { maquina_id: secadora, fichas: 3 }).expect(200);
+    const n = await nota(id);
+    expect([n.fichas_extra, Number(n.precio_fichas_extra)]).toEqual([2, 100]);
+    expect(Number(n.precio_total)).toBe(150);
+  });
+
+  it('la nota ya pagada vuelve a Por Cobrar por la ficha de más', async () => {
+    const { body } = await api('post', '/api/notas', {
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ secadora_id: secadora }],
+    }).expect(201);
+    await api('patch', `/api/notas/${body.id}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
+    const n = await nota(body.id);
+    expect(Number(n.precio_total)).toBe(100);
+    expect(n.estado_pago).toBe('PENDIENTE');
+  });
+});
+
 describe('fichas sin Sonoff y con tiempos (mig. 177)', () => {
   beforeEach(async () => {
     await pool.query('UPDATE modelos_maquina SET solo_fichas = FALSE, fichas_con_tiempo = TRUE, minutos_por_ficha = 15');

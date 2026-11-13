@@ -77,6 +77,38 @@ export async function usarFichas(client, { maquinaId, notaId, fichas, usuarioId 
 }
 
 /**
+ * Cobra las fichas de más de un arranque: la primera va en el precio de la
+ * carga y cada una de más cuesta lo mismo (congelado en `precio_fichas_extra`).
+ * Solo Autoservicio; en Por Encargo el servicio ya lo incluye. Devuelve lo que
+ * sumó; quien llama recalcula el total de la nota.
+ */
+export async function cobrarFichasDeMas(client, { notaId, maquinaId, fichas }) {
+  const deMas = Number(fichas) - 1;
+  if (!(deMas > 0)) return 0;
+  /* La carga de la pasada viva de esa máquina en la nota (como usarFichas). */
+  const { rows: [carga] } = await client.query(
+    `SELECT nc.id,
+            CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora ELSE nc.precio_secadora END AS precio
+       FROM nota_carga_maquinas p
+       JOIN nota_cargas nc ON nc.id = p.carga_id
+       JOIN notas n ON n.id = nc.nota_id
+      WHERE nc.nota_id = $1 AND p.maquina_id = $2 AND p.finalizada_at IS NULL
+        AND n.tipo_servicio = 'AUTOSERVICIO'
+      ORDER BY p.asignada_at DESC, p.id DESC LIMIT 1`,
+    [notaId, maquinaId]
+  );
+  const monto = carga ? deMas * Number(carga.precio) : 0;
+  if (!(monto > 0)) return 0;
+  await client.query(
+    `UPDATE nota_cargas
+        SET fichas_extra = fichas_extra + $2, precio_fichas_extra = precio_fichas_extra + $3
+      WHERE id = $1`,
+    [carga.id, deMas, monto]
+  );
+  return monto;
+}
+
+/**
  * Arranque con fichas: si alguna de `ids` las pide, tiene que ser la única y
  * traer `fichas`. Devuelve [{ maquinaId, fichas }] por meter después de arrancar.
  */
