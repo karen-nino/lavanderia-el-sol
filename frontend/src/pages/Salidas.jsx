@@ -12,6 +12,7 @@ import TopeServicios from '../components/TopeServicios';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ElegirTiempoModal from '../components/ElegirTiempoModal';
 import ElegirFichasModal from '../components/ElegirFichasModal';
+import { eligeFichas } from '../lib/fichas';
 import GranelPorServicio from '../components/GranelPorServicio';
 import Selector from '../components/Selector';
 import { preguntaTiempo, tiemposDeMaquina, etiquetaPrograma } from '../lib/tiemposModelo';
@@ -293,6 +294,8 @@ export default function Salidas() {
       return;
     }
     if (maq.pide_fichas) {
+      /* Si su modelo admite una sola ficha, arranca con 1 sin preguntar. */
+      if (!eligeFichas(maq)) return arrancarMaquina(maq, null, 1);
       setEligiendoFichas(maq);
       return;
     }

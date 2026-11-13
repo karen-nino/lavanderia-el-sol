@@ -1856,9 +1856,9 @@ function AjustesAdmin() {
   );
   /** Ayuda del renglón del modelo: tope y programas (si tiene) y su precio propio. */
   const ayudaModelo = (t) => (t.fichas_con_tiempo
-    ? 'Trabaja con fichas sin Sonoff. Cada ficha: su tope son las fichas que se le meten por estos minutos; al llegar se finaliza sola. Vacío = sin tope. Máx. fichas: hasta cuántas se ofrecen al iniciarla (1 a 3). Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.'
+    ? 'Trabaja con fichas sin Sonoff. Cada ficha: su tope son las fichas que se le meten por estos minutos; al llegar se finaliza sola. Vacío = sin tope. Máx. fichas: hasta cuántas se ofrecen al iniciarla (1 a 3); con 1 no pregunta y lleva 1. Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.'
     : t.solo_fichas
-    ? 'Trabaja con fichas: no tiene tope. Máx. fichas: hasta cuántas se ofrecen al iniciarla (1 a 3). Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.'
+    ? 'Trabaja con fichas: no tiene tope. Máx. fichas: hasta cuántas se ofrecen al iniciarla (1 a 3); con 1 no pregunta y lleva 1. Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.'
     : `${ayudaTiempo(t)} Abajo, el precio por carga de este modelo; vacío = usa el precio de arriba.`);
 
   const setMinutosMarca = (clave, valor, campo = 'minutos') =>

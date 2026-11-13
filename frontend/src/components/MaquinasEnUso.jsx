@@ -5,6 +5,7 @@ import MachineCard from './MachineCard';
 import MaquinaCicloOverlay from './MaquinaCicloOverlay';
 import ElegirTiempoModal from './ElegirTiempoModal';
 import ElegirFichasModal from './ElegirFichasModal';
+import { eligeFichas } from '../lib/fichas';
 import { preguntaTiempo, tiemposDeMaquina, etiquetaPrograma } from '../lib/tiemposModelo';
 import { marcaYTamano } from '../lib/estadoMaquina';
 
@@ -241,8 +242,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     if (terminaLavado && minutosElegidos == null) {
       if (preguntaTiempo(secElegida)) { setEligiendoTiempo(secElegida); return; }
     }
-    // La secadora de fichas arranca aquí: antes, cuántas fichas lleva.
+    // La secadora de fichas arranca aquí: antes, cuántas fichas lleva (1 si su modelo no deja elegir).
     if (terminaLavado && secElegida?.pide_fichas && fichasElegidas == null) {
+      if (!eligeFichas(secElegida)) return confirmarTerminarCiclo(minutosElegidos, 1);
       setEligiendoTiempo(null);
       setEligiendoFichas({ maquina: secElegida, alElegir: (n) => confirmarTerminarCiclo(minutosElegidos, n) });
       return;
@@ -389,8 +391,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       setEligiendoArranque(maquina);
       return;
     }
-    // Cada arranque de la de fichas (el primero y otro ciclo) pide cuántas lleva.
+    // Cada arranque de la de fichas (el primero y otro ciclo) pide cuántas lleva (1 si no deja elegir).
     if (maquina.pide_fichas && fichas == null) {
+      if (!eligeFichas(maquina)) return pedirOtroCiclo(maquina, minutos, 1);
       setEligiendoArranque(null);
       setEligiendoFichas({ maquina, alElegir: (n) => pedirOtroCiclo(maquina, minutos, n) });
       return;

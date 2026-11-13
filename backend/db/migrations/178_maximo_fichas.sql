@@ -3,7 +3,9 @@
 --
 -- "¿Cuántas fichas?" al iniciar una máquina de fichas ofrecía siempre 1, 2 o 3.
 -- Ahora cada modelo dice hasta cuántas (Ajustes, junto a su precio); 3 por
--- omisión. A pedido de la usuaria el Maytag1 (S1 de Zapopan) llega hasta 2.
+-- omisión. Con máximo 1 no se pregunta: arranca con 1 ficha. A pedido de la
+-- usuaria solo el Maytag1 (S1 de Zapopan) pregunta, hasta 2; los demás modelos
+-- de fichas de Zapopan (Maytag2, Maytag3 y neptune washer) llevan 1.
 
 BEGIN;
 
@@ -19,5 +21,12 @@ UPDATE modelos_maquina mo
  WHERE mm.id = mo.marca_id
    AND LOWER(TRIM(mm.nombre)) = 'maytag'
    AND LOWER(TRIM(mo.nombre)) = 'maytag1';
+
+UPDATE modelos_maquina mo
+   SET max_fichas = 1
+  FROM marcas_maquina mm
+ WHERE mm.id = mo.marca_id
+   AND LOWER(TRIM(mm.nombre)) = 'maytag'
+   AND LOWER(TRIM(mo.nombre)) IN ('maytag2', 'maytag3', 'neptune washer');
 
 COMMIT;

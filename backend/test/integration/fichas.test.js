@@ -107,6 +107,20 @@ describe('iniciar una máquina de fichas', () => {
     expect(await dentro()).toBe(2);
   });
 
+  it('con máximo 1 no se pregunta: arranca con 1 ficha', async () => {
+    await pool.query('UPDATE modelos_maquina SET max_fichas = 1');
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora }).expect(200);
+    expect(await dentro()).toBe(1);
+    expect(await disponibles()).toBe(9);
+  });
+
+  it('con máximo 1 no acepta más fichas', async () => {
+    await pool.query('UPDATE modelos_maquina SET max_fichas = 1');
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(400);
+  });
+
   it('el admin cambia el máximo de fichas del modelo en Ajustes, de 1 a 3', async () => {
     const { rows: [mo] } = await pool.query('SELECT id FROM modelos_maquina');
     const { body } = await api('put', '/api/etiquetas/tiempos-marca', { modelo_id: mo.id, max_fichas: 2 }).expect(200);

@@ -29,10 +29,13 @@ export async function maquinasQuePidenFichas(client, ids) {
   return rows;
 }
 
-/** Lee `fichas` del body: de 1 a `max` (el del modelo); si no, lanza ErrorFichas. */
+/**
+ * Lee `fichas` del body: de 1 a `max` (el del modelo); si no, lanza ErrorFichas.
+ * Con máximo 1 no se pregunta: sin dato, lleva 1.
+ */
 export function leerFichas(valor, nombreMaquina, max = MAX_FICHAS_POR_ARRANQUE) {
-  const n = Number(valor);
   const tope = Math.min(MAX_FICHAS_POR_ARRANQUE, Math.max(1, Number(max) || MAX_FICHAS_POR_ARRANQUE));
+  const n = tope === 1 && (valor === undefined || valor === null) ? 1 : Number(valor);
   if (!Number.isInteger(n) || n < 1 || n > tope) {
     const opciones = tope === 1 ? '1' : `de 1 a ${tope}`;
     throw new ErrorFichas(`Elige cuántas fichas se le meten a ${nombreMaquina}: ${opciones}.`, 'FICHAS_SIN_ELEGIR');
