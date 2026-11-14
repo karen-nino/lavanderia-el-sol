@@ -310,7 +310,7 @@ export const quitarTipo = (req, res) =>
       `SELECT ft.id, ft.sucursal, ft.nombre, ft.disponibles,
               COALESCE((SELECT SUM(m.fichas_dentro) FROM maquinas m WHERE m.ficha_tipo_id = ft.id), 0)::int AS dentro
          FROM fichas_tipos ft JOIN sucursales s ON s.slug = ft.sucursal
-        WHERE ft.id = $1 AND s.oculta = FALSE`,
+        WHERE ft.id = $1 AND s.oculta = FALSE FOR UPDATE OF ft`,
       [Number(req.params.id) || 0]
     );
     if (!tipo) throw fallo(404, 'No se encontró el tipo de ficha.');

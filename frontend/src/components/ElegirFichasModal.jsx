@@ -18,22 +18,27 @@ export const IconoFicha = ({ className = 'w-5 h-5' }) => (
  * y el conteo queda en negativo.
  */
 export default function ElegirFichasModal({ maquina, guardando = false, error = '', onElegir, onCancelar }) {
-  const [disponibles, setDisponibles] = useState(null);
-  const [tipo, setTipo] = useState(null);
+  /* El conteo es de la máquina que lo pidió: si se abre para otra, no se usa el anterior. */
+  const [conteo, setConteo] = useState(null); // { id, disponibles, tipo }
+  /* La de la nota trae `maquina_id` (su `id` es la pasada); la de la lista, `id`. */
+  const id = maquina ? Number(maquina.maquina_id ?? maquina.id) : null;
   useEffect(() => {
-    if (!maquina) return undefined;
+    if (id == null) return undefined;
     let vigente = true;
-    /* La de la nota trae `maquina_id` (su `id` es la pasada); la de la lista, `id`. */
-    const id = maquina.maquina_id ?? maquina.id;
     api.get('/fichas')
       .then(d => {
         if (!vigente) return;
-        setDisponibles(disponiblesDeMaquina(d, id));
-        setTipo(d?.maquinas?.find(m => m.id === Number(id))?.ficha_tipo_nombre ?? null);
+        setConteo({
+          id,
+          disponibles: disponiblesDeMaquina(d, id),
+          tipo: d?.maquinas?.find(m => m.id === id)?.ficha_tipo_nombre ?? null,
+        });
       })
       .catch(() => { /* sin el conteo se puede elegir igual */ });
     return () => { vigente = false; };
-  }, [maquina]);
+  }, [id, maquina]);
+  const disponibles = conteo?.id === id ? conteo.disponibles : null;
+  const tipo = conteo?.id === id ? conteo.tipo : null;
 
   if (!maquina) return null;
   const max = Math.min(3, Math.max(1, Number(maquina.max_fichas) || 3));

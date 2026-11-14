@@ -84,12 +84,14 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
         {resumen.maquinas.length === 0 ? (
           <p className="px-5 py-4 text-sm text-gray-500">No hay máquinas que trabajen con fichas en esta sucursal.</p>
         ) : (
-          grupos.filter(g => g.maquinas.length > 0).map(g => (
+          /* divide-y separa los grupos; cada uno con su encabezado de tipo. */
+          <div className="divide-y divide-gray-100">
+          {grupos.filter(g => g.maquinas.length > 0).map(g => (
             <div key={g.clave}>
               {conTipos && (
                 <p className="px-5 py-2 bg-gray-50 border-b border-gray-100 text-sm font-semibold text-gray-600">{g.nombre}</p>
               )}
-              <div className="divide-y divide-gray-100 border-b border-gray-100 last:border-b-0">
+              <div className="divide-y divide-gray-100">
                 {g.maquinas.map(m => (
                   <div key={m.id} className="px-5 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -119,7 +121,8 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
                 ))}
               </div>
             </div>
-          ))
+          ))}
+          </div>
         )}
       </div>
 
