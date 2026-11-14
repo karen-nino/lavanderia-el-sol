@@ -14,7 +14,7 @@ const TIPO = {
 
 /**
  * Historial de fichas en tabla, filtrado por período (como el de Caja): fecha,
- * hora, movimiento, máquina, nota, fichas (+ entran / − salen) y quién. `recarga` cambia cuando hubo un movimiento nuevo (recoger).
+ * hora, movimiento, tipo de ficha (si hay), máquina, nota, fichas (+ entran / − salen) y quién. `recarga` cambia cuando hubo un movimiento nuevo (recoger).
  */
 export default function HistorialFichas({ recarga }) {
   const [periodo, setPeriodo] = useState(periodoInicial);
@@ -34,6 +34,8 @@ export default function HistorialFichas({ recarga }) {
   }, [desde, hasta, recarga]);
 
   const movimientos = datos?.movimientos ?? [];
+  /* La columna Tipo solo si algún movimiento del período tiene tipo de ficha. */
+  const conTipo = movimientos.some(mv => mv.ficha_tipo_nombre);
   const th = 'px-4 py-2.5 font-medium whitespace-nowrap';
   const td = 'px-4 py-2.5 whitespace-nowrap';
 
@@ -59,6 +61,7 @@ export default function HistorialFichas({ recarga }) {
                 <th className={th}>Fecha</th>
                 <th className={th}>Hora</th>
                 <th className={th}>Movimiento</th>
+                {conTipo && <th className={th}>Tipo</th>}
                 <th className={th}>Máquina</th>
                 <th className={th}>Nota</th>
                 <th className={`${th} text-right`}>Fichas</th>
@@ -75,6 +78,7 @@ export default function HistorialFichas({ recarga }) {
                     <td className={td}>
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tipo.cls}`}>{tipo.label}</span>
                     </td>
+                    {conTipo && <td className={`${td} text-gray-800`}>{mv.ficha_tipo_nombre ?? 'Sin tipo'}</td>}
                     <td className={`${td} text-gray-800`}>{mv.maquina_nombre ?? '—'}</td>
                     <td className={td}>
                       {mv.nota_id

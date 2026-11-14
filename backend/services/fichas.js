@@ -3,7 +3,9 @@
  * fichas: sin Sonoff y sin tiempos" arrancan con fichas del negocio: al
  * iniciarlas salen de las disponibles y entran a la máquina; al recogerlas
  * vuelven. Todo deja su renglón en `fichas_movimientos`. Las funciones reciben
- * el `client` de la transacción de quien las llama.
+ * el `client` de la transacción de quien las llama. Desde la mig. 179 cada
+ * máquina usa las de su tipo (`ficha_tipo_id`); sin tipo, las generales de la
+ * sucursal.
  */
 import { pideFichasSql, maxFichasSql } from '../db/sqlMaquina.js';
 
@@ -44,21 +46,47 @@ export function leerFichas(valor, nombreMaquina, max = MAX_FICHAS_POR_ARRANQUE) 
 }
 
 /**
+ * Suma `cantidad` (negativa = salen) a las disponibles de un tipo de ficha, o
+ * a las generales de la sucursal si no hay tipo. Devuelve las que quedan.
+ */
+async function moverDisponibles(client, { sucursal, fichaTipoId, cantidad }) {
+  const { rows: [fila] } = fichaTipoId
+    ? await client.query(
+      'UPDATE fichas_tipos SET disponibles = disponibles + $2 WHERE id = $1 RETURNING disponibles',
+      [fichaTipoId, cantidad]
+    )
+    : await client.query(
+      `UPDATE sucursales SET fichas_disponibles = fichas_disponibles + $2 WHERE slug = $1
+       RETURNING fichas_disponibles AS disponibles`,
+      [sucursal, cantidad]
+    );
+  return fila.disponibles;
+}
+
+/** Renglón del historial; el nombre del tipo se guarda por si después se quita. */
+async function registrarMovimiento(client, { sucursal, tipo, cantidad, disponiblesDespues, fichaTipoId = null,
+  maquinaId = null, maquinaNombre = null, notaId = null, usuarioId = null }) {
+  await client.query(
+    `INSERT INTO fichas_movimientos
+       (sucursal, tipo, cantidad, disponibles_despues, maquina_id, maquina_nombre, nota_id, usuario_id,
+        ficha_tipo_id, ficha_tipo_nombre)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, (SELECT nombre FROM fichas_tipos WHERE id = $9))`,
+    [sucursal, tipo, cantidad, disponiblesDespues, maquinaId, maquinaNombre, notaId, usuarioId, fichaTipoId]
+  );
+}
+
+/**
  * Mete `fichas` a la máquina al arrancarla: salen de las disponibles de su
- * sucursal (pueden quedar en negativo), entran a la máquina y la pasada viva
- * de la nota las guarda. Devuelve las disponibles que quedan.
+ * tipo (pueden quedar en negativo), entran a la máquina y la pasada viva de la
+ * nota las guarda. Devuelve las disponibles que quedan de ese tipo.
  */
 export async function usarFichas(client, { maquinaId, notaId, fichas, usuarioId }) {
   const { rows: [maq] } = await client.query(
     `UPDATE maquinas SET fichas_dentro = fichas_dentro + $2 WHERE id = $1
-     RETURNING id, nombre, sucursal`,
+     RETURNING id, nombre, sucursal, ficha_tipo_id`,
     [maquinaId, fichas]
   );
-  const { rows: [suc] } = await client.query(
-    `UPDATE sucursales SET fichas_disponibles = fichas_disponibles - $2 WHERE slug = $1
-     RETURNING fichas_disponibles`,
-    [maq.sucursal, fichas]
-  );
+  const quedan = await moverDisponibles(client, { sucursal: maq.sucursal, fichaTipoId: maq.ficha_tipo_id, cantidad: -fichas });
   // La pasada de esta máquina en la nota que la arrancó (la más reciente sin cerrar).
   await client.query(
     `UPDATE nota_carga_maquinas SET fichas = COALESCE(fichas, 0) + $3
@@ -70,13 +98,11 @@ export async function usarFichas(client, { maquinaId, notaId, fichas, usuarioId 
       )`,
     [notaId, maquinaId, fichas]
   );
-  await client.query(
-    `INSERT INTO fichas_movimientos
-       (sucursal, tipo, cantidad, disponibles_despues, maquina_id, maquina_nombre, nota_id, usuario_id)
-     VALUES ($1, 'uso', $2, $3, $4, $5, $6, $7)`,
-    [maq.sucursal, -fichas, suc.fichas_disponibles, maq.id, maq.nombre, notaId, usuarioId ?? null]
-  );
-  return suc.fichas_disponibles;
+  await registrarMovimiento(client, {
+    sucursal: maq.sucursal, tipo: 'uso', cantidad: -fichas, disponiblesDespues: quedan, fichaTipoId: maq.ficha_tipo_id,
+    maquinaId: maq.id, maquinaNombre: maq.nombre, notaId, usuarioId,
+  });
+  return quedan;
 }
 
 /**
@@ -124,10 +150,10 @@ export async function fichasDelArranque(client, ids, fichasBody) {
   return [{ maquinaId: piden[0].id, fichas: leerFichas(fichasBody, piden[0].nombre, piden[0].max_fichas) }];
 }
 
-/** Recoge las fichas de una máquina (o de todas las de la sucursal) a las disponibles. */
+/** Recoge las fichas de una máquina (o de todas las de la sucursal) a las disponibles de su tipo. */
 export async function recogerFichas(client, { sucursal, maquinaId = null, usuarioId }) {
   const { rows: maquinas } = await client.query(
-    `SELECT id, nombre, fichas_dentro FROM maquinas
+    `SELECT id, nombre, fichas_dentro, ficha_tipo_id FROM maquinas
       WHERE sucursal = $1 AND fichas_dentro > 0 AND ($2::int IS NULL OR id = $2)
       ORDER BY nombre FOR UPDATE`,
     [sucursal, maquinaId]
@@ -135,34 +161,31 @@ export async function recogerFichas(client, { sucursal, maquinaId = null, usuari
   let recogidas = 0;
   for (const m of maquinas) {
     await client.query('UPDATE maquinas SET fichas_dentro = 0 WHERE id = $1', [m.id]);
-    const { rows: [suc] } = await client.query(
-      `UPDATE sucursales SET fichas_disponibles = fichas_disponibles + $2 WHERE slug = $1
-       RETURNING fichas_disponibles`,
-      [sucursal, m.fichas_dentro]
-    );
-    await client.query(
-      `INSERT INTO fichas_movimientos
-         (sucursal, tipo, cantidad, disponibles_despues, maquina_id, maquina_nombre, usuario_id)
-       VALUES ($1, 'recoger', $2, $3, $4, $5, $6)`,
-      [sucursal, m.fichas_dentro, suc.fichas_disponibles, m.id, m.nombre, usuarioId ?? null]
-    );
+    const quedan = await moverDisponibles(client, { sucursal, fichaTipoId: m.ficha_tipo_id, cantidad: m.fichas_dentro });
+    await registrarMovimiento(client, {
+      sucursal, tipo: 'recoger', cantidad: m.fichas_dentro, disponiblesDespues: quedan, fichaTipoId: m.ficha_tipo_id,
+      maquinaId: m.id, maquinaNombre: m.nombre, usuarioId,
+    });
     recogidas += m.fichas_dentro;
   }
   return recogidas;
 }
 
-/** Fija las disponibles de la sucursal (corrige el conteo) y deja la diferencia en el historial. */
-export async function ajustarFichas(client, { sucursal, disponibles, usuarioId }) {
-  const { rows: [antes] } = await client.query(
-    'SELECT fichas_disponibles FROM sucursales WHERE slug = $1 FOR UPDATE', [sucursal]
-  );
-  const diferencia = disponibles - antes.fichas_disponibles;
+/**
+ * Fija las disponibles de un tipo de ficha (o las generales de la sucursal sin
+ * `fichaTipoId`) y deja la diferencia en el historial.
+ */
+export async function ajustarFichas(client, { sucursal, disponibles, usuarioId, fichaTipoId = null }) {
+  const { rows: [antes] } = fichaTipoId
+    ? await client.query('SELECT disponibles FROM fichas_tipos WHERE id = $1 FOR UPDATE', [fichaTipoId])
+    : await client.query(
+      'SELECT fichas_disponibles AS disponibles FROM sucursales WHERE slug = $1 FOR UPDATE', [sucursal]
+    );
+  const diferencia = disponibles - antes.disponibles;
   if (diferencia === 0) return 0;
-  await client.query('UPDATE sucursales SET fichas_disponibles = $2 WHERE slug = $1', [sucursal, disponibles]);
-  await client.query(
-    `INSERT INTO fichas_movimientos (sucursal, tipo, cantidad, disponibles_despues, usuario_id)
-     VALUES ($1, 'ajuste', $2, $3, $4)`,
-    [sucursal, diferencia, disponibles, usuarioId ?? null]
-  );
+  await moverDisponibles(client, { sucursal, fichaTipoId, cantidad: diferencia });
+  await registrarMovimiento(client, {
+    sucursal, tipo: 'ajuste', cantidad: diferencia, disponiblesDespues: disponibles, fichaTipoId, usuarioId,
+  });
   return diferencia;
 }

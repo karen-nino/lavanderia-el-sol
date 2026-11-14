@@ -265,3 +265,66 @@ describe('Ajustes → Fichas', () => {
     await api('patch', '/api/fichas/sucursales/centro', { fichas_disponibles: 5 }, empleado.token).expect(403);
   });
 });
+
+describe('tipos de ficha (mig. 179)', () => {
+  /** Da de alta un tipo en centro y devuelve su id. */
+  async function crearTipo(nombre) {
+    const res = await api('post', '/api/fichas/sucursales/centro/tipos', { nombre }).expect(200);
+    return res.body.tipos.find(t => t.nombre === nombre).id;
+  }
+  const disponiblesDe = async (id) =>
+    (await pool.query('SELECT disponibles FROM fichas_tipos WHERE id = $1', [id])).rows[0].disponibles;
+
+  it('la máquina usa y recoge las fichas de su tipo, no las generales', async () => {
+    const amarilla = await crearTipo('Secadora Amarilla');
+    await api('patch', `/api/fichas/tipos/${amarilla}`, { disponibles: 5 }).expect(200);
+    await api('patch', `/api/fichas/maquinas/${secadora}`, { ficha_tipo_id: amarilla }).expect(200);
+
+    const nota = await notaConSecadora();
+    const res = await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
+    expect(res.body.fichas_disponibles).toBe(3);
+    expect(await disponiblesDe(amarilla)).toBe(3);
+    expect(await disponibles()).toBe(10);
+
+    const resumen = (await api('get', '/api/fichas', null, empleado.token)).body;
+    expect(resumen.tipos).toEqual([{ id: amarilla, nombre: 'Secadora Amarilla', disponibles: 3, dentro: 2 }]);
+    expect(resumen.maquinas.find(m => m.id === secadora)).toMatchObject({ ficha_tipo_id: amarilla, ficha_tipo_nombre: 'Secadora Amarilla' });
+
+    await api('post', '/api/fichas/recoger', { maquina_id: secadora }, empleado.token).expect(200);
+    expect(await disponiblesDe(amarilla)).toBe(5);
+    const { rows } = await pool.query('SELECT tipo, cantidad, ficha_tipo_nombre FROM fichas_movimientos ORDER BY id');
+    expect(rows.map(r => [r.tipo, r.cantidad, r.ficha_tipo_nombre])).toEqual([
+      ['ajuste', 5, 'Secadora Amarilla'], ['uso', -2, 'Secadora Amarilla'], ['recoger', 2, 'Secadora Amarilla'],
+    ]);
+  });
+
+  it('no se cambia el tipo de una máquina con fichas dentro', async () => {
+    const amarilla = await crearTipo('Secadora Amarilla');
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 1 }).expect(200);
+    await api('patch', `/api/fichas/maquinas/${secadora}`, { ficha_tipo_id: amarilla }).expect(400);
+    await api('post', '/api/fichas/recoger', { maquina_id: secadora }).expect(200);
+    await api('patch', `/api/fichas/maquinas/${secadora}`, { ficha_tipo_id: amarilla }).expect(200);
+  });
+
+  it('el nombre no se repite y solo se quita un tipo sin fichas', async () => {
+    const blanca = await crearTipo('Secadora Blanca');
+    await api('post', '/api/fichas/sucursales/centro/tipos', { nombre: 'secadora  blanca' }).expect(409);
+    await api('post', '/api/fichas/sucursales/centro/tipos', { nombre: '  ' }).expect(400);
+    await api('patch', `/api/fichas/tipos/${blanca}`, { disponibles: 4 }).expect(200);
+    await api('delete', `/api/fichas/tipos/${blanca}`).expect(400);
+    await api('patch', `/api/fichas/tipos/${blanca}`, { disponibles: 0, nombre: 'Blanca' }).expect(200);
+    await api('patch', `/api/fichas/maquinas/${secadora}`, { ficha_tipo_id: blanca }).expect(200);
+    const res = await api('delete', `/api/fichas/tipos/${blanca}`).expect(200);
+    expect(res.body.tipos).toEqual([]);
+    expect(res.body.maquinas.find(m => m.id === secadora).ficha_tipo_id).toBeNull();
+  });
+
+  it('solo el admin maneja los tipos', async () => {
+    await api('post', '/api/fichas/sucursales/centro/tipos', { nombre: 'Redonda' }, empleado.token).expect(403);
+    const redonda = await crearTipo('Redonda');
+    await api('patch', `/api/fichas/tipos/${redonda}`, { disponibles: 3 }, empleado.token).expect(403);
+    await api('patch', `/api/fichas/maquinas/${secadora}`, { ficha_tipo_id: redonda }, empleado.token).expect(403);
+    await api('delete', `/api/fichas/tipos/${redonda}`, null, empleado.token).expect(403);
+  });
+});

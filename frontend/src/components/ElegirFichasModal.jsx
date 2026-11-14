@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import ElegirTiempoModal from './ElegirTiempoModal';
-import { textoFichas } from '../lib/fichas';
+import { textoFichas, disponiblesDeMaquina } from '../lib/fichas';
 
 /** Ficha: una moneda con su marca. */
 export const IconoFicha = ({ className = 'w-5 h-5' }) => (
@@ -14,16 +14,23 @@ export const IconoFicha = ({ className = 'w-5 h-5' }) => (
 /**
  * "¿Cuántas fichas?" al iniciar una máquina que trabaja con fichas (inventario
  * de fichas de la sucursal): de 1 al máximo de su modelo (3 sin dato). Dice
- * cuántas quedan; si no alcanzan, la máquina arranca igual y el conteo queda en
- * negativo.
+ * cuántas quedan de su tipo de ficha; si no alcanzan, la máquina arranca igual
+ * y el conteo queda en negativo.
  */
 export default function ElegirFichasModal({ maquina, guardando = false, error = '', onElegir, onCancelar }) {
   const [disponibles, setDisponibles] = useState(null);
+  const [tipo, setTipo] = useState(null);
   useEffect(() => {
     if (!maquina) return undefined;
     let vigente = true;
+    /* La de la nota trae `maquina_id` (su `id` es la pasada); la de la lista, `id`. */
+    const id = maquina.maquina_id ?? maquina.id;
     api.get('/fichas')
-      .then(d => { if (vigente) setDisponibles(d?.disponibles ?? null); })
+      .then(d => {
+        if (!vigente) return;
+        setDisponibles(disponiblesDeMaquina(d, id));
+        setTipo(d?.maquinas?.find(m => m.id === Number(id))?.ficha_tipo_nombre ?? null);
+      })
       .catch(() => { /* sin el conteo se puede elegir igual */ });
     return () => { vigente = false; };
   }, [maquina]);
@@ -33,8 +40,8 @@ export default function ElegirFichasModal({ maquina, guardando = false, error = 
   const opciones = Array.from({ length: max }, (_, i) => i + 1);
   const quedan = disponibles == null ? null
     : disponibles < max
-      ? `Quedan ${textoFichas(disponibles)}: si usas más, el conteo queda en negativo hasta que las recojan o lo corrijan en Fichas.`
-      : `Quedan ${textoFichas(disponibles)} en la sucursal.`;
+      ? `Quedan ${textoFichas(disponibles)}${tipo ? ` de ${tipo}` : ''}: si usas más, el conteo queda en negativo hasta que las recojan o lo corrijan en Fichas.`
+      : `Quedan ${textoFichas(disponibles)} ${tipo ? `de ${tipo}` : 'en la sucursal'}.`;
   return (
     <ElegirTiempoModal
       maquina={maquina}
