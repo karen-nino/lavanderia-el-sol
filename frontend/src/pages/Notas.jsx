@@ -29,6 +29,7 @@ const FILTRO_SERVICIO_CLS = {
 const FRANJA_SERVICIO_CLS = {
   AUTOSERVICIO: 'border-x-[3px] border-x-blue-500',
   POR_ENCARGO:  'border-x-[3px] border-x-amber-500',
+  PRODUCTOS:    'border-x-[3px] border-x-violet-500',
 };
 
 // Renglones por página en la tabla de escritorio.
