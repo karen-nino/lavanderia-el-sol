@@ -11,11 +11,11 @@ const router = Router();
 
 router.use(verifyToken, sucursalActiva);
 
-// Inventario → Fichas: lo ven y lo recogen admin y empleados.
+// Inventario → Fichas: lo ven admin y empleados; recoger, solo el admin.
 router.get('/', getFichas);
 router.get('/historial', getHistorialFichas);
 router.get('/turnos', getTurnosFichas);
-router.post('/recoger', recoger);
+router.post('/recoger', requireAdmin, recoger);
 router.post('/ajustar', requireAdmin, ajustar);
 // Ajustes → Operación → Fichas: qué sucursales llevan fichas.
 router.get('/sucursales', requireAdmin, getSucursalesFichas);

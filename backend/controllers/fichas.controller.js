@@ -2,7 +2,7 @@
 //   GET   /api/fichas                    resumen de la sucursal activa (todos)
 //   GET   /api/fichas/historial          movimientos de un rango de fechas, de una máquina con ?maquina_id (todos)
 //   GET   /api/fichas/turnos             por turno de caja: con cuántas empezó, usadas, recogidas y con cuántas terminó (todos)
-//   POST  /api/fichas/recoger            recoge de una máquina o de todas (todos)
+//   POST  /api/fichas/recoger            recoge de una máquina o de todas (admin)
 //   POST  /api/fichas/ajustar            corrige el conteo de disponibles (admin)
 //   GET   /api/fichas/sucursales         qué sucursales usan fichas (admin)
 //   PATCH /api/fichas/sucursales/:slug   encender o apagar las fichas y fijar cuántas hay sin tipo (admin)

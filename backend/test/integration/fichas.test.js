@@ -208,7 +208,7 @@ describe('fichas sin Sonoff y con tiempos (mig. 177)', () => {
 });
 
 describe('Inventario → Fichas', () => {
-  it('el empleado ve y recoge las fichas de una máquina', async () => {
+  it('el empleado ve las fichas y solo el admin las recoge', async () => {
     const nota = await notaConSecadora();
     await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 3 }).expect(200);
 
@@ -216,7 +216,9 @@ describe('Inventario → Fichas', () => {
     expect(antes).toMatchObject({ usa_fichas: true, disponibles: 7, dentro: 3 });
     expect(antes.maquinas.find(m => m.id === secadora).fichas_dentro).toBe(3);
 
-    const res = await api('post', '/api/fichas/recoger', { maquina_id: secadora }, empleado.token);
+    await api('post', '/api/fichas/recoger', { maquina_id: secadora }, empleado.token).expect(403);
+    await api('post', '/api/fichas/recoger', {}, empleado.token).expect(403);
+    const res = await api('post', '/api/fichas/recoger', { maquina_id: secadora });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ recogidas: 3, disponibles: 10, dentro: 0 });
     expect(res.body.movimientos[0]).toMatchObject({ tipo: 'recoger', cantidad: 3, maquina_nombre: 'S2' });
@@ -226,7 +228,7 @@ describe('Inventario → Fichas', () => {
     const nota = await notaConSecadora();
     await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
     await pool.query(`UPDATE fichas_movimientos SET created_at = '2026-01-15T12:00:00Z'`);
-    await api('post', '/api/fichas/recoger', { maquina_id: secadora }, empleado.token).expect(200);
+    await api('post', '/api/fichas/recoger', { maquina_id: secadora }).expect(200);
 
     const enero = (await api('get', '/api/fichas/historial?desde=2026-01-01T06:00:00Z&hasta=2026-02-01T06:00:00Z', null, empleado.token)).body;
     expect(enero.movimientos.map(m => [m.tipo, m.cantidad, m.folio != null])).toEqual([['uso', -2, true]]);
@@ -239,7 +241,7 @@ describe('Inventario → Fichas', () => {
     await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
     await pool.query(`UPDATE cajas SET estado = 'cerrada', cerrada_at = NOW() WHERE sucursal = 'centro' AND cerrada_at IS NULL`);
     await api('post', '/api/caja/abrir', { monto_inicial: 0 }).expect(201);
-    await api('post', '/api/fichas/recoger', { maquina_id: secadora }, empleado.token).expect(200);
+    await api('post', '/api/fichas/recoger', { maquina_id: secadora }).expect(200);
     await api('post', '/api/fichas/ajustar', { disponibles: 7 }).expect(200);
 
     const rango = 'desde=2000-01-01T00:00:00Z&hasta=2100-01-01T00:00:00Z';
@@ -328,7 +330,7 @@ describe('tipos de ficha (mig. 179)', () => {
     expect(resumen.tipos).toEqual([{ id: amarilla, nombre: 'Secadora Amarilla', disponibles: 3, dentro: 2 }]);
     expect(resumen.maquinas.find(m => m.id === secadora)).toMatchObject({ ficha_tipo_id: amarilla, ficha_tipo_nombre: 'Secadora Amarilla' });
 
-    await api('post', '/api/fichas/recoger', { maquina_id: secadora }, empleado.token).expect(200);
+    await api('post', '/api/fichas/recoger', { maquina_id: secadora }).expect(200);
     expect(await disponiblesDe(amarilla)).toBe(5);
     const { rows } = await pool.query('SELECT tipo, cantidad, ficha_tipo_nombre FROM fichas_movimientos ORDER BY id');
     expect(rows.map(r => [r.tipo, r.cantidad, r.ficha_tipo_nombre])).toEqual([

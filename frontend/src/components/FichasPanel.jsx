@@ -69,7 +69,7 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
       </div>
       {negativo && (
         <p className="text-sm text-red-600">
-          Un conteo en negativo no cuadra: recoge las fichas{esAdmin ? ' o fija cuántas hay en Ajustes → Fichas' : ''}.
+          Un conteo en negativo no cuadra: {esAdmin ? 'recoge las fichas o fija cuántas hay en Ajustes → Fichas' : 'avisa a un admin para que recoja las fichas'}.
         </p>
       )}
 
@@ -77,7 +77,8 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
           <h2 className="text-base font-bold text-dark-blue">Máquinas</h2>
-          {resumen.dentro > 0 && (
+          {/* Recoger es solo del admin (el backend también lo exige). */}
+          {esAdmin && resumen.dentro > 0 && (
             <button
               type="button"
               onClick={() => { setError(''); setPorRecoger(null); }}
@@ -98,13 +99,13 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
                 <tr className="text-left text-gray-500 border-b border-gray-100">
                   <th className={th}>Máquina</th>
                   <th className={`${th} text-right`}>Dentro</th>
-                  <th className={th}><span className="sr-only">Recoger</span></th>
+                  {esAdmin && <th className={th}><span className="sr-only">Recoger</span></th>}
                 </tr>
               </thead>
               {secciones.map(sec => (
                 <tbody key={sec.clave} className="divide-y divide-gray-100">
                   <tr className="bg-gray-50">
-                    <td colSpan={3} className="px-4 py-2 text-sm font-semibold text-gray-600">{sec.nombre}</td>
+                    <td colSpan={esAdmin ? 3 : 2} className="px-4 py-2 text-sm font-semibold text-gray-600">{sec.nombre}</td>
                   </tr>
                   {sec.maquinas.map(m => (
                     <tr key={m.id}>
@@ -123,21 +124,23 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
                           {textoFichas(m.fichas_dentro)}
                         </span>
                       </td>
-                      <td className={`${td} text-right`}>
-                        <button
-                          type="button"
-                          onClick={() => { setError(''); setPorRecoger(m); }}
-                          disabled={m.fichas_dentro === 0 || recogiendo != null}
-                          /* Con fichas dentro, de color: hay algo que recoger. */
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            m.fichas_dentro > 0
-                              ? 'bg-blue text-white hover:opacity-90 disabled:opacity-60'
-                              : 'border border-gray-300 text-gray-700 disabled:opacity-40'
-                          }`}
-                        >
-                          {recogiendo === m.id ? 'Recogiendo…' : 'Recoger'}
-                        </button>
-                      </td>
+                      {esAdmin && (
+                        <td className={`${td} text-right`}>
+                          <button
+                            type="button"
+                            onClick={() => { setError(''); setPorRecoger(m); }}
+                            disabled={m.fichas_dentro === 0 || recogiendo != null}
+                            /* Con fichas dentro, de color: hay algo que recoger. */
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              m.fichas_dentro > 0
+                                ? 'bg-blue text-white hover:opacity-90 disabled:opacity-60'
+                                : 'border border-gray-300 text-gray-700 disabled:opacity-40'
+                            }`}
+                          >
+                            {recogiendo === m.id ? 'Recogiendo…' : 'Recoger'}
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
