@@ -252,7 +252,8 @@ describe('Inventario → Fichas', () => {
     expect(segundo.grupos).toEqual([{ clave: 'sin', nombre: 'Fichas', inicio: 8, usadas: 0, recogidas: 2, correcciones: -3, fin: 7 }]);
     await api('get', '/api/fichas/turnos?desde=nada&hasta=2026-02-01').expect(400);
 
-    /* Un turno abierto días antes sale en el período de hoy. */
+    /* Un turno abierto días antes sale en el período de hoy; uno que se cerró antes, no. */
+    await pool.query(`UPDATE cajas SET abierta_at = NOW() - INTERVAL '5 days', cerrada_at = NOW() - INTERVAL '4 days' WHERE cerrada_at IS NOT NULL`);
     await pool.query(`UPDATE cajas SET abierta_at = NOW() - INTERVAL '3 days' WHERE cerrada_at IS NULL`);
     const hoy = `desde=${new Date(Date.now() - 3600e3).toISOString()}&hasta=${new Date(Date.now() + 3600e3).toISOString()}`;
     const deHoy = (await api('get', `/api/fichas/turnos?${hoy}`, null, empleado.token)).body.turnos;
