@@ -1,6 +1,7 @@
 // Inventario de fichas (mig. 176).
 //   GET   /api/fichas                    resumen de la sucursal activa (todos)
 //   GET   /api/fichas/historial          movimientos de un rango de fechas, de una máquina con ?maquina_id (todos)
+//   GET   /api/fichas/turnos             por turno de caja: con cuántas empezó, usadas, recogidas y con cuántas terminó (todos)
 //   POST  /api/fichas/recoger            recoge de una máquina o de todas (todos)
 //   POST  /api/fichas/ajustar            corrige el conteo de disponibles (admin)
 //   GET   /api/fichas/sucursales         qué sucursales usan fichas (admin)
@@ -121,6 +122,87 @@ export const getHistorialFichas = async (req, res) => {
   } catch (err) {
     console.error('getHistorialFichas error:', err);
     res.status(500).json({ message: 'No se pudo cargar el historial de fichas. Intenta de nuevo.' });
+  }
+};
+
+/**
+ * Fichas por turno de caja (los que estuvieron abiertos entre `desde` y `hasta`, aunque se abrieran antes), por
+ * tipo de ficha: con cuántas disponibles empezó, usadas, recogidas,
+ * correcciones y con cuántas terminó (o hay ahora, si sigue abierto). Como
+ * todo cambio al conteo deja su movimiento, el conteo de un momento = el de
+ * ahora menos lo que se movió después. Con `anios`, los años con turnos.
+ */
+export const getTurnosFichas = async (req, res) => {
+  const desde = new Date(String(req.query.desde ?? ''));
+  const hasta = new Date(String(req.query.hasta ?? ''));
+  if (Number.isNaN(desde.getTime()) || Number.isNaN(hasta.getTime()) || hasta <= desde) {
+    return res.status(400).json({ message: 'Elige un rango de fechas válido.' });
+  }
+  try {
+    const [{ rows: turnos }, { rows: anios }, { rows: [suc] }, tipos, maquinas] = await Promise.all([
+      pool.query(
+        `SELECT c.id, c.abierta_at, c.cerrada_at, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS abrio
+           FROM cajas c
+           LEFT JOIN usuarios u ON u.id = c.usuario_apertura_id
+          WHERE c.sucursal = $1 AND c.abierta_at < $3 AND (c.cerrada_at IS NULL OR c.cerrada_at > $2)
+          ORDER BY c.abierta_at DESC
+          LIMIT 500`,
+        [req.sucursal, desde, hasta]
+      ),
+      pool.query(
+        `SELECT DISTINCT EXTRACT(YEAR FROM abierta_at AT TIME ZONE 'America/Mexico_City')::int AS anio
+           FROM cajas WHERE sucursal = $1 ORDER BY 1 DESC`,
+        [req.sucursal]
+      ),
+      pool.query('SELECT fichas_disponibles FROM sucursales WHERE slug = $1', [req.sucursal]),
+      tiposDeFicha(pool, req.sucursal),
+      maquinasDeFichas(pool, req.sucursal),
+    ]);
+    if (turnos.length === 0) return res.json({ turnos: [], anios: anios.map(r => r.anio) });
+
+    /* Los movimientos desde que abrió el turno más viejo; los de un tipo ya quitado no entran. */
+    const primero = turnos[turnos.length - 1].abierta_at;
+    const { rows: movs } = await pool.query(
+      `SELECT tipo, cantidad, ficha_tipo_id, created_at
+         FROM fichas_movimientos
+        WHERE sucursal = $1 AND created_at >= $2 AND (ficha_tipo_id IS NOT NULL OR ficha_tipo_nombre IS NULL)`,
+      [req.sucursal, primero]
+    );
+    const ahora = new Date();
+    const grupos = tipos.map(t => ({ clave: t.id, nombre: t.nombre, actual: t.disponibles }));
+    const general = suc?.fichas_disponibles ?? 0;
+    /* "Sin tipo" como en la página: si no hay tipos, si alguna máquina no tiene o si tiene fichas. */
+    const conGeneral = grupos.length === 0 || general !== 0 || maquinas.some(m => m.ficha_tipo_id == null);
+    const sumar = (lista) => lista.reduce((t, m) => t + m.cantidad, 0);
+
+    res.json({
+      anios: anios.map(r => r.anio),
+      turnos: turnos.map(c => {
+        const inicio = new Date(c.abierta_at);
+        const fin = c.cerrada_at ? new Date(c.cerrada_at) : ahora;
+        const filas = [...grupos, { clave: 'sin', nombre: grupos.length === 0 ? 'Fichas' : 'Sin tipo', actual: general }]
+          .map(g => {
+            const delGrupo = movs.filter(m => (g.clave === 'sin' ? m.ficha_tipo_id == null : m.ficha_tipo_id === g.clave));
+            const enTurno = delGrupo.filter(m => new Date(m.created_at) >= inicio && new Date(m.created_at) < fin);
+            return {
+              clave: g.clave,
+              nombre: g.nombre,
+              inicio: g.actual - sumar(delGrupo.filter(m => new Date(m.created_at) >= inicio)),
+              usadas: -sumar(enTurno.filter(m => m.tipo === 'uso')),
+              recogidas: sumar(enTurno.filter(m => m.tipo === 'recoger')),
+              correcciones: sumar(enTurno.filter(m => m.tipo === 'ajuste')),
+              fin: g.actual - sumar(delGrupo.filter(m => new Date(m.created_at) >= fin)),
+              movimientos: enTurno.length,
+            };
+          })
+          .filter(f => f.clave !== 'sin' || conGeneral || f.movimientos > 0)
+          .map(({ movimientos: _, ...f }) => f);
+        return { id: c.id, abierta_at: c.abierta_at, cerrada_at: c.cerrada_at, en_curso: !c.cerrada_at, abrio: c.abrio || null, grupos: filas };
+      }),
+    });
+  } catch (err) {
+    console.error('getTurnosFichas error:', err);
+    res.status(500).json({ message: 'No se pudieron cargar las fichas por turno. Intenta de nuevo.' });
   }
 };
 

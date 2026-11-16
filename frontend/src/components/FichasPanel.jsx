@@ -4,6 +4,7 @@ import { textoFichas, gruposDeFichas } from '../lib/fichas';
 import { IconoFicha } from './ElegirFichasModal';
 import HistorialFichas from './HistorialFichas';
 import FichasMaquinaModal from './FichasMaquinaModal';
+import FichasPorTurno from './FichasPorTurno';
 import ConfirmacionModal from './ConfirmacionModal';
 
 const th = 'px-4 py-2.5 font-medium whitespace-nowrap';
@@ -187,6 +188,9 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
           />
         );
       })()}
+
+      {/* Por turno de caja: con cuántas empezó, usadas y con cuántas terminó. */}
+      <FichasPorTurno recarga={resumen} />
 
       {/* Historial en tabla, con su período; se recarga tras recoger. */}
       <HistorialFichas recarga={resumen} />

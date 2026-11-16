@@ -234,6 +234,31 @@ describe('Inventario → Fichas', () => {
     await api('get', '/api/fichas/historial?desde=nada&hasta=2026-02-01').expect(400);
   });
 
+  it('por turno: con cuántas empieza, usadas, recogidas y con cuántas termina', async () => {
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
+    await pool.query(`UPDATE cajas SET estado = 'cerrada', cerrada_at = NOW() WHERE sucursal = 'centro' AND cerrada_at IS NULL`);
+    await api('post', '/api/caja/abrir', { monto_inicial: 0 }).expect(201);
+    await api('post', '/api/fichas/recoger', { maquina_id: secadora }, empleado.token).expect(200);
+    await api('post', '/api/fichas/ajustar', { disponibles: 7 }).expect(200);
+
+    const rango = 'desde=2000-01-01T00:00:00Z&hasta=2100-01-01T00:00:00Z';
+    const res = await api('get', `/api/fichas/turnos?${rango}`, null, empleado.token);
+    expect(res.status).toBe(200);
+    const [segundo, primero] = res.body.turnos;
+    expect(primero).toMatchObject({ en_curso: false });
+    expect(primero.grupos).toEqual([{ clave: 'sin', nombre: 'Fichas', inicio: 10, usadas: 2, recogidas: 0, correcciones: 0, fin: 8 }]);
+    expect(segundo).toMatchObject({ en_curso: true });
+    expect(segundo.grupos).toEqual([{ clave: 'sin', nombre: 'Fichas', inicio: 8, usadas: 0, recogidas: 2, correcciones: -3, fin: 7 }]);
+    await api('get', '/api/fichas/turnos?desde=nada&hasta=2026-02-01').expect(400);
+
+    /* Un turno abierto días antes sale en el período de hoy. */
+    await pool.query(`UPDATE cajas SET abierta_at = NOW() - INTERVAL '3 days' WHERE cerrada_at IS NULL`);
+    const hoy = `desde=${new Date(Date.now() - 3600e3).toISOString()}&hasta=${new Date(Date.now() + 3600e3).toISOString()}`;
+    const deHoy = (await api('get', `/api/fichas/turnos?${hoy}`, null, empleado.token)).body.turnos;
+    expect(deHoy.map(t => t.id)).toEqual([segundo.id]);
+  });
+
   it('el historial filtra por máquina', async () => {
     const nota = await notaConSecadora();
     await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
