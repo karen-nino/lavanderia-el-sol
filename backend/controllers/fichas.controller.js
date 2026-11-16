@@ -139,7 +139,7 @@ export const getTurnosFichas = async (req, res) => {
     return res.status(400).json({ message: 'Elige un rango de fechas válido.' });
   }
   try {
-    const [{ rows: turnos }, { rows: anios }, { rows: [suc] }, tipos, maquinas] = await Promise.all([
+    const [{ rows: turnos }, { rows: anios }, { rows: [suc] }, tipos] = await Promise.all([
       pool.query(
         `SELECT c.id, c.abierta_at, c.cerrada_at, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS abrio
            FROM cajas c
@@ -156,7 +156,6 @@ export const getTurnosFichas = async (req, res) => {
       ),
       pool.query('SELECT fichas_disponibles FROM sucursales WHERE slug = $1', [req.sucursal]),
       tiposDeFicha(pool, req.sucursal),
-      maquinasDeFichas(pool, req.sucursal),
     ]);
     if (turnos.length === 0) return res.json({ turnos: [], anios: anios.map(r => r.anio) });
 
@@ -169,10 +168,10 @@ export const getTurnosFichas = async (req, res) => {
       [req.sucursal, primero]
     );
     const ahora = new Date();
-    const grupos = tipos.map(t => ({ clave: t.id, nombre: t.nombre, actual: t.disponibles }));
-    const general = suc?.fichas_disponibles ?? 0;
-    /* "Sin tipo" como en la página: si no hay tipos, si alguna máquina no tiene o si tiene fichas. */
-    const conGeneral = grupos.length === 0 || general !== 0 || maquinas.some(m => m.ficha_tipo_id == null);
+    /* Un renglón por tipo; el conteo general (sin tipo) solo si la sucursal no tiene tipos. */
+    const grupos = tipos.length > 0
+      ? tipos.map(t => ({ clave: t.id, nombre: t.nombre, actual: t.disponibles }))
+      : [{ clave: 'sin', nombre: 'Fichas', actual: suc?.fichas_disponibles ?? 0 }];
     const sumar = (lista) => lista.reduce((t, m) => t + m.cantidad, 0);
 
     res.json({
@@ -180,23 +179,19 @@ export const getTurnosFichas = async (req, res) => {
       turnos: turnos.map(c => {
         const inicio = new Date(c.abierta_at);
         const fin = c.cerrada_at ? new Date(c.cerrada_at) : ahora;
-        const filas = [...grupos, { clave: 'sin', nombre: grupos.length === 0 ? 'Fichas' : 'Sin tipo', actual: general }]
-          .map(g => {
-            const delGrupo = movs.filter(m => (g.clave === 'sin' ? m.ficha_tipo_id == null : m.ficha_tipo_id === g.clave));
-            const enTurno = delGrupo.filter(m => new Date(m.created_at) >= inicio && new Date(m.created_at) < fin);
-            return {
-              clave: g.clave,
-              nombre: g.nombre,
-              inicio: g.actual - sumar(delGrupo.filter(m => new Date(m.created_at) >= inicio)),
-              usadas: -sumar(enTurno.filter(m => m.tipo === 'uso')),
-              recogidas: sumar(enTurno.filter(m => m.tipo === 'recoger')),
-              correcciones: sumar(enTurno.filter(m => m.tipo === 'ajuste')),
-              fin: g.actual - sumar(delGrupo.filter(m => new Date(m.created_at) >= fin)),
-              movimientos: enTurno.length,
-            };
-          })
-          .filter(f => f.clave !== 'sin' || conGeneral || f.movimientos > 0)
-          .map(({ movimientos: _, ...f }) => f);
+        const filas = grupos.map(g => {
+          const delGrupo = movs.filter(m => (g.clave === 'sin' ? m.ficha_tipo_id == null : m.ficha_tipo_id === g.clave));
+          const enTurno = delGrupo.filter(m => new Date(m.created_at) >= inicio && new Date(m.created_at) < fin);
+          return {
+            clave: g.clave,
+            nombre: g.nombre,
+            inicio: g.actual - sumar(delGrupo.filter(m => new Date(m.created_at) >= inicio)),
+            usadas: -sumar(enTurno.filter(m => m.tipo === 'uso')),
+            recogidas: sumar(enTurno.filter(m => m.tipo === 'recoger')),
+            correcciones: sumar(enTurno.filter(m => m.tipo === 'ajuste')),
+            fin: g.actual - sumar(delGrupo.filter(m => new Date(m.created_at) >= fin)),
+          };
+        });
         return { id: c.id, abierta_at: c.abierta_at, cerrada_at: c.cerrada_at, en_curso: !c.cerrada_at, abrio: c.abrio || null, grupos: filas };
       }),
     });
