@@ -5,11 +5,8 @@ import { IconoFicha } from './ElegirFichasModal';
 import HistorialFichas from './HistorialFichas';
 import ConfirmacionModal from './ConfirmacionModal';
 
-/** Tipo y tamaño de la máquina: "Secadora mediana", "Lavadora chica". */
-const tipoMaquina = (m) => {
-  const tipo = m.tipo === 'secadora' ? 'Secadora' : 'Lavadora';
-  return m.tamano ? `${tipo} ${m.tamano}` : tipo;
-};
+const th = 'px-4 py-2.5 font-medium whitespace-nowrap';
+const td = 'px-4 py-2.5 whitespace-nowrap';
 
 /**
  * Página Fichas: las que hay de cada tipo, las que quedaron dentro de cada
@@ -27,6 +24,13 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
   const negativo = grupos.some(g => g.disponibles < 0);
   /* El grupo (tipo) de una máquina, para "Disponibles después". */
   const grupoDe = (m) => grupos.find(g => g.maquinas.some(x => x.id === m.id));
+  const nombreTipo = (m) => resumen.tipos.find(t => t.id === m.ficha_tipo_id)?.nombre ?? 'Sin tipo';
+  /* Secciones de la tabla: primero lavadoras, luego secadoras (solo las que tienen máquinas). */
+  const secciones = [
+    { clave: 'lavadora', nombre: 'Lavadoras', maquinas: resumen.maquinas.filter(m => m.tipo !== 'secadora') },
+    { clave: 'secadora', nombre: 'Secadoras', maquinas: resumen.maquinas.filter(m => m.tipo === 'secadora') },
+  ].filter(sec => sec.maquinas.length > 0);
+  const columnas = conTipos ? 4 : 3;
 
   const recoger = async (maquinaId = null) => {
     setRecogiendo(maquinaId ?? 'todas');
@@ -66,7 +70,7 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
         </p>
       )}
 
-      {/* Las máquinas de fichas por tipo, con las que tienen dentro. */}
+      {/* Las máquinas de fichas, con su tipo de ficha y las que tienen dentro. */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
           <h2 className="text-base font-bold text-dark-blue">Máquinas</h2>
@@ -84,44 +88,52 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
         {resumen.maquinas.length === 0 ? (
           <p className="px-5 py-4 text-sm text-gray-500">No hay máquinas que trabajen con fichas en esta sucursal.</p>
         ) : (
-          /* divide-y separa los grupos; cada uno con su encabezado de tipo. */
-          <div className="divide-y divide-gray-100">
-          {grupos.filter(g => g.maquinas.length > 0).map(g => (
-            <div key={g.clave}>
-              {conTipos && (
-                <p className="px-5 py-2 bg-gray-50 border-b border-gray-100 text-sm font-semibold text-gray-600">{g.nombre}</p>
-              )}
-              <div className="divide-y divide-gray-100">
-                {g.maquinas.map(m => (
-                  <div key={m.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{m.nombre}</p>
-                      <p className="text-sm text-gray-500">{tipoMaquina(m)}</p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="flex items-center gap-1.5 text-sm font-semibold tabular-nums text-gray-900">
-                        <IconoFicha className="w-4 h-4 text-gray-400" />
-                        {textoFichas(m.fichas_dentro)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => { setError(''); setPorRecoger(m); }}
-                        disabled={m.fichas_dentro === 0 || recogiendo != null}
-                        /* Con fichas dentro, de color: hay algo que recoger. */
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          m.fichas_dentro > 0
-                            ? 'bg-blue text-white hover:opacity-90 disabled:opacity-60'
-                            : 'border border-gray-300 text-gray-700 disabled:opacity-40'
-                        }`}
-                      >
-                        {recogiendo === m.id ? 'Recogiendo…' : 'Recoger'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+          /* Tabla seccionada por lavadoras y secadoras; el tipo de ficha va en su columna. */
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-gray-100">
+                  <th className={th}>Máquina</th>
+                  {conTipos && <th className={th}>Tipo de ficha</th>}
+                  <th className={`${th} text-right`}>Dentro</th>
+                  <th className={th}><span className="sr-only">Recoger</span></th>
+                </tr>
+              </thead>
+              {secciones.map(sec => (
+                <tbody key={sec.clave} className="divide-y divide-gray-100">
+                  <tr className="bg-gray-50">
+                    <td colSpan={columnas} className="px-4 py-2 text-sm font-semibold text-gray-600">{sec.nombre}</td>
+                  </tr>
+                  {sec.maquinas.map(m => (
+                    <tr key={m.id}>
+                      <td className={`${td} font-semibold text-gray-900`}>{m.nombre}</td>
+                      {conTipos && <td className={`${td} text-gray-800`}>{nombreTipo(m)}</td>}
+                      <td className={`${td} text-right`}>
+                        <span className="inline-flex items-center gap-1.5 font-semibold tabular-nums text-gray-900">
+                          <IconoFicha className="w-4 h-4 text-gray-400" />
+                          {textoFichas(m.fichas_dentro)}
+                        </span>
+                      </td>
+                      <td className={`${td} text-right`}>
+                        <button
+                          type="button"
+                          onClick={() => { setError(''); setPorRecoger(m); }}
+                          disabled={m.fichas_dentro === 0 || recogiendo != null}
+                          /* Con fichas dentro, de color: hay algo que recoger. */
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            m.fichas_dentro > 0
+                              ? 'bg-blue text-white hover:opacity-90 disabled:opacity-60'
+                              : 'border border-gray-300 text-gray-700 disabled:opacity-40'
+                          }`}
+                        >
+                          {recogiendo === m.id ? 'Recogiendo…' : 'Recoger'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              ))}
+            </table>
           </div>
         )}
       </div>
