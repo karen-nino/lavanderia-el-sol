@@ -14,12 +14,9 @@ const td = 'px-4 py-2.5 whitespace-nowrap tabular-nums';
 /** Un turno: quién lo abrió, su horario y una columna por tipo de ficha. */
 function TarjetaTurno({ t }) {
   const horario = `${formatHora12(t.abierta_at)} – ${t.en_curso ? 'en curso' : formatHora12(t.cerrada_at)}`;
-  /* Los renglones cuadran: al empezar − usadas + recogidas ± correcciones = al terminar. */
   const renglones = [
     { etiqueta: 'Al empezar', valor: g => g.inicio },
     { etiqueta: 'Usadas', valor: g => conSigno(-g.usadas) },
-    { etiqueta: 'Recogidas', valor: g => conSigno(g.recogidas) },
-    { etiqueta: 'Correcciones', valor: g => conSigno(g.correcciones) },
   ];
 
   return (
@@ -59,7 +56,7 @@ function TarjetaTurno({ t }) {
 
 /**
  * Fichas por turno de caja en la página Fichas: con cuántas disponibles empezó
- * cada turno, las usadas, recogidas y corregidas, y con cuántas terminó; por
+ * cada turno, las usadas y con cuántas terminó; por
  * tipo de ficha. `recarga` cambia tras recoger.
  */
 export default function FichasPorTurno({ recarga }) {
