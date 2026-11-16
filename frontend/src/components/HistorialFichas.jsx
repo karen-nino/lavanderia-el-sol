@@ -15,8 +15,9 @@ const TIPO = {
 /**
  * Historial de fichas en tabla, filtrado por período (como el de Caja): fecha,
  * hora, movimiento, tipo de ficha (si hay), máquina, nota, fichas (+ entran / − salen) y quién. `recarga` cambia cuando hubo un movimiento nuevo (recoger).
+ * Con `maquinaId`, solo los de esa máquina y sin la columna Máquina; `enTarjeta` en false lo deja sin su tarjeta (para un modal).
  */
-export default function HistorialFichas({ recarga }) {
+export default function HistorialFichas({ recarga, maquinaId = null, enTarjeta = true }) {
   const [periodo, setPeriodo] = useState(periodoInicial);
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState('');
@@ -27,11 +28,12 @@ export default function HistorialFichas({ recarga }) {
   useEffect(() => {
     if (!desde) return undefined;
     let vigente = true;
-    api.get(`/fichas/historial?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`)
+    const deMaquina = maquinaId != null ? `&maquina_id=${maquinaId}` : '';
+    api.get(`/fichas/historial?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}${deMaquina}`)
       .then(d => { if (vigente) { setDatos(d); setError(''); } })
       .catch(err => { if (vigente) setError(err.message); });
     return () => { vigente = false; };
-  }, [desde, hasta, recarga]);
+  }, [desde, hasta, recarga, maquinaId]);
 
   const movimientos = datos?.movimientos ?? [];
   /* La columna Tipo solo si algún movimiento del período tiene tipo de ficha. */
@@ -41,7 +43,7 @@ export default function HistorialFichas({ recarga }) {
 
   return (
     /* Sin overflow-hidden: el panel del período tiene que poder salir de la tarjeta. */
-    <div className="bg-white rounded-xl border border-gray-200">
+    <div className={enTarjeta ? 'bg-white rounded-xl border border-gray-200' : ''}>
       <div className="px-5 py-4 border-b border-gray-100 space-y-3">
         <h2 className="text-base font-bold text-dark-blue">Historial</h2>
         <SelectorPeriodo valor={periodo} onCambio={setPeriodo} anios={datos?.anios} />
@@ -62,7 +64,7 @@ export default function HistorialFichas({ recarga }) {
                 <th className={th}>Hora</th>
                 <th className={th}>Movimiento</th>
                 {conTipo && <th className={th}>Tipo</th>}
-                <th className={th}>Máquina</th>
+                {maquinaId == null && <th className={th}>Máquina</th>}
                 <th className={th}>Nota</th>
                 <th className={`${th} text-right`}>Fichas</th>
                 <th className={th}>Quién</th>
@@ -79,7 +81,7 @@ export default function HistorialFichas({ recarga }) {
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tipo.cls}`}>{tipo.label}</span>
                     </td>
                     {conTipo && <td className={`${td} text-gray-800`}>{mv.ficha_tipo_nombre ?? 'Sin tipo'}</td>}
-                    <td className={`${td} text-gray-800`}>{mv.maquina_nombre ?? '—'}</td>
+                    {maquinaId == null && <td className={`${td} text-gray-800`}>{mv.maquina_nombre ?? '—'}</td>}
                     <td className={td}>
                       {mv.nota_id
                         ? <Link to={`/notas/${mv.nota_id}`} className="text-blue hover:underline">{mv.folio ?? `#${mv.nota_id}`}</Link>

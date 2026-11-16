@@ -1,6 +1,6 @@
 // Inventario de fichas (mig. 176).
 //   GET   /api/fichas                    resumen de la sucursal activa (todos)
-//   GET   /api/fichas/historial          movimientos de un rango de fechas (todos)
+//   GET   /api/fichas/historial          movimientos de un rango de fechas, de una máquina con ?maquina_id (todos)
 //   POST  /api/fichas/recoger            recoge de una máquina o de todas (todos)
 //   POST  /api/fichas/ajustar            corrige el conteo de disponibles (admin)
 //   GET   /api/fichas/sucursales         qué sucursales usan fichas (admin)
@@ -83,14 +83,19 @@ export const getFichas = async (req, res) => {
 
 /**
  * Historial de movimientos entre `desde` (incluido) y `hasta` (excluido), dos
- * fechas ISO; del más reciente al más viejo, hasta 1,000. Con `años`, los años
- * que tienen movimientos (para el selector de período).
+ * fechas ISO; del más reciente al más viejo, hasta 1,000. Con `maquina_id`,
+ * solo los de esa máquina. Con `años`, los años que tienen movimientos (para
+ * el selector de período).
  */
 export const getHistorialFichas = async (req, res) => {
   const desde = new Date(String(req.query.desde ?? ''));
   const hasta = new Date(String(req.query.hasta ?? ''));
   if (Number.isNaN(desde.getTime()) || Number.isNaN(hasta.getTime()) || hasta <= desde) {
     return res.status(400).json({ message: 'Elige un rango de fechas válido.' });
+  }
+  const maquinaId = req.query.maquina_id != null ? Number(req.query.maquina_id) : null;
+  if (maquinaId != null && !Number.isInteger(maquinaId)) {
+    return res.status(400).json({ message: 'Elige una máquina válida.' });
   }
   try {
     const [{ rows: movimientos }, { rows: anios }] = await Promise.all([
@@ -101,14 +106,15 @@ export const getHistorialFichas = async (req, res) => {
            LEFT JOIN notas n ON n.id = f.nota_id
            LEFT JOIN usuarios u ON u.id = f.usuario_id
           WHERE f.sucursal = $1 AND f.created_at >= $2 AND f.created_at < $3
+            AND ($4::int IS NULL OR f.maquina_id = $4)
           ORDER BY f.created_at DESC, f.id DESC
           LIMIT 1000`,
-        [req.sucursal, desde, hasta]
+        [req.sucursal, desde, hasta, maquinaId]
       ),
       pool.query(
         `SELECT DISTINCT EXTRACT(YEAR FROM created_at AT TIME ZONE 'America/Mexico_City')::int AS anio
-           FROM fichas_movimientos WHERE sucursal = $1 ORDER BY 1 DESC`,
-        [req.sucursal]
+           FROM fichas_movimientos WHERE sucursal = $1 AND ($2::int IS NULL OR maquina_id = $2) ORDER BY 1 DESC`,
+        [req.sucursal, maquinaId]
       ),
     ]);
     res.json({ movimientos, anios: anios.map(r => r.anio) });

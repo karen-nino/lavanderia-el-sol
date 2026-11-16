@@ -234,6 +234,18 @@ describe('Inventario → Fichas', () => {
     await api('get', '/api/fichas/historial?desde=nada&hasta=2026-02-01').expect(400);
   });
 
+  it('el historial filtra por máquina', async () => {
+    const nota = await notaConSecadora();
+    await api('patch', `/api/notas/${nota}/activar-pendientes`, { maquina_id: secadora, fichas: 2 }).expect(200);
+    const rango = 'desde=2000-01-01T00:00:00Z&hasta=2100-01-01T00:00:00Z';
+
+    const suya = (await api('get', `/api/fichas/historial?${rango}&maquina_id=${secadora}`, null, empleado.token)).body;
+    expect(suya.movimientos.map(m => [m.tipo, m.cantidad])).toEqual([['uso', -2]]);
+    const otra = (await api('get', `/api/fichas/historial?${rango}&maquina_id=${secadora + 999}`, null, empleado.token)).body;
+    expect(otra).toEqual({ movimientos: [], anios: [] });
+    await api('get', `/api/fichas/historial?${rango}&maquina_id=nada`).expect(400);
+  });
+
   it('solo el admin corrige el conteo, y queda la diferencia en el historial', async () => {
     await api('post', '/api/fichas/ajustar', { disponibles: 107 }, empleado.token).expect(403);
     const res = await api('post', '/api/fichas/ajustar', { disponibles: 107 });

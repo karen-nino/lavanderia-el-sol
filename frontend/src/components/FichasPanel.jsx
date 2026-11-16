@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { textoFichas, gruposDeFichas } from '../lib/fichas';
 import { IconoFicha } from './ElegirFichasModal';
 import HistorialFichas from './HistorialFichas';
+import FichasMaquinaModal from './FichasMaquinaModal';
 import ConfirmacionModal from './ConfirmacionModal';
 
 const th = 'px-4 py-2.5 font-medium whitespace-nowrap';
@@ -17,6 +18,8 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
   const [error, setError] = useState('');
   // Recoger pide confirmación: la máquina (o null = todas) que se va a vaciar.
   const [porRecoger, setPorRecoger] = useState(undefined);
+  /* La máquina cuyas fichas se ven en el modal (su id: tras recoger se toma la del resumen nuevo). */
+  const [viendoId, setViendoId] = useState(null);
 
   if (!resumen) return null;
   const grupos = gruposDeFichas(resumen);
@@ -30,7 +33,6 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
     { clave: 'lavadora', nombre: 'Lavadoras', maquinas: resumen.maquinas.filter(m => m.tipo !== 'secadora') },
     { clave: 'secadora', nombre: 'Secadoras', maquinas: resumen.maquinas.filter(m => m.tipo === 'secadora') },
   ].filter(sec => sec.maquinas.length > 0);
-  const columnas = conTipos ? 4 : 3;
 
   const recoger = async (maquinaId = null) => {
     setRecogiendo(maquinaId ?? 'todas');
@@ -70,7 +72,7 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
         </p>
       )}
 
-      {/* Las máquinas de fichas, con su tipo de ficha y las que tienen dentro. */}
+      {/* Las máquinas de fichas, con las que tienen dentro. */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
           <h2 className="text-base font-bold text-dark-blue">Máquinas</h2>
@@ -88,13 +90,12 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
         {resumen.maquinas.length === 0 ? (
           <p className="px-5 py-4 text-sm text-gray-500">No hay máquinas que trabajen con fichas en esta sucursal.</p>
         ) : (
-          /* Tabla seccionada por lavadoras y secadoras; el tipo de ficha va en su columna. */
+          /* Tabla seccionada por lavadoras y secadoras; el tipo de ficha se ve al abrir la máquina. */
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-100">
                   <th className={th}>Máquina</th>
-                  {conTipos && <th className={th}>Tipo de ficha</th>}
                   <th className={`${th} text-right`}>Dentro</th>
                   <th className={th}><span className="sr-only">Recoger</span></th>
                 </tr>
@@ -102,12 +103,19 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
               {secciones.map(sec => (
                 <tbody key={sec.clave} className="divide-y divide-gray-100">
                   <tr className="bg-gray-50">
-                    <td colSpan={columnas} className="px-4 py-2 text-sm font-semibold text-gray-600">{sec.nombre}</td>
+                    <td colSpan={3} className="px-4 py-2 text-sm font-semibold text-gray-600">{sec.nombre}</td>
                   </tr>
                   {sec.maquinas.map(m => (
                     <tr key={m.id}>
-                      <td className={`${td} font-semibold text-gray-900`}>{m.nombre}</td>
-                      {conTipos && <td className={`${td} text-gray-800`}>{nombreTipo(m)}</td>}
+                      <td className={td}>
+                        <button
+                          type="button"
+                          onClick={() => setViendoId(m.id)}
+                          className="font-semibold text-blue hover:underline"
+                        >
+                          {m.nombre}
+                        </button>
+                      </td>
                       <td className={`${td} text-right`}>
                         <span className="inline-flex items-center gap-1.5 font-semibold tabular-nums text-gray-900">
                           <IconoFicha className="w-4 h-4 text-gray-400" />
@@ -162,6 +170,20 @@ export default function FichasPanel({ resumen, onResumen, esAdmin }) {
             error={error}
             onClose={() => { setPorRecoger(undefined); setError(''); }}
             onConfirm={() => recoger(porRecoger ? porRecoger.id : null)}
+          />
+        );
+      })()}
+
+      {/* Las fichas de una máquina: se abre al apretar su nombre. */}
+      {(() => {
+        const viendo = resumen.maquinas.find(m => m.id === viendoId);
+        return viendo && (
+          <FichasMaquinaModal
+            maquina={viendo}
+            nombreTipo={nombreTipo(viendo)}
+            conTipos={conTipos}
+            recarga={resumen}
+            onClose={() => setViendoId(null)}
           />
         );
       })()}
