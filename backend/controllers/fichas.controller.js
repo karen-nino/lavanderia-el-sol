@@ -173,23 +173,29 @@ export const getTurnosFichas = async (req, res) => {
       ? tipos.map(t => ({ clave: t.id, nombre: t.nombre, actual: t.disponibles }))
       : [{ clave: 'sin', nombre: 'Fichas', actual: suc?.fichas_disponibles ?? 0 }];
     const sumar = (lista) => lista.reduce((t, m) => t + m.cantidad, 0);
+    /* Los movimientos de cada grupo, con su hora en número: se reparten una sola vez para todos los turnos. */
+    const porGrupo = new Map(grupos.map(g => [g.clave, []]));
+    for (const m of movs) {
+      const lista = porGrupo.get(tipos.length > 0 ? m.ficha_tipo_id : 'sin');
+      if (lista) lista.push({ tipo: m.tipo, cantidad: m.cantidad, t: new Date(m.created_at).getTime() });
+    }
 
     res.json({
       anios: anios.map(r => r.anio),
       turnos: turnos.map(c => {
-        const inicio = new Date(c.abierta_at);
-        const fin = c.cerrada_at ? new Date(c.cerrada_at) : ahora;
+        const inicio = new Date(c.abierta_at).getTime();
+        const fin = c.cerrada_at ? new Date(c.cerrada_at).getTime() : ahora.getTime();
         const filas = grupos.map(g => {
-          const delGrupo = movs.filter(m => (g.clave === 'sin' ? m.ficha_tipo_id == null : m.ficha_tipo_id === g.clave));
-          const enTurno = delGrupo.filter(m => new Date(m.created_at) >= inicio && new Date(m.created_at) < fin);
+          const delGrupo = porGrupo.get(g.clave);
+          const enTurno = delGrupo.filter(m => m.t >= inicio && m.t < fin);
           return {
             clave: g.clave,
             nombre: g.nombre,
-            inicio: g.actual - sumar(delGrupo.filter(m => new Date(m.created_at) >= inicio)),
+            inicio: g.actual - sumar(delGrupo.filter(m => m.t >= inicio)),
             usadas: -sumar(enTurno.filter(m => m.tipo === 'uso')),
             recogidas: sumar(enTurno.filter(m => m.tipo === 'recoger')),
             correcciones: sumar(enTurno.filter(m => m.tipo === 'ajuste')),
-            fin: g.actual - sumar(delGrupo.filter(m => new Date(m.created_at) >= fin)),
+            fin: g.actual - sumar(delGrupo.filter(m => m.t >= fin)),
           };
         });
         return { id: c.id, abierta_at: c.abierta_at, cerrada_at: c.cerrada_at, en_curso: !c.cerrada_at, abrio: c.abrio || null, grupos: filas };
