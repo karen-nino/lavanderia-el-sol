@@ -11,13 +11,9 @@ const conSigno = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
 const th = 'px-4 py-2.5 font-medium whitespace-nowrap';
 const td = 'px-4 py-2.5 whitespace-nowrap tabular-nums';
 
-/** Un turno: quién lo abrió, su horario y una columna por tipo de ficha. */
+/** Un turno: quién lo abrió, su horario y un renglón por tipo de ficha. */
 function TarjetaTurno({ t }) {
   const horario = `${formatHora12(t.abierta_at)} – ${t.en_curso ? 'en curso' : formatHora12(t.cerrada_at)}`;
-  const renglones = [
-    { etiqueta: 'Al empezar', valor: g => g.inicio },
-    { etiqueta: 'Usadas', valor: g => conSigno(-g.usadas) },
-  ];
 
   return (
     <div className={`rounded-lg border overflow-hidden ${t.en_curso ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-white'}`}>
@@ -30,23 +26,21 @@ function TarjetaTurno({ t }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-gray-500 border-b border-gray-100">
-              <th className={th}><span className="sr-only">Concepto</span></th>
-              {t.grupos.map(g => <th key={g.clave} className={`${th} text-right`}>{g.nombre}</th>)}
+              <th className={th}>Tipo de ficha</th>
+              <th className={`${th} text-right`}>Al empezar</th>
+              <th className={`${th} text-right`}>Usadas</th>
+              <th className={`${th} text-right`}>{t.en_curso ? 'Ahora' : 'Al terminar'}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {renglones.map(r => (
-              <tr key={r.etiqueta}>
-                <td className={`${td} text-gray-500`}>{r.etiqueta}</td>
-                {t.grupos.map(g => <td key={g.clave} className={`${td} text-right text-gray-700`}>{r.valor(g)}</td>)}
+            {t.grupos.map(g => (
+              <tr key={g.clave}>
+                <td className={`${td} text-gray-800`}>{g.nombre}</td>
+                <td className={`${td} text-right text-gray-700`}>{g.inicio}</td>
+                <td className={`${td} text-right text-gray-700`}>{conSigno(-g.usadas)}</td>
+                <td className={`${td} text-right font-semibold ${g.fin < 0 ? 'text-red-600' : 'text-gray-900'}`}>{g.fin}</td>
               </tr>
             ))}
-            <tr>
-              <td className={`${td} font-semibold text-gray-800`}>{t.en_curso ? 'Ahora' : 'Al terminar'}</td>
-              {t.grupos.map(g => (
-                <td key={g.clave} className={`${td} text-right font-semibold ${g.fin < 0 ? 'text-red-600' : 'text-gray-900'}`}>{g.fin}</td>
-              ))}
-            </tr>
           </tbody>
         </table>
       </div>
