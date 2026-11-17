@@ -7,7 +7,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, 
 // máquina" llama directo para no depender del listener; es idempotente.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
 import { sellarPasadasVivas, soltarVueltaSinArrancar } from '../db/pasadas.js';
-import { COBRO_APARTE_ENCARGO, GRANEL_POR_ELEGIR } from '../db/sqlProductos.js';
+import { COBRO_APARTE_ENCARGO } from '../db/sqlProductos.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, PRECIOS_DE_PROGRAMAS, OPCIONES_DE_MARCA,
   esCronometroSql, conIniciarSql, soloFichasSql, cronometroActivo, TOPE_RELOJ, PRECIO_DEL_MODELO, pideFichasSql,
@@ -574,20 +574,6 @@ function topeDeCarga(prenda, tamano, t, tamanoEdredon) {
 const esServicioQueSeVende = (prenda, tamano) =>
   String(prenda ?? '').toUpperCase() === 'EDREDON' || ['chico', 'mediano', 'grande'].includes(tamano);
 
-/**
- * Costo de las máquinas de un servicio Por Encargo, que gasta de su tope igual
- * que el material: Chico, Mediano y Grande usan lavadora y secadora medianas;
- * el Edredón, la lavadora jumbo (su secado no cuenta).
- */
-function costoMaquinasDeServicio(prenda, tamano, t) {
-  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return Number(t.edredonJumbo) || 0;
-  if (tamano === 'jumbo')  return (Number(t.jumbo)   || 0) + (Number(t.secadora) || 0);
-  if (['chico', 'mediano', 'grande'].includes(tamano)) {
-    return (Number(t.mediana) || 0) + (Number(t.secadora) || 0);
-  }
-  return 0;
-}
-
 /** Nombre del servicio como se ve en pantalla, para los mensajes. */
 function nombreServicio(prenda, tamano, tamanoEdredon) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') {
@@ -825,6 +811,7 @@ async function secadoraPorDefinir(client, notaId) {
 /**
  * Solo Por Encargo: lo que cuesta cada servicio con precio (máquinas + material
  * servido) y lo que suma la nota completa contra lo que se cobra por sus servicios.
+ * Solo cuenta lo seguro: máquinas ya asignadas y granel ya elegido.
  *
  * @returns {Promise<{servicios: object[], nota: {presupuesto: number, usado: number}|null}>}
  *   `nota` es null si la nota no tiene servicios con precio.
@@ -834,38 +821,29 @@ async function topesDeNota(client, notaId) {
     `SELECT nc.id AS carga_id, nc.orden, nc.tamano, nc.tipo_prenda,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.tamano_edredon,
-            nc.precio_lavadora + nc.precio_secadora AS maquinas,
-            -- Cuenta lo servido (granel y bolsa); lo que se vende por unidad va aparte.
-            -- Más el granel aún sin producto, al precio del más caro de su tipo.
+            -- Solo lo seguro: la máquina cuenta cuando ya se asignó (o ya se usó),
+            -- no el tipo elegido al crear.
+            CASE WHEN nc.lavadora_id IS NOT NULL OR nc.lavadora_usada_id IS NOT NULL
+                 THEN nc.precio_lavadora ELSE 0 END
+              + CASE WHEN nc.secadora_id IS NOT NULL OR nc.secadora_usada_id IS NOT NULL
+                     THEN nc.precio_secadora ELSE 0 END AS maquinas,
+            -- Lo servido (granel elegido y bolsa); lo que se vende por unidad va aparte.
             COALESCE(SUM(CASE WHEN a.se_vende_por_unidad THEN 0
-                              ELSE np.cantidad * np.precio_unitario END), 0)
-              + MAX(pend.estimado) AS productos,
+                              ELSE np.cantidad * np.precio_unitario END), 0) AS productos,
             nc.precio_tope AS tope
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
        LEFT JOIN productos a ON a.id = np.producto_id
-       CROSS JOIN LATERAL (
-         SELECT COALESCE(SUM(${GRANEL_POR_ELEGIR('pe', 'n.sucursal')}), 0) AS estimado
-           FROM nota_carga_pendientes pe WHERE pe.carga_id = nc.id
-       ) pend
       WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO'
         AND (nc.tamano IS NOT NULL OR UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
       GROUP BY nc.id
       ORDER BY nc.orden`,
     [notaId]
   );
-  const t = await tarifasCarga(client);
-  // Costo de máquinas: el guardado en la carga o, si no tiene, el que le toca
-  // al servicio.
-  const maquinasDe = (r) => {
-    const guardado = Number(r.maquinas) || 0;
-    return guardado > 0 ? guardado : costoMaquinasDeServicio(r.tipo_prenda, r.tamano, t);
-  };
-
   const servicios = rows
     .filter(r => r.tope != null)
-    .map(r => ({ ...r, maquinas: maquinasDe(r), total: maquinasDe(r) + Number(r.productos) }));
+    .map(r => ({ ...r, maquinas: Number(r.maquinas), total: Number(r.maquinas) + Number(r.productos) }));
 
   // Después la nota completa: máquinas de los servicios + todo el material
   // servido contra lo que se cobra por los servicios. Las máquinas agregadas en
@@ -876,13 +854,11 @@ async function topesDeNota(client, notaId) {
        COALESCE((SELECT SUM(nc2.precio_tope) FROM nota_cargas nc2 WHERE nc2.nota_id = $1), 0)
          + n.ajuste AS presupuesto,
        -- Todo lo servido, también las bolsas de más (se cobran aparte, pero
-       -- cuentan contra el tope), y el granel aún sin producto.
+       -- cuentan contra el tope). El granel aún sin producto no cuenta.
        COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                    FROM nota_productos np
                    JOIN productos a ON a.id = np.producto_id
-                  WHERE np.nota_id = $1 AND NOT a.se_vende_por_unidad), 0)
-         + COALESCE((SELECT SUM(${GRANEL_POR_ELEGIR('pe', 'n.sucursal')})
-                       FROM nota_carga_pendientes pe WHERE pe.nota_id = $1), 0) AS material
+                  WHERE np.nota_id = $1 AND NOT a.se_vende_por_unidad), 0) AS material
        FROM notas n
       WHERE n.id = $1 AND n.tipo_servicio = 'POR_ENCARGO'`,
     [notaId]
@@ -900,19 +876,24 @@ async function topesDeNota(client, notaId) {
 }
 
 /**
- * Solo Por Encargo: ningún servicio pasa de su precio (tope) y el material de
- * toda la nota no pasa de lo que se cobra por sus servicios. Aplica a todos los
- * roles. Se llama antes del COMMIT en las rutas que encarecen una carga.
+ * Solo Por Encargo: lo que se agrega de más (productos, bolsas, medidas extra)
+ * no puede pasar un servicio de su precio (tope) ni la nota de lo que se cobra
+ * por sus servicios. Las máquinas y el granel del servicio no se bloquean: si
+ * se pasan, la pantalla lo avisa. Solo se rechaza lo que subió respecto a
+ * `antes` (los topes previos al cambio), para no trabar quitar algo de una nota
+ * que ya se pasó. Se llama antes del COMMIT.
  *
  * @returns {Promise<string|null>} el mensaje de error, o null si todo cabe.
  */
-async function validarTopesCargas(client, notaId) {
+async function validarTopesCargas(client, notaId, antes) {
   const { servicios, nota } = await topesDeNota(client, notaId);
   const fmt = (n) => `$${Number(n).toFixed(2)}`;
+  const totalAntes = new Map((antes?.servicios ?? []).map(r => [r.carga_id, r.total]));
+  const subio = (ahora, previo) => previo == null || ahora > previo + 1e-9;
 
   // Primero cada servicio, para decir cuál se pasó y por cuánto.
   for (const r of servicios) {
-    if (r.total > Number(r.tope) + 1e-9) {
+    if (r.total > Number(r.tope) + 1e-9 && subio(r.total, totalAntes.get(r.carga_id))) {
       const servicio = nombreServicio(r.es_edredon ? 'EDREDON' : 'ROPA', r.tamano, r.tamano_edredon);
       const desglose = `máquinas ${fmt(r.maquinas)} + material ${fmt(r.productos)} = ${fmt(r.total)}`;
       return `El servicio ${servicio} (carga ${r.orden}) se cobra en ${fmt(r.tope)} y ${desglose}. `
@@ -921,7 +902,7 @@ async function validarTopesCargas(client, notaId) {
     }
   }
 
-  if (nota && nota.usado > nota.presupuesto + 1e-9) {
+  if (nota && nota.usado > nota.presupuesto + 1e-9 && subio(nota.usado, antes?.nota?.usado)) {
     return `El material de la nota suma ${fmt(nota.usado)} y los servicios se cobran en ${fmt(nota.presupuesto)}. `
       + `Baja $${(nota.usado - nota.presupuesto).toFixed(2)}: quita productos o sube el precio de los servicios en Ajustes.`;
   }
@@ -3558,12 +3539,6 @@ export const asignarMaquina = async (req, res) => {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
 
-    const errTope = await validarTopesCargas(client, id);
-    if (errTope) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: errTope });
-    }
-
     await client.query('COMMIT');
 
     const { rows } = await pool.query(
@@ -3699,12 +3674,6 @@ export const cambiarMaquina = async (req, res) => {
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
-
-    const errTope = await validarTopesCargas(client, id);
-    if (errTope) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: errTope });
-    }
 
     await client.query('COMMIT');
 
@@ -3957,12 +3926,6 @@ export const terminarLavado = async (req, res) => {
     await recalcularPrecioTotal(client, id, cobroFichas > 0
       ? { desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal }
       : {});
-    const errTope = await validarTopesCargas(client, id);
-    if (errTope) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: errTope });
-    }
-
     await client.query('COMMIT');
 
     const { rows } = await pool.query(
@@ -4528,6 +4491,8 @@ export const addProductoToNota = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Para rechazar solo lo que suba de más.
+    const antesTope = await topesDeNota(client, id);
 
     const { rows: notaRows } = await client.query(
       'SELECT estado, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
@@ -4567,7 +4532,7 @@ export const addProductoToNota = async (req, res) => {
     });
 
     // En Por Encargo el granel y las bolsas gastan del precio del servicio.
-    const errTope = await validarTopesCargas(client, id);
+    const errTope = await validarTopesCargas(client, id, antesTope);
     if (errTope) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: errTope });
@@ -4607,6 +4572,8 @@ export const elegirGranelDeCarga = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Para rechazar solo lo que suba de más.
+    const antesTope = await topesDeNota(client, id);
     const { rows: notaRows } = await client.query(
       'SELECT estado, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
@@ -4643,6 +4610,15 @@ export const elegirGranelDeCarga = async (req, res) => {
         FOR UPDATE OF np`,
       [id, cargaId, tipoId]
     );
+    // Las medidas que el servicio ya traía de este tipo (elegidas o por elegir):
+    // servirlas no se bloquea por el tope; solo las de más.
+    const { rows: porElegir } = await client.query(
+      `SELECT COALESCE(SUM(cantidad), 0) AS medidas FROM nota_carga_pendientes
+        WHERE carga_id = $1 AND tipo_granel_id = $2`,
+      [cargaId, tipoId]
+    );
+    const medidasPrevias = previos.reduce((a, np) => a + Number(np.cantidad_medidas), 0)
+      + Number(porElegir[0].medidas);
     if (previos.length > 0) {
       await devolverProductosDeNota(client, id, req.sucursal, req.user?.id, { ids: previos.map(np => np.id) });
       await client.query('DELETE FROM nota_productos WHERE id = ANY($1::int[])', [previos.map(np => np.id)]);
@@ -4692,7 +4668,7 @@ export const elegirGranelDeCarga = async (req, res) => {
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
-    const errTope = await validarTopesCargas(client, id);
+    const errTope = cantidad > medidasPrevias ? await validarTopesCargas(client, id, antesTope) : null;
     if (errTope) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: errTope });
@@ -4784,6 +4760,8 @@ export const cambiarCantidadProducto = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Para rechazar solo lo que suba de más.
+    const antesTope = await topesDeNota(client, id);
 
     const { rows: npRows } = await client.query(
       `SELECT np.*, n.estado AS nota_estado FROM nota_productos np
@@ -4843,7 +4821,7 @@ export const cambiarCantidadProducto = async (req, res) => {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
 
-    const errTope = await validarTopesCargas(client, id);
+    const errTope = await validarTopesCargas(client, id, antesTope);
     if (errTope) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: errTope });
@@ -4887,6 +4865,8 @@ export const cambiarBolsasServicio = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Para rechazar solo lo que suba de más.
+    const antesTope = await topesDeNota(client, id);
 
     const { rows: notaRows } = await client.query(
       'SELECT estado, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
@@ -4983,7 +4963,7 @@ export const cambiarBolsasServicio = async (req, res) => {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
 
-    const errTope = await validarTopesCargas(client, id);
+    const errTope = await validarTopesCargas(client, id, antesTope);
     if (errTope) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: errTope });

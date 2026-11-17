@@ -107,7 +107,7 @@ describe('la bolsa de más cuadra en caja y Ventas', () => {
 });
 
 describe('el tope del servicio sigue funcionando', () => {
-  // Chico: $120; sus máquinas cuestan 70 + 45 = 115, así que caben $5 de material.
+  // Chico: $120. Sus máquinas (70 + 45) solo cuentan al asignarse; al crear no.
   beforeEach(() => seedAjustes({ precarga_bolsas_chico: 1, precio_carga_mediana: 70, precio_carga_secadora: 45 }));
   const bolsaDe = async (precio) => {
     const { body } = await api('post', '/api/productos', {
@@ -120,7 +120,7 @@ describe('el tope del servicio sigue funcionando', () => {
   };
 
   it('la bolsa incluida sí gasta del precio del servicio: si no cabe, no se crea', async () => {
-    const cara = await bolsaDe(10); // 115 + 10 = 125 > 120
+    const cara = await bolsaDe(125); // 125 > 120
     const res = await notaChico(cara, 1);
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/material de la nota/i);
@@ -129,7 +129,7 @@ describe('el tope del servicio sigue funcionando', () => {
   });
 
   it('la bolsa incluida que cabe se queda en el precio del servicio', async () => {
-    const justa = await bolsaDe(5); // 115 + 5 = 120
+    const justa = await bolsaDe(120); // 120 = 120
     const res = await notaChico(justa, 1);
     expect(res.status).toBe(201);
     expect(await total(res.body.id)).toBe(120);
@@ -141,7 +141,7 @@ describe('el tope del servicio sigue funcionando', () => {
     const { rows: [{ id: jabon }] } = await pool.query(
       `INSERT INTO productos (nombre, precio_unitario, stock_actual, stock_reservado, es_por_medida,
                               tipo_liquido, forma, botella_ml, medida_ml, sucursal)
-       VALUES ('Jabón', 8, 100, 0, TRUE, 'granel', 'liquido', 800, 200, 'centro') RETURNING id`);
+       VALUES ('Jabón', 116, 100, 0, TRUE, 'granel', 'liquido', 800, 200, 'centro') RETURNING id`);
     const res = await api('post', `/api/notas/${body.id}/productos`, { producto_id: jabon, cantidad: 1 });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/material de la nota/i);
@@ -149,8 +149,8 @@ describe('el tope del servicio sigue funcionando', () => {
   });
 
   it('las bolsas de más también cuentan contra el tope', async () => {
-    const bolsa = await bolsaDe(5);
-    const res = await notaChico(bolsa, 4); // 1 incluida + 3 de más: 115 + 20 > 120
+    const bolsa = await bolsaDe(31);
+    const res = await notaChico(bolsa, 4); // 1 incluida + 3 de más: 4 × 31 = 124 > 120
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/material de la nota/i);
   });

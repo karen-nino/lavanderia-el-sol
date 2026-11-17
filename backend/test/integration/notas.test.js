@@ -803,14 +803,14 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
     const clienteId = await seedCliente();
     const jabon = await seedProducto({ nombre: 'Jabón', stock_actual: 100, precio_unitario: 7 });
     const cargas = [{ tamano: 'grande', tipo_prenda: 'ROPA' }];
-    const productos = [{ producto_id: jabon, cantidad: 3 }];
-    // Grande: máquina 115 + 21 de jabón = 136. Sin descuento cabe en 150…
+    const productos = [{ producto_id: jabon, cantidad: 20 }];
+    // Grande: 140 de jabón (la máquina aún no se asigna). Sin descuento cabe en 150…
     const cabe = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE', cargas, productos,
     });
     expect(cabe.status).toBe(201);
-    // …y con 20 de descuento ya no: quedan 130 para pagar 136.
+    // …y con 20 de descuento ya no: quedan 130 para pagar 140.
     const conDescuento = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE', cargas, productos, ajuste: -20,
@@ -1067,11 +1067,10 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
     });
   });
 
-  // El tope tiene que cubrir la máquina, no solo el jabón: un servicio Chica va
-  // en lavadora y secadora medianas, y ese costo sale del mismo precio.
-  it('la máquina del servicio cuenta contra su tope', async () => {
+  // "Usado" solo cuenta lo seguro: la máquina gasta del tope cuando se asigna,
+  // no por adelantado (las empleadas creían que ese dinero ya se había usado).
+  it('la máquina del servicio no gasta del tope hasta asignarse', async () => {
     const clienteId = await seedCliente();
-    // Chica: tope 120, máquina 70 + 45 = 115. Quedan 5 para material.
     const caro = await seedProducto({ nombre: 'Jabón caro', stock_actual: 100, precio_unitario: 10 });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
@@ -1079,8 +1078,9 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
       cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA',
                  productos: [{ producto_id: caro, cantidad: 1 }] }],
     });
-    expect(res.status).toBe(400); // 115 + 10 = 125 > 120
-    expect(res.body.message).toMatch(/máquinas \$115\.00/);
+    expect(res.status).toBe(201);
+    const { body } = await request(app).get(`/api/notas/${res.body.id}`).set(auth(admin.token));
+    expect(body.tope_nota.usado).toBe(10);
   });
 
   // El edredón va en la lavadora jumbo y sin secado: su costo es otro.
@@ -1188,7 +1188,7 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
 
   it('un producto que rebasa el tope → 400 y no crea la nota', async () => {
     const { clienteId } = await armar();
-    const productoId = await seedProducto({ precio_unitario: 40 }); // 70 + 40 = 110 > 100
+    const productoId = await seedProducto({ precio_unitario: 110 }); // 110 > 100
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE',
@@ -1715,10 +1715,10 @@ describe('edredón (lavadora jumbo)', () => {
     expect(res.body.message).toMatch(/Edredón Cubre Colchón/);
   });
 
-  it('aplica el tope de edredón (lavado 80 + producto 90 > 160)', async () => {
+  it('aplica el tope de edredón (producto 170 > 160)', async () => {
     await seedAjustes({ precio_carga_jumbo: 80, tope_carga_edredon: 160 });
     const clienteId = await seedCliente();
-    const productoId = await seedProducto({ precio_unitario: 90 });
+    const productoId = await seedProducto({ precio_unitario: 170 });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
       estado_pago: 'PENDIENTE',
@@ -2365,10 +2365,10 @@ describe('cambiar la cantidad de un producto de la nota', () => {
   // El tope manda igual que al agregar: servir más desde Salidas no puede
   // pasarse de lo que el servicio cobra.
   it('no deja pasarse del precio del servicio', async () => {
-    const { notaId, prod } = await notaConProducto();
-    // Grande: tope 150, máquina 115. Con 7 por medida, 5 medidas ya son 150.
+    const { notaId, prod } = await notaConProducto({ stock_actual: 50 });
+    // Grande: tope 150. Con 7 por medida, 22 medidas son 154.
     const res = await request(app).patch(`/api/notas/${notaId}/productos/${prod}`)
-      .set(auth(admin.token)).send({ cantidad: 6 });
+      .set(auth(admin.token)).send({ cantidad: 22 });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/se cobra en|material de la nota/i);
   });
