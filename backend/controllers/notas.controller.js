@@ -845,6 +845,8 @@ async function topesDeNota(client, notaId) {
       ORDER BY nc.orden`,
     [notaId]
   );
+  // Sin servicios con precio no hay tope (Autoservicio, servicios viejos).
+  if (!rows.some(r => r.tope != null)) return { servicios: [], nota: null };
 
   // Máquinas agregadas en Salidas (renglones sin precio de servicio) que van sin
   // cobro: las paga el servicio, así que gastan del tope. Las que se cobran
