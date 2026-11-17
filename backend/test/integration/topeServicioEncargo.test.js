@@ -134,4 +134,21 @@ describe('lo que el servicio ya trae no se bloquea', () => {
     await api('put', `/api/notas/${nota.id}/cargas/${carga.id}/granel/${jabonTipo}`,
       { producto_id: producto, cantidad: 3 }).expect(400); // 3 × 41 = 123 > 120
   });
+
+  // Caso real (nota 0137): el servicio se creó sin tipo de máquina y la lavadora
+  // se agregó en Salidas sin cobro. La paga el servicio: cuenta en Usado.
+  it('la máquina agregada sin cobro gasta del tope a su tarifa; la cobrada aparte no', async () => {
+    const { body: sinCobro } = await notaChico(0);
+    await api('patch', `/api/notas/${sinCobro.id}/asignar-maquina`,
+      { maquina_ids: [await lavadora()], cobrar: false }).expect(200);
+    expect((await api('get', `/api/notas/${sinCobro.id}`)).body.tope_nota.usado).toBe(70);
+
+    const { rows: [{ id: l2 }] } = await pool.query(
+      `INSERT INTO maquinas (nombre, tipo, estado, sucursal)
+       VALUES ('L2', 'lavadora_mediana', 'disponible', 'centro') RETURNING id`);
+    const { body: cobrada } = await notaChico(0);
+    await api('patch', `/api/notas/${cobrada.id}/asignar-maquina`,
+      { maquina_ids: [l2], cobrar: true }).expect(200);
+    expect((await api('get', `/api/notas/${cobrada.id}`)).body.tope_nota.usado).toBe(0);
+  });
 });

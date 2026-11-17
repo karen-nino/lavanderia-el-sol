@@ -845,9 +845,36 @@ async function topesDeNota(client, notaId) {
     .filter(r => r.tope != null)
     .map(r => ({ ...r, maquinas: Number(r.maquinas), total: Number(r.maquinas) + Number(r.productos) }));
 
-  // Después la nota completa: máquinas de los servicios + todo el material
-  // servido contra lo que se cobra por los servicios. Las máquinas agregadas en
-  // Salidas no cuentan: no cobran ni traen presupuesto.
+  // Máquinas agregadas en Salidas (renglones sin precio de servicio) que van sin
+  // cobro: las paga el servicio, así que gastan del tope a su tarifa desde que se
+  // asignan. Las que se cobran aparte no gastan del tope.
+  const { rows: agregadas } = await client.query(
+    `SELECT nc.tipo_prenda, nc.precio_lavadora, nc.precio_secadora,
+            ml.tipo AS lavadora_tipo, ${PRECIO_DEL_MODELO('ml')} AS lavadora_modelo,
+            ms.tamano AS secadora_tamano, ${PRECIO_DEL_MODELO('ms')} AS secadora_modelo,
+            ms.id IS NOT NULL AS con_secadora
+       FROM nota_cargas nc
+       JOIN notas n ON n.id = nc.nota_id
+       LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
+       LEFT JOIN maquinas ms ON ms.id = COALESCE(nc.secadora_id, nc.secadora_usada_id)
+      WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO' AND nc.precio_tope IS NULL`,
+    [notaId]
+  );
+  let maquinasAgregadas = 0;
+  if (agregadas.length > 0) {
+    const t = await tarifasCarga(client);
+    for (const a of agregadas) {
+      if (a.lavadora_tipo && Number(a.precio_lavadora) === 0) {
+        maquinasAgregadas += tarifaLavadora(a.lavadora_tipo, a.tipo_prenda, t, a.lavadora_modelo);
+      }
+      if (a.con_secadora && Number(a.precio_secadora) === 0) {
+        maquinasAgregadas += Number(tarifaSecadora(a.secadora_tamano, a.tipo_prenda, t, a.secadora_modelo)) || 0;
+      }
+    }
+  }
+
+  // Después la nota completa: máquinas de los servicios y las agregadas sin
+  // cobro + todo el material servido contra lo que se cobra por los servicios.
   const { rows: totales } = await client.query(
     `SELECT
        -- El ajuste de la nota cambia lo que se cobra, así que entra al presupuesto.
@@ -868,7 +895,7 @@ async function topesDeNota(client, notaId) {
   const nota = tot && servicios.length > 0
     ? {
       presupuesto: Number(tot.presupuesto),
-      usado: servicios.reduce((a, r) => a + r.maquinas, 0) + Number(tot.material),
+      usado: servicios.reduce((a, r) => a + r.maquinas, 0) + maquinasAgregadas + Number(tot.material),
     }
     : null;
 
