@@ -1080,6 +1080,8 @@ function ModalCorregirGranel({ producto, onClose, onDone }) {
 
   const n = Number(botellas);
   const invalido = botellas === '' || !Number.isInteger(n) || n < 0;
+  /* Por medidas, no por botellas: un bidón puede dejar una medida suelta que hay que poder quitar. */
+  const sinCambio = !invalido && n * tpb === Math.round(Number(producto.stock_granel_medidas) || 0);
   const vista = invalido ? null : partesGranel({ ...producto, stock_granel_medidas: n * tpb });
 
   const enviar = async () => {
@@ -1115,7 +1117,7 @@ function ModalCorregirGranel({ producto, onClose, onDone }) {
             type="number" inputMode="numeric" min="0" step="1" value={botellas} placeholder="0"
             onChange={(e) => setBotellas(e.target.value)} className={NUM_CLS}
           />
-          {vista && n !== actuales && (
+          {vista && !sinCambio && (
             <p className="text-sm text-gray-500 mt-1">
               Quedará en <Partes partes={vista} />.
             </p>
@@ -1134,7 +1136,7 @@ function ModalCorregirGranel({ producto, onClose, onDone }) {
             Cancelar
           </button>
           <button
-            type="button" onClick={enviar} disabled={loading || invalido || n === actuales}
+            type="button" onClick={enviar} disabled={loading || invalido || sinCambio}
             className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
           >
             {loading ? 'Guardando...' : 'Guardar'}
