@@ -859,14 +859,15 @@ export default function NuevaNota() {
   };
 
   // Lo que gasta la carga contra su tope, solo lo seguro (como el servidor): el
-  // material servido y el granel que sale solo (su tipo tiene un único producto).
-  // Las máquinas cuentan hasta asignarse en Salidas y el granel con varias
-  // opciones, hasta elegirse. El ajuste no cuenta.
-  const granelContraTope = (c) => [...granelPorTipo().entries()].reduce((sum, [tipoId, opciones]) => (
-    opciones.length === 1
-      ? sum + medidasGranel(c, tipoId) * (Number(opciones[0].precio_unitario) || 0)
-      : sum
-  ), 0);
+  // material servido y el granel que sale solo (su tipo tiene un único producto
+  // y alcanza). Las máquinas cuentan hasta asignarse en Salidas y el granel con
+  // varias opciones, hasta elegirse. El ajuste no cuenta.
+  const granelContraTope = (c) => [...granelPorTipo().entries()].reduce((sum, [tipoId, opciones]) => {
+    const medidas = medidasGranel(c, tipoId);
+    return opciones.length === 1 && medidasDisponibles(opciones[0]) >= medidas
+      ? sum + medidas * (Number(opciones[0].precio_unitario) || 0)
+      : sum;
+  }, 0);
   const usadoContraTope = (c) => subtotalAbsorbidoLista(c.productos) + granelContraTope(c);
   // Sin tope (servicios viejos) el precio es lo que suma: máquinas y material.
   const precioSinTope = (c) => {

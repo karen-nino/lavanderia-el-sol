@@ -4611,10 +4611,11 @@ export const elegirGranelDeCarga = async (req, res) => {
       [id, cargaId, tipoId]
     );
     // Las medidas que el servicio ya traía de este tipo (elegidas o por elegir):
-    // servirlas no se bloquea por el tope; solo las de más.
+    // servirlas no se bloquea por el tope; solo las de más. Las que trajo el
+    // cliente no cuentan: no gastan del tope, así que no abren lugar.
     const { rows: porElegir } = await client.query(
       `SELECT COALESCE(SUM(cantidad), 0) AS medidas FROM nota_carga_pendientes
-        WHERE carga_id = $1 AND tipo_granel_id = $2`,
+        WHERE carga_id = $1 AND tipo_granel_id = $2 AND NOT del_cliente`,
       [cargaId, tipoId]
     );
     const medidasPrevias = previos.reduce((a, np) => a + Number(np.cantidad_medidas), 0)

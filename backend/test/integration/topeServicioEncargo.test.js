@@ -122,4 +122,16 @@ describe('lo que el servicio ya trae no se bloquea', () => {
     await api('put', `/api/notas/${nota.id}/cargas/${carga.id}/granel/${jabonTipo}`,
       { producto_id: producto, cantidad: 1 }).expect(200);
   });
+
+  // Del cliente no gasta del tope: pasar de "lo trae el cliente" a un producto
+  // con las mismas medidas no puede saltarse el tope.
+  it('las medidas que trajo el cliente no abren lugar para el producto', async () => {
+    const producto = await jabon(41);
+    const { body: nota } = await notaChico();
+    const carga = nota.cargas[0];
+    await api('put', `/api/notas/${nota.id}/cargas/${carga.id}/granel/${jabonTipo}`,
+      { del_cliente: true, cantidad: 3 }).expect(200);
+    await api('put', `/api/notas/${nota.id}/cargas/${carga.id}/granel/${jabonTipo}`,
+      { producto_id: producto, cantidad: 3 }).expect(400); // 3 × 41 = 123 > 120
+  });
 });
