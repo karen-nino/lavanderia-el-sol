@@ -320,15 +320,14 @@ class TotalBajoAbonosError extends Error {
 
 /**
  * El cobro de la nota ya está en un corte cerrado (con cifras congeladas): su
- * total no se puede cambiar, o ese dinero se contaría dos veces. Un corte
- * cerrado no se reabre; lo que falte se cobra o devuelve aparte.
+ * total puede subir (lo cobrado queda como abono de aquel corte), pero no bajar,
+ * porque ese dinero ya se contó. Lo que haya que devolver va aparte.
  */
 class CorteCerradoError extends Error {
   constructor(folio) {
     super(`El cobro de la nota ${folio} ya quedó en un corte cerrado, así que no se puede `
-        + 'cambiar lo que cuesta: la nota volvería a pendiente y ese dinero ya está contado '
-        + 'en aquel corte. Si falta cobrar algo, hazlo en una nota nueva; si hay que devolver, '
-        + 'regístralo como salida de caja.');
+        + 'bajar lo que cuesta: ese dinero ya está contado en aquel corte. Si hay que '
+        + 'devolver, regístralo como gasto de caja.');
     this.name = 'CorteCerradoError';
   }
 }
@@ -365,16 +364,19 @@ export function respondioCorteCerrado(res, err) {
  *
  * Con `desmarcarPagoSiCambia`, una nota PAGADA cuyo total cambia vuelve a
  * PENDIENTE para cobrarla por el importe nuevo (y deja aviso en la campana).
+ * Si su cobro está en un corte cerrado, solo puede subir: lo ya cobrado pasa a
+ * abono de aquel corte y la nota queda debiendo la diferencia.
  *
  * @throws {TotalNegativoError} si el total queda negativo.
  * @throws {TotalBajoAbonosError} si queda por debajo de lo abonado.
- * @throws {CorteCerradoError} si el cobro ya está en un corte cerrado.
+ * @throws {CorteCerradoError} si baja con el cobro en un corte cerrado.
  */
 export async function recalcularPrecioTotal(client, notaId, opciones = {}) {
   const { desmarcarPagoSiCambia = false, usuarioId = null, sucursal = null } = opciones;
   const { rows: previas } = desmarcarPagoSiCambia
     ? await client.query(
-        'SELECT id, folio, precio_total, estado_pago, caja_id FROM notas WHERE id = $1',
+        `SELECT id, folio, precio_total, estado_pago, caja_id, forma_pago, pagado_en, pagado_por
+           FROM notas WHERE id = $1`,
         [notaId]
       )
     : { rows: [] };
@@ -443,11 +445,29 @@ export async function recalcularPrecioTotal(client, notaId, opciones = {}) {
   if (antes && antes.estado_pago === 'PAGADO' && Number(nuevo) !== Number(antes.precio_total)) {
     // Un cobro sin caja no está en ningún corte y sí se puede deshacer.
     if (antes.caja_id && antes.caja_estado !== 'abierta') {
-      throw new CorteCerradoError(antes.folio ?? `#${antes.id}`);
+      if (Number(nuevo) < Number(antes.precio_total)) {
+        throw new CorteCerradoError(antes.folio ?? `#${antes.id}`);
+      }
+      await congelarCobroComoAbono(client, antes, abonado);
     }
     await desmarcarPagoPorCambio(client, antes, Number(antes.precio_total), Number(nuevo), usuarioId, sucursal);
   }
   return nuevo;
+}
+
+/**
+ * Lo liquidado en un corte cerrado (total − abonos) pasa a abono de esa caja,
+ * con su forma de pago, quién cobró y cuándo: aquel corte y Ventas siguen
+ * contándolo igual, y al liquidar de nuevo solo entra la diferencia.
+ */
+async function congelarCobroComoAbono(client, nota, abonado) {
+  const monto = Math.round((Number(nota.precio_total) - abonado) * 100) / 100;
+  if (monto <= 0) return;
+  await client.query(
+    `INSERT INTO nota_abonos (nota_id, caja_id, usuario_id, monto, forma_pago, created_at)
+     VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))`,
+    [nota.id, nota.caja_id, nota.pagado_por, monto, nota.forma_pago ?? 'EFECTIVO', nota.pagado_en]
+  );
 }
 
 /**
@@ -1991,8 +2011,8 @@ export const getNotaById = async (req, res) => {
                  n.caja_id IS NULL
                  OR EXISTS (SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta')
               )) AS pago_reversible,
-              -- Cobro en un corte cerrado: nada que mueva el total se permite
-              -- (CorteCerradoError); la pantalla esconde esas acciones.
+              -- Cobro en un corte cerrado: el total solo puede subir
+              -- (CorteCerradoError); la pantalla esconde lo que lo baja.
               (n.estado_pago = 'PAGADO' AND n.caja_id IS NOT NULL AND NOT EXISTS (
                  SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta'
               )) AS cobro_congelado

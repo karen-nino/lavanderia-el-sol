@@ -361,8 +361,8 @@ describe('POST /api/notas — Por Encargo', () => {
   });
 });
 
-// Lo cobrado en un corte cerrado no se deshace: cambiar lo que cuesta la nota
-// la devolvería a pendiente, y ese corte ya cuenta la venta.
+// Lo cobrado en un corte cerrado no se deshace: la nota puede subir (lo cobrado
+// pasa a abono de aquel corte), pero no bajar, porque ese corte ya cuenta la venta.
 describe('un cobro congelado en su corte no se deshace por un cambio', () => {
   async function notaPagadaEnCorteCerrado() {
     // Autoservicio cobra la BOTELLA, así que sin `precio_botella` el producto
@@ -395,6 +395,31 @@ describe('un cobro congelado en su corte no se deshace por un cambio', () => {
     const { rows } = await pool.query('SELECT estado_pago, caja_id FROM notas WHERE id = $1', [notaId]);
     expect(rows[0].estado_pago).toBe('PAGADO');
     expect(rows[0].caja_id).not.toBeNull();
+  });
+
+  it('subir el total deja lo cobrado como abono de aquel corte y la nota debe la diferencia', async () => {
+    const { notaId, productoId } = await notaPagadaEnCorteCerrado();
+    const { rows: [antes] } = await pool.query(
+      'SELECT precio_total, caja_id, pagado_en FROM notas WHERE id = $1', [notaId]
+    );
+    const res = await request(app).patch(`/api/notas/${notaId}/productos/${productoId}`)
+      .set(auth(admin.token)).send({ cantidad: 2 });
+    expect(res.status).toBe(200);
+
+    const { rows: [nota] } = await pool.query(
+      'SELECT precio_total, estado_pago, caja_id FROM notas WHERE id = $1', [notaId]
+    );
+    expect(nota.estado_pago).toBe('PENDIENTE');
+    expect(Number(nota.precio_total)).toBe(Number(antes.precio_total) + 30);
+
+    const { rows: abonos } = await pool.query(
+      'SELECT monto, caja_id, forma_pago, created_at FROM nota_abonos WHERE nota_id = $1', [notaId]
+    );
+    expect(abonos).toHaveLength(1);
+    expect(Number(abonos[0].monto)).toBe(Number(antes.precio_total));
+    expect(abonos[0].caja_id).toBe(antes.caja_id);
+    expect(abonos[0].forma_pago).toBe('EFECTIVO');
+    expect(abonos[0].created_at.getTime()).toBe(antes.pagado_en.getTime());
   });
 
   // Borrar la nota entera era la única puerta que seguía abierta: el corte de

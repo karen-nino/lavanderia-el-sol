@@ -817,8 +817,8 @@ export default function DetalleNota() {
       disabled={loadingAccion}
     />
   );
-  // Solo Por Encargo, con la nota viva y sin cobro congelado.
-  const botonAjuste = esEncargoNota && !esTerminal(nota) && !nota.cobro_congelado && (
+  // Solo Por Encargo y con la nota viva; con el cobro congelado solo sirve el cargo extra.
+  const botonAjuste = esEncargoNota && !esTerminal(nota) && (
     <AccionCircular
       label="Ajuste"
       title="Descuento o cargo extra"

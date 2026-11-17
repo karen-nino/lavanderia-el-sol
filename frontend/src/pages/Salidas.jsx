@@ -238,7 +238,7 @@ export default function Salidas() {
   const porMaquinas   = esAutoservicio || esEncargo;
   const Renglon       = porMaquinas ? 'Máquina' : 'Carga';
   const renglon       = porMaquinas ? 'máquina' : 'carga';
-  // Cobro en un corte cerrado: no se ofrece nada que mueva el total.
+  // Cobro en un corte cerrado: el total puede subir, pero no se ofrece nada que lo baje.
   const cobroCongelado = Boolean(nota?.cobro_congelado);
 
   // Máquinas asignadas a la nota, sin repetir.
@@ -1027,9 +1027,10 @@ export default function Salidas() {
     if (!tope || seVendePorUnidad(p)) return true;
     return tope.usado + Number(p.precio_unitario) <= tope.presupuesto + 1e-9;
   };
-  // Con la nota cerrada o el cobro congelado no se tocan productos.
-  const puedeTocarProductos = Boolean(nota) && !cobroCongelado
+  // Con la nota cerrada no se tocan productos; con el cobro congelado no se quitan.
+  const puedeTocarProductos = Boolean(nota)
     && !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
+  const puedeQuitarProductos = puedeTocarProductos && !cobroCongelado;
 
   // Existencia en las piezas con que se sirve: medidas (granel), unidades (marca)
   // o piezas (bolsas). Viene en medidas.
@@ -1102,12 +1103,12 @@ export default function Salidas() {
         </div>
       )}
 
-      {/* Cobro en un corte cerrado: se avisa de entrada que no se puede cambiar el total. */}
+      {/* Cobro en un corte cerrado: se avisa de entrada que el total no puede bajar. */}
       {cobroCongelado && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
-          Esta nota se cobró en un corte que ya se cerró, así que <span className="font-medium">no se
-          puede cambiar lo que cuesta</span>: no se agregan ni se quitan máquinas ni productos. Lo que
-          falte se cobra en una nota nueva; lo que haya que devolver va como salida de caja.
+          Esta nota se cobró en un corte que ya se cerró. Puedes <span className="font-medium">agregar</span> máquinas
+          y productos: lo que ya pagó queda como abono y la nota debe solo la diferencia. Lo que <span
+          className="font-medium">no se puede es quitar</span>; lo que haya que devolver va como gasto de caja.
         </div>
       )}
 
@@ -1120,7 +1121,7 @@ export default function Salidas() {
           <h2 className="text-sm font-semibold text-gray-700">Máquinas</h2>
           {/* Agregar una máquina extra, salvo en notas cerradas. En Autoservicio entra
               como un renglón nuevo con su tarifa; las de una carga se asignan con su botón. */}
-          {nota && !cobroCongelado
+          {nota
             && !['FINALIZADA', 'CANCELADA'].includes(nota.estado)
             && (esAutoservicio || cargasDestino.length > 0) && (
             <button
@@ -1464,7 +1465,7 @@ export default function Salidas() {
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => cambiarCantidadProducto(p.producto_id, Number(p.cantidad) - 1)}
-                      disabled={!puedeTocarProductos || Number(p.cantidad) <= 1 || loadingProducto != null}
+                      disabled={!puedeQuitarProductos || Number(p.cantidad) <= 1 || loadingProducto != null}
                       aria-label={`Servir menos ${tituloProducto(p)}`}
                       className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
