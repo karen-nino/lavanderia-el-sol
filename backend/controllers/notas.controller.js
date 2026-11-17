@@ -817,61 +817,64 @@ async function secadoraPorDefinir(client, notaId) {
  *   `nota` es null si la nota no tiene servicios con precio.
  */
 async function topesDeNota(client, notaId) {
+  // Máquina de cada hueco: la puesta o, si ya se soltó, la que se usó.
+  const MAQUINAS_DE_CARGA = `
+            ml.tipo AS lavadora_maquina, ${PRECIO_DEL_MODELO('ml')} AS lavadora_modelo,
+            ms.tamano AS secadora_tamano, ${PRECIO_DEL_MODELO('ms')} AS secadora_modelo,
+            ms.id IS NOT NULL AS con_secadora`;
+  const JOIN_MAQUINAS = `
+       LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
+       LEFT JOIN maquinas ms ON ms.id = COALESCE(nc.secadora_id, nc.secadora_usada_id)`;
   const { rows } = await client.query(
     `SELECT nc.id AS carga_id, nc.orden, nc.tamano, nc.tipo_prenda,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.tamano_edredon,
-            -- Solo lo seguro: la máquina cuenta cuando ya se asignó (o ya se usó),
-            -- no el tipo elegido al crear.
-            CASE WHEN nc.lavadora_id IS NOT NULL OR nc.lavadora_usada_id IS NOT NULL
-                 THEN nc.precio_lavadora ELSE 0 END
-              + CASE WHEN nc.secadora_id IS NOT NULL OR nc.secadora_usada_id IS NOT NULL
-                     THEN nc.precio_secadora ELSE 0 END AS maquinas,
+            ${MAQUINAS_DE_CARGA},
             -- Lo servido (granel elegido y bolsa); lo que se vende por unidad va aparte.
             COALESCE(SUM(CASE WHEN a.se_vende_por_unidad THEN 0
                               ELSE np.cantidad * np.precio_unitario END), 0) AS productos,
             nc.precio_tope AS tope
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
+       ${JOIN_MAQUINAS}
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
        LEFT JOIN productos a ON a.id = np.producto_id
       WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO'
         AND (nc.tamano IS NOT NULL OR UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
-      GROUP BY nc.id
+      GROUP BY nc.id, ml.id, ms.id
       ORDER BY nc.orden`,
     [notaId]
   );
-  const servicios = rows
-    .filter(r => r.tope != null)
-    .map(r => ({ ...r, maquinas: Number(r.maquinas), total: Number(r.maquinas) + Number(r.productos) }));
 
   // Máquinas agregadas en Salidas (renglones sin precio de servicio) que van sin
-  // cobro: las paga el servicio, así que gastan del tope a su tarifa desde que se
-  // asignan. Las que se cobran aparte no gastan del tope.
+  // cobro: las paga el servicio, así que gastan del tope. Las que se cobran
+  // aparte no gastan del tope.
   const { rows: agregadas } = await client.query(
-    `SELECT nc.tipo_prenda, nc.precio_lavadora, nc.precio_secadora,
-            ml.tipo AS lavadora_tipo, ${PRECIO_DEL_MODELO('ml')} AS lavadora_modelo,
-            ms.tamano AS secadora_tamano, ${PRECIO_DEL_MODELO('ms')} AS secadora_modelo,
-            ms.id IS NOT NULL AS con_secadora
+    `SELECT nc.precio_lavadora, nc.precio_secadora, ${MAQUINAS_DE_CARGA}
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
-       LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
-       LEFT JOIN maquinas ms ON ms.id = COALESCE(nc.secadora_id, nc.secadora_usada_id)
+       ${JOIN_MAQUINAS}
       WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO' AND nc.precio_tope IS NULL`,
     [notaId]
   );
-  let maquinasAgregadas = 0;
-  if (agregadas.length > 0) {
-    const t = await tarifasCarga(client);
-    for (const a of agregadas) {
-      if (a.lavadora_tipo && Number(a.precio_lavadora) === 0) {
-        maquinasAgregadas += tarifaLavadora(a.lavadora_tipo, a.tipo_prenda, t, a.lavadora_modelo);
-      }
-      if (a.con_secadora && Number(a.precio_secadora) === 0) {
-        maquinasAgregadas += Number(tarifaSecadora(a.secadora_tamano, a.tipo_prenda, t, a.secadora_modelo)) || 0;
-      }
-    }
-  }
+
+  // Solo lo seguro: una máquina cuenta cuando ya se asignó (o ya se usó), a la
+  // tarifa de su tamaño o modelo, también en Edredón (una mediana cuesta lo de
+  // una mediana, no la tarifa de edredón).
+  const t = await tarifasCarga(client);
+  const costoLavadora = (r) => (r.lavadora_maquina ? tarifaLavadora(r.lavadora_maquina, null, t, r.lavadora_modelo) : 0);
+  const costoSecadora = (r) => (r.con_secadora
+    ? Number(tarifaSecadora(r.secadora_tamano, null, t, r.secadora_modelo)) || 0 : 0);
+
+  const servicios = rows
+    .filter(r => r.tope != null)
+    .map(r => {
+      const maquinas = costoLavadora(r) + costoSecadora(r);
+      return { ...r, maquinas, total: maquinas + Number(r.productos) };
+    });
+  const maquinasAgregadas = agregadas.reduce((sum, r) => sum
+    + (Number(r.precio_lavadora) === 0 ? costoLavadora(r) : 0)
+    + (Number(r.precio_secadora) === 0 ? costoSecadora(r) : 0), 0);
 
   // Después la nota completa: máquinas de los servicios y las agregadas sin
   // cobro + todo el material servido contra lo que se cobra por los servicios.

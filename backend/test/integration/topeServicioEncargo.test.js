@@ -152,4 +152,16 @@ describe('lo que el servicio ya trae no se bloquea', () => {
       { maquina_ids: [l2], cobrar: true }).expect(200);
     expect((await api('get', `/api/notas/${cobrada.id}`)).body.tope_nota.usado).toBe(0);
   });
+
+  // En Edredón la lavadora cuenta a la tarifa de su tamaño, no a la de edredón.
+  it('Edredón: una lavadora mediana gasta lo de una mediana', async () => {
+    await seedAjustes({ precarga_medidas_chico: 1, precio_carga_mediana: 50, precio_edredon_jumbo: 80, tope_carga_edredon: 200 });
+    const { body: nota } = await api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'EDREDON', estado_pago: 'PENDIENTE',
+      cargas: [{ tipo_prenda: 'EDREDON' }],
+    }).expect(201);
+    await api('patch', `/api/notas/${nota.id}/asignar-maquina`,
+      { maquina_ids: [await lavadora()], cobrar: false }).expect(200);
+    expect((await api('get', `/api/notas/${nota.id}`)).body.tope_nota.usado).toBe(50);
+  });
 });
