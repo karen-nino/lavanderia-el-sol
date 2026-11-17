@@ -905,10 +905,10 @@ async function topesDeNota(client, notaId) {
 /**
  * Solo Por Encargo: lo que se agrega de más (productos, bolsas, medidas extra)
  * no puede pasar un servicio de su precio (tope) ni la nota de lo que se cobra
- * por sus servicios. Las máquinas y el granel del servicio no se bloquean: si
- * se pasan, la pantalla lo avisa. Solo se rechaza lo que subió respecto a
- * `antes` (los topes previos al cambio), para no trabar quitar algo de una nota
- * que ya se pasó. Se llama antes del COMMIT.
+ * por sus servicios. El granel del servicio no se bloquea: si se pasa, la
+ * pantalla lo avisa (las máquinas van en `maquinaSePasaDelTope`). Solo se
+ * rechaza lo que subió respecto a `antes` (los topes previos al cambio), para no
+ * trabar quitar algo de una nota que ya se pasó. Se llama antes del COMMIT.
  *
  * @returns {Promise<string|null>} el mensaje de error, o null si todo cabe.
  */
@@ -935,6 +935,22 @@ async function validarTopesCargas(client, notaId, antes) {
   }
 
   return null;
+}
+
+/**
+ * Solo Por Encargo: una máquina nueva o cambiada no puede dejar la nota por
+ * encima de lo que se cobra por sus servicios. Solo se rechaza si lo usado
+ * subió respecto a `antes` (los topes previos al cambio).
+ *
+ * @returns {Promise<string|null>} el mensaje de error, o null si cabe.
+ */
+async function maquinaSePasaDelTope(client, notaId, antes) {
+  const { nota } = await topesDeNota(client, notaId);
+  if (!nota || nota.usado <= nota.presupuesto + 1e-9) return null;
+  if (antes?.nota && nota.usado <= antes.nota.usado + 1e-9) return null;
+  const fmt = (n) => `$${Number(n).toFixed(2)}`;
+  return `Con esta máquina la nota se pasa del tope: usaría ${fmt(nota.usado)} de ${fmt(nota.presupuesto)} `
+    + `(se pasa ${fmt(nota.usado - nota.presupuesto)}). Quita algo de la nota o sube el precio del servicio en Ajustes.`;
 }
 
 /**
@@ -3399,6 +3415,8 @@ export const asignarMaquina = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Para rechazar la máquina que deje la nota pasada del tope.
+    const antesTope = await topesDeNota(client, id);
 
     const { rows: notaRows } = await client.query(
       'SELECT estado, tipo_prenda, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
@@ -3566,6 +3584,12 @@ export const asignarMaquina = async (req, res) => {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
 
+    const errTope = await maquinaSePasaDelTope(client, id, antesTope);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
+
     await client.query('COMMIT');
 
     const { rows } = await pool.query(
@@ -3611,6 +3635,8 @@ export const cambiarMaquina = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Para rechazar la máquina que deje la nota pasada del tope.
+    const antesTope = await topesDeNota(client, id);
 
     const { rows: notaRows } = await client.query(
       'SELECT estado, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
@@ -3701,6 +3727,12 @@ export const cambiarMaquina = async (req, res) => {
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
+
+    const errTope = await maquinaSePasaDelTope(client, id, antesTope);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
 
     await client.query('COMMIT');
 

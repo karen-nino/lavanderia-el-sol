@@ -238,6 +238,9 @@ export default function Salidas() {
   const porMaquinas   = esAutoservicio || esEncargo;
   const Renglon       = porMaquinas ? 'Máquina' : 'Carga';
   const renglon       = porMaquinas ? 'máquina' : 'carga';
+  // Por Encargo: la nota ya usa más de lo que se cobra por sus servicios.
+  const notaSePasa = Boolean(nota?.tope_nota)
+    && nota.tope_nota.usado > nota.tope_nota.presupuesto + 1e-9;
   // Cobro en un corte cerrado: el total puede subir, pero no se ofrece nada que lo baje.
   const cobroCongelado = Boolean(nota?.cobro_congelado);
 
@@ -1125,7 +1128,13 @@ export default function Salidas() {
             && !['FINALIZADA', 'CANCELADA'].includes(nota.estado)
             && (esAutoservicio || cargasDestino.length > 0) && (
             <button
-              onClick={conCajaAbierta(() => iniciarAsignar())}
+              onClick={conCajaAbierta(() => (notaSePasa
+                /* Ya se pasa del tope: otra máquina no cabe (el servidor también la rechaza). */
+                ? setAvisoBloqueo({
+                  titulo: 'La nota ya se pasa del tope',
+                  mensaje: 'No se puede agregar otra máquina. Quita algo de la nota o sube el precio del servicio en Ajustes.',
+                })
+                : iniciarAsignar()))}
               disabled={loadingMaquina}
               className="flex items-center gap-1 text-sm font-medium text-blue hover:underline disabled:opacity-60"
             >

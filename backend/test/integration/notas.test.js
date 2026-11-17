@@ -1500,6 +1500,8 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
   // aunque su modelo pidiera dos.
   it('una máquina nueva SIN cobro tampoco queda capada a un ciclo', async () => {
     const { notaId } = await porEncargoEnEspera();
+    // Con lugar en el tope: aquí solo importa el ciclo.
+    await pool.query('UPDATE nota_cargas SET precio_tope = 1000 WHERE nota_id = $1 AND precio_tope IS NOT NULL', [notaId]);
     const otra = await seedMaquina({ nombre: 'Lavadora sin cobro', tipo: 'lavadora_mediana' });
     const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
       .set(auth(admin.token)).send({ maquina_ids: [otra], cobrar: false });

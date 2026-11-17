@@ -95,18 +95,19 @@ describe('lo que el servicio ya trae no se bloquea', () => {
     `INSERT INTO maquinas (nombre, tipo, estado, sucursal)
      VALUES ('L1', 'lavadora_mediana', 'disponible', 'centro') RETURNING id`)).rows[0].id;
 
-  it('asignar la máquina aunque se pase: se deja y Usado lo dice', async () => {
+  // Caso real (nota 0138): la nota iba en 125 de 140 y otra lavadora la pasaba.
+  it('agregar una máquina que deja la nota pasada del tope se rechaza', async () => {
     const producto = await jabon(41);
     const { body: nota } = await notaChico(); // 41 de jabón
     const carga = nota.cargas[0];
-    // Más medidas de las que trae, pero aún caben: 2 × 41 = 82.
     await api('put', `/api/notas/${nota.id}/cargas/${carga.id}/granel/${jabonTipo}`,
-      { producto_id: producto, cantidad: 2 }).expect(200);
+      { producto_id: producto, cantidad: 2 }).expect(200); // 82
     const res = await api('patch', `/api/notas/${nota.id}/asignar-maquina`,
-      { carga_id: carga.id, maquina_ids: [await lavadora()], cobrar: true });
-    expect(res.status).toBe(200);
+      { maquina_ids: [await lavadora()], cobrar: false });
+    expect(res.status).toBe(400); // 82 + 70 = 152 > 120
+    expect(res.body.message).toMatch(/se pasa del tope/);
     const { body } = await api('get', `/api/notas/${nota.id}`);
-    expect(body.tope_nota.usado).toBe(152); // 82 + 70 > 120
+    expect(body.tope_nota.usado).toBe(82);
   });
 
   it('elegir las medidas que ya traía no se bloquea aunque la nota ya se pase', async () => {
