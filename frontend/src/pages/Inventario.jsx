@@ -1069,6 +1069,82 @@ function ModalRellenar({ producto, onClose, onDone }) {
   );
 }
 
+// ── Modal Corregir granel ───────────────────────────────────────
+/** Cambia cuántas botellas hay a granel; la diferencia queda como entrada o salida. */
+function ModalCorregirGranel({ producto, onClose, onDone }) {
+  const tpb = medidasPorBotella(producto);
+  const actuales = tpb > 0 ? Math.floor(Number(producto.stock_granel_medidas) / tpb) : 0;
+  const [botellas, setBotellas] = useState(String(actuales));
+  const [error, setError]   = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const n = Number(botellas);
+  const invalido = botellas === '' || !Number.isInteger(n) || n < 0;
+  const vista = invalido ? null : partesGranel({ ...producto, stock_granel_medidas: n * tpb });
+
+  const enviar = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const resp = await api.post(`/productos/${producto.id}/granel`, { botellas: n });
+      onDone(resp);
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">Cantidad a granel</h3>
+          <p className="text-sm text-gray-500 mt-0.5">{producto.nombre}</p>
+        </div>
+
+        <div className="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-600">
+          Hoy dice: <span className="font-semibold text-gray-800"><Partes partes={partesGranel(producto)} /></span>
+          {' '}({actuales} botella(s)).
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            ¿Cuántas botellas hay a granel?
+          </label>
+          <input
+            type="number" inputMode="numeric" min="0" step="1" value={botellas} placeholder="0"
+            onChange={(e) => setBotellas(e.target.value)} className={NUM_CLS}
+          />
+          {vista && n !== actuales && (
+            <p className="text-sm text-gray-500 mt-1">
+              Quedará en <Partes partes={vista} />.
+            </p>
+          )}
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            type="button" onClick={onClose} disabled={loading}
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button" onClick={enviar} disabled={loading || invalido || n === actuales}
+            className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+          >
+            {loading ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Modal Historial ─────────────────────────────────────────────
 const MOV_LABEL = {
   entrada: 'Entrada', salida: 'Salida', rellenar: 'Rellenado',
@@ -1872,6 +1948,7 @@ export default function Inventario() {
   const [apartadosDe,     setApartadosDe]     = useState(null);  // producto cuyas notas con apartado se ven
   const [modalMovimiento, setModalMovimiento] = useState(null);  // { producto, tipo }
   const [modalRellenar,   setModalRellenar]   = useState(null);  // producto
+  const [modalGranel,     setModalGranel]     = useState(null);  // producto
   const [modalHistorial,  setModalHistorial]  = useState(null);  // producto
   // Alto del modal de Producto al abrir el historial desde él (el historial sale igual).
   const [altoHistorial,   setAltoHistorial]   = useState(null);
@@ -2611,7 +2688,10 @@ export default function Inventario() {
                   <div>
                     <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">A Granel</p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base font-medium text-gray-700"><Partes partes={partesGranel(p)} /></span>
+                      {/* Al tocarlo, se corrige cuántas botellas hay a granel. */}
+                      <button type="button" onClick={() => setModalGranel(p)} className="text-left text-base font-medium text-blue hover:underline underline-offset-2">
+                        <Partes partes={partesGranel(p)} />
+                      </button>
                       <BadgeGranel estado={estadoGranel(p)} />
                     </div>
                   </div>
@@ -2708,6 +2788,15 @@ export default function Inventario() {
           producto={modalRellenar}
           onClose={() => setModalRellenar(null)}
           onDone={(prod) => { reemplazarProducto(prod); setModalRellenar(null); }}
+        />
+      )}
+
+      {/* Modal corregir granel */}
+      {modalGranel && (
+        <ModalCorregirGranel
+          producto={modalGranel}
+          onClose={() => setModalGranel(null)}
+          onDone={(prod) => { reemplazarProducto(prod); setModalGranel(null); }}
         />
       )}
 

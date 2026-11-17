@@ -551,6 +551,73 @@ export const rellenarBotellas = async (req, res) => {
   }
 };
 
+// ── POST /productos/:id/granel ──────────────────────────────────
+/**
+ * Corrige cuántas botellas hay a granel (solo granel líquido). La diferencia
+ * queda como entrada o salida a granel, así el historial y el Reporte diario cuadran.
+ */
+export const corregirGranel = async (req, res) => {
+  const { id } = req.params;
+  const botellas = Number(req.body?.botellas);
+
+  if (!Number.isInteger(botellas) || botellas < 0) {
+    return res.status(400).json({ message: 'Indica cuántas botellas hay a granel (un número entero, 0 o más).' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Producto no encontrado.' });
+    }
+    const p = rows[0];
+    if (p.tipo_liquido !== 'granel' || p.forma === 'polvo') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Este producto no maneja existencia a granel.' });
+    }
+    const medidasPorBotella = medidasDeUnidad('botella', p);
+    if (medidasPorBotella <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'El producto no tiene bien definidos los tamaños de botella y medida.' });
+    }
+    const delta = botellas * medidasPorBotella - Number(p.stock_granel_medidas);
+    if (delta === 0) {
+      await client.query('ROLLBACK');
+      const { rows: igual } = await pool.query(
+        `SELECT ${SELECT_PRODUCTO} FROM productos WHERE id = $1 AND sucursal = $2`,
+        [id, req.sucursal]
+      );
+      return res.json(igual[0]);
+    }
+    const { rows: upd } = await client.query(
+      `UPDATE productos SET stock_granel_medidas = $1, updated_at = NOW()
+        WHERE id = $2 AND sucursal = $3
+        RETURNING ${SELECT_PRODUCTO}`,
+      [botellas * medidasPorBotella, id, req.sucursal]
+    );
+    const medidas = Math.abs(delta);
+    await registrarMovimiento(client, {
+      productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
+      tipo: delta > 0 ? 'entrada' : 'salida', destino: 'granel', cantidadMedidas: medidas,
+      descripcion: `${Math.round((medidas / medidasPorBotella) * 100) / 100} botella(s)`,
+      nota: `Corrección: a granel quedaron ${botellas} botella(s)`,
+    });
+    await client.query('COMMIT');
+    res.json(upd[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('corregirGranel error:', err);
+    res.status(500).json({ message: 'No se pudo corregir la cantidad a granel. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── POST /productos/:id/movimiento ──────────────────────────────
 /**
  * Entrada o salida manual. destino: 'granel' | 'botellas'; unidad: 'bidon' |

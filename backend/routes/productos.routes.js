@@ -6,7 +6,7 @@ import { validarId } from '../middleware/validarId.js';
 import {
   getProductos, createProducto, updateProducto, deleteProducto,
   deleteProductosMultiples, archivarProducto,
-  rellenarBotellas, crearMovimiento, getMovimientos, getReporteDiario, getApartados,
+  rellenarBotellas, corregirGranel, crearMovimiento, getMovimientos, getReporteDiario, getApartados,
 } from '../controllers/productos.controller.js';
 
 const router = Router();
@@ -29,6 +29,8 @@ router.get('/:id/movimientos', getMovimientos);
 router.get('/:id/apartados', getApartados);
 router.post('/:id/movimiento', crearMovimiento);
 router.post('/:id/rellenar',   rellenarBotellas);
+// Corregir cuántas botellas hay a granel.
+router.post('/:id/granel',     corregirGranel);
 router.put('/:id',     updateProducto);
 router.delete('/:id',  requireAdmin, deleteProducto);
 
