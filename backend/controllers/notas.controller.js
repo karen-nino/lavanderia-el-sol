@@ -438,6 +438,16 @@ export async function recalcularPrecioTotal(client, notaId, opciones = {}) {
   // Quien llama está en una transacción: su catch la deshace.
   const abonado = await totalAbonado(client, notaId);
   if (abonado > 0 && Number(nuevo) < abonado - 1e-9) {
+    // Un abono de un corte cerrado ya no se revierte: no sirve pedirlo.
+    const { rows: congelados } = await client.query(
+      `SELECT n.folio FROM nota_abonos ab
+         JOIN notas n ON n.id = ab.nota_id
+         JOIN cajas cj ON cj.id = ab.caja_id
+        WHERE ab.nota_id = $1 AND ab.revertido_at IS NULL AND cj.estado <> 'abierta'
+        LIMIT 1`,
+      [notaId]
+    );
+    if (congelados.length > 0) throw new CorteCerradoError(congelados[0].folio ?? `#${notaId}`);
     throw new TotalBajoAbonosError(abonado, Number(nuevo));
   }
 
@@ -5267,7 +5277,7 @@ export const reabrirNota = async (req, res) => {
 /**
  * Ajuste de la nota desde Salidas: descuento (negativo) o cargo extra
  * (positivo); sale en el ticket. Si la nota estaba cobrada vuelve a PENDIENTE
- * por el importe nuevo; con el cobro en un corte cerrado no se permite.
+ * por el importe nuevo; con el cobro en un corte cerrado solo puede subir.
  */
 export const ajustarNota = async (req, res) => {
   const { id } = req.params;

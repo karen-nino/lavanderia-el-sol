@@ -422,6 +422,18 @@ describe('un cobro congelado en su corte no se deshace por un cambio', () => {
     expect(abonos[0].created_at.getTime()).toBe(antes.pagado_en.getTime());
   });
 
+  // Tras subir, lo pagado vive como abono de aquel corte: bajar de ahí no se
+  // puede, y el aviso no pide revertir un abono que ya no se revierte.
+  it('después de subir, bajar de lo ya pagado se rechaza como corte cerrado', async () => {
+    const { notaId, productoId } = await notaPagadaEnCorteCerrado();
+    await request(app).patch(`/api/notas/${notaId}/productos/${productoId}`)
+      .set(auth(admin.token)).send({ cantidad: 2 }).expect(200);
+    const res = await request(app).delete(`/api/notas/${notaId}/productos/${productoId}`)
+      .set(auth(admin.token));
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/corte cerrado/i);
+  });
+
   // Borrar la nota entera era la única puerta que seguía abierta: el corte de
   // aquel día conserva la venta y Ventas, que suma notas vivas, la perdía.
   it('borrar la nota entera también se rechaza con 409', async () => {
