@@ -943,8 +943,10 @@ export default function Salidas() {
     .filter(b => b.maquinas.length > 0 || b.slots.length > 0 || b.vacia);
 
   // Huecos que se pueden repetir (Relavar / Más secado): ya se usaron y están
-  // libres. Solo Por Encargo y, por ahora, solo el Admin Main.
-  const slotsRepetibles = (c) => (esEncargo && esAdminMain(usuario?.rol) && !notaCerrada
+  // libres. Solo Por Encargo y, por ahora, solo el Admin Main (y "prueba admin",
+  // que solo ve la sucursal de pruebas).
+  const puedeRepetir = esAdminMain(usuario?.rol) || (esAdmin && usuario?.es_prueba === true);
+  const slotsRepetibles = (c) => (esEncargo && puedeRepetir && !notaCerrada
     ? ['lavadora', 'secadora'].filter(slot =>
       (c.maquinas_usadas ?? []).some(u => u.slot === slot)
       && !(slot === 'lavadora' ? c.lavadora_id : c.secadora_id))

@@ -3514,8 +3514,11 @@ export const asignarMaquina = async (req, res) => {
             : 'En Autoservicio no hay Relavado: agrega otra lavadora a la nota.',
         });
       }
-      // En Por Encargo, otra vuelta de la misma ropa es, por ahora, solo del Admin Main.
-      if (notaRows[0].tipo_servicio === 'POR_ENCARGO' && !esAdminMain(req.user?.rol)
+      // En Por Encargo, otra vuelta de la misma ropa es, por ahora, solo del Admin
+      // Main (y del admin de prueba, que solo ve la sucursal de pruebas).
+      const puedeRepetir = esAdminMain(req.user?.rol)
+        || (esAdmin(req.user?.rol) && req.user?.es_prueba === true);
+      if (notaRows[0].tipo_servicio === 'POR_ENCARGO' && !puedeRepetir
           && ((c.lavadora_usada_id && lavadoras.length > 0)
               || (c.secadora_usada_id && secadoras.length > 0))) {
         await client.query('ROLLBACK');

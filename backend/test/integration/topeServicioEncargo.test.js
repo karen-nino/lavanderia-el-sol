@@ -194,6 +194,27 @@ describe('Relavar y Más secado (Por Encargo)', () => {
     }
   });
 
+  it('el admin de prueba sí puede relavar (solo ve la sucursal de pruebas)', async () => {
+    await seedSucursal('pruebas');
+    const prueba = await seedUsuario({ rol: 'admin', sucursal: 'pruebas', nombre: 'Prueba' });
+    await pool.query('UPDATE usuarios SET es_prueba = TRUE WHERE id = $1', [prueba.id]);
+    const comoPrueba = (m, url, body) => request(app)[m](url).set(auth(prueba.token, 'pruebas')).send(body);
+    const enPruebas = async (nombre) => (await pool.query(
+      `INSERT INTO maquinas (nombre, tipo, estado, sucursal)
+       VALUES ($1, 'lavadora_mediana', 'disponible', 'pruebas') RETURNING id`, [nombre])).rows[0].id;
+    const { body: nota } = await comoPrueba('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }],
+    }).expect(201);
+    await comoPrueba('patch', `/api/notas/${nota.id}/asignar-maquina`,
+      { maquina_ids: [await enPruebas('P1')], cobrar: false }).expect(200);
+    const { rows: [carga] } = await pool.query(
+      'SELECT id FROM nota_cargas WHERE nota_id = $1 AND precio_tope IS NULL', [nota.id]);
+    await pool.query('UPDATE nota_cargas SET lavadora_id = NULL WHERE id = $1', [carga.id]);
+    await comoPrueba('patch', `/api/notas/${nota.id}/asignar-maquina`,
+      { maquina_ids: [await enPruebas('P2')], carga_id: carga.id, cobrar: false }).expect(200);
+  });
+
   it('el Admin Main relava en otra más cara: un solo ciclo y Usado no sube', async () => {
     await seedAjustes({ precarga_medidas_chico: 1, precio_carga_mediana: 50, precio_carga_jumbo: 90 });
     const { notaId, cargaId } = await conLavadoTerminado();
