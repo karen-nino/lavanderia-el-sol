@@ -140,9 +140,9 @@ function sqlAlgunaLavadoraTermino(notaRef) {
 /**
  * Sucursales donde un Por Encargo de puro edredón se ve como "Edredón" en vez
  * de En Espera en cuanto termina una lavadora: ahí el edredón no pasa por
- * secadora, así que nunca llegaría a "Doblado".
+ * secadora, así que nunca llegaría a "Doblado". Zapopan trabaja igual que Retiro.
  */
-const SUCURSALES_ETIQUETA_EDREDON = ['retiro'];
+const SUCURSALES_ETIQUETA_EDREDON = ['retiro', 'zapopan'];
 const SQL_SUCURSALES_ETIQUETA_EDREDON =
   `ARRAY[${SUCURSALES_ETIQUETA_EDREDON.map(s => `'${s}'`).join(', ')}]::text[]`;
 
