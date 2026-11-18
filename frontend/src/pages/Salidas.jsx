@@ -829,7 +829,9 @@ export default function Salidas() {
   const puedeQuitarCarga = (c) =>
     Boolean(nota) && !notaCerrada && !cobroCongelado
     && cargasNota.length > 1
-    && !c.lavadora_iniciada_at && !c.secadora_iniciada_at;
+    && !c.lavadora_iniciada_at && !c.secadora_iniciada_at
+    /* Una vuelta anterior ya corrió (p. ej. hay un relavado pendiente): no se quita. */
+    && (c.maquinas_usadas ?? []).every(u => u.actual);
 
   // Lo que la carga le cobra a la nota (lo que deja de cobrarse al quitarla): en
   // Por Encargo, el precio del servicio + marca + ajuste; sin precio de servicio,
