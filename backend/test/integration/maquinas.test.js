@@ -8,7 +8,8 @@ let admin;
 beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
-  admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  // Admin Main: Relavar y Más secado son solo suyos por ahora.
+  admin = await seedUsuario({ rol: 'admin_main', sucursal: 'centro' });
 });
 
 describe('GET /api/maquinas — aislamiento por sucursal', () => {

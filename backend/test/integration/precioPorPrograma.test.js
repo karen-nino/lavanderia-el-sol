@@ -17,7 +17,8 @@ beforeEach(async () => {
   cancelarCortesProgramados();
   await limpiarBase();
   await seedSucursal('centro');
-  admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  // Admin Main: Relavar y Más secado son solo suyos por ahora.
+  admin = await seedUsuario({ rol: 'admin_main', sucursal: 'centro' });
   await seedAjustes({ tiempo_carga_mediana: 30, tiempo_carga_jumbo: 45, tiempo_carga_secadora: 40 });
 });
 

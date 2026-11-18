@@ -880,7 +880,7 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
 
     // Otro ciclo: la misma máquina, al mismo hueco.
     const otro = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
-      .set(auth(admin.token)).send({ maquina_ids: [lav], cobrar: false, carga_id: cargaMaquina.id });
+      .set(auth(adminMain.token)).send({ maquina_ids: [lav], cobrar: false, carga_id: cargaMaquina.id });
     expect(otro.status).toBe(200);
     // Vuelve a haber trabajo: la nota deja de estar Por Entregar.
     expect(otro.body.estado).toBe('EN_ESPERA');
@@ -1425,7 +1425,7 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     // Con la lavadora puesta, no cabe otra del mismo tipo a la vez.
     const otra = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
     const ocupada = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
-      .set(auth(admin.token)).send({ maquina_id: otra, cobrar: false, carga_id: cargaId });
+      .set(auth(adminMain.token)).send({ maquina_id: otra, cobrar: false, carga_id: cargaId });
     expect(ocupada.status).toBe(400);
     expect(ocupada.body.message).toMatch(/ya tiene una lavadora/i);
 
@@ -1435,7 +1435,7 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     await pool.query("UPDATE maquinas SET estado = 'disponible' WHERE id = $1", [lavadoraId]);
 
     const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
-      .set(auth(admin.token)).send({ maquina_id: otra, cobrar: false, carga_id: cargaId });
+      .set(auth(adminMain.token)).send({ maquina_id: otra, cobrar: false, carga_id: cargaId });
     expect(res.status).toBe(200);
     // Ni carga nueva ni cambio de total: la segunda lavada va en la misma carga
     // y el lavado que sí se cobró sigue cobrado.
@@ -1456,7 +1456,7 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     await pool.query('UPDATE nota_cargas SET lavadora_id = NULL WHERE id = $1', [carga.id]);
     await pool.query("UPDATE maquinas SET estado = 'disponible' WHERE id = $1", [lavadoraId]);
     const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
-      .set(auth(admin.token)).send({ maquina_id: lavadoraId, cobrar: false, carga_id: carga.id });
+      .set(auth(adminMain.token)).send({ maquina_id: lavadoraId, cobrar: false, carga_id: carga.id });
     expect(res.status).toBe(200);
 
     const despues = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
@@ -1483,7 +1483,7 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     await pool.query('UPDATE nota_cargas SET lavadora_id = NULL WHERE id = $1', [cargaId]);
     await pool.query("UPDATE maquinas SET estado = 'disponible' WHERE id = $1", [lavadoraId]);
     await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
-      .set(auth(admin.token)).send({ maquina_id: lavadoraId, cobrar: false, carga_id: cargaId })
+      .set(auth(adminMain.token)).send({ maquina_id: lavadoraId, cobrar: false, carga_id: cargaId })
       .expect(200);
 
     const { rows: pasadas } = await pool.query(

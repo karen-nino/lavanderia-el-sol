@@ -3514,12 +3514,12 @@ export const asignarMaquina = async (req, res) => {
             : 'En Autoservicio no hay Relavado: agrega otra lavadora a la nota.',
         });
       }
-      // En Por Encargo, otra vuelta de la misma ropa es cosa de admin.
-      if (notaRows[0].tipo_servicio === 'POR_ENCARGO' && !esAdmin(req.user?.rol)
+      // En Por Encargo, otra vuelta de la misma ropa es, por ahora, solo del Admin Main.
+      if (notaRows[0].tipo_servicio === 'POR_ENCARGO' && !esAdminMain(req.user?.rol)
           && ((c.lavadora_usada_id && lavadoras.length > 0)
               || (c.secadora_usada_id && secadoras.length > 0))) {
         await client.query('ROLLBACK');
-        return res.status(403).json({ message: 'Relavar y Más secado solo los puede hacer un admin.' });
+        return res.status(403).json({ message: 'Relavar y Más secado solo los puede hacer el Admin Main.' });
       }
       cargaObjetivo = c;
     }

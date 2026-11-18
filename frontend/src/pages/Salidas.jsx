@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import { tituloProducto, etiquetaProducto, plural, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { guardarAvisoCobro } from '../lib/avisoCobro';
 import { useAuth } from '../context/AuthContext';
-import { esAdmin as esAdminFn } from '../lib/roles';
+import { esAdmin as esAdminFn, esAdminMain } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
 import ConfirmacionModal from '../components/ConfirmacionModal';
 import TopeServicios from '../components/TopeServicios';
@@ -165,7 +165,7 @@ export default function Salidas() {
   // Modo hueco: { carga, slot, tipo } de una carga a la que le falta la máquina
   // de un tipo ya elegido. No se pregunta cobro ni destino.
   const [asignarSlot,      setAsignarSlot]      = useState(null);
-  // Relavar o Más secado (Por Encargo, solo admin): el hueco ya usado que se repite.
+  // Relavar o Más secado (Por Encargo, solo Admin Main): el hueco ya usado que se repite.
   const [repetirSlot,      setRepetirSlot]      = useState(null);
 
   // Cambiar una máquina asignada (sin iniciar) por otra del mismo tipo.
@@ -943,8 +943,8 @@ export default function Salidas() {
     .filter(b => b.maquinas.length > 0 || b.slots.length > 0 || b.vacia);
 
   // Huecos que se pueden repetir (Relavar / Más secado): ya se usaron y están
-  // libres. Solo Por Encargo y solo admin.
-  const slotsRepetibles = (c) => (esEncargo && esAdmin && !notaCerrada
+  // libres. Solo Por Encargo y, por ahora, solo el Admin Main.
+  const slotsRepetibles = (c) => (esEncargo && esAdminMain(usuario?.rol) && !notaCerrada
     ? ['lavadora', 'secadora'].filter(slot =>
       (c.maquinas_usadas ?? []).some(u => u.slot === slot)
       && !(slot === 'lavadora' ? c.lavadora_id : c.secadora_id))
@@ -1366,7 +1366,7 @@ export default function Salidas() {
                 );
               })}
 
-              {/* Relavar / Más secado: el hueco ya se usó y quedó libre (Por Encargo, solo admin). */}
+              {/* Relavar / Más secado: el hueco ya se usó y quedó libre (Por Encargo, solo Admin Main). */}
               {slotsRepetibles(carga).length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {slotsRepetibles(carga).map(slot => (

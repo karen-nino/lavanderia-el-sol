@@ -184,22 +184,25 @@ describe('Relavar y Más secado (Por Encargo)', () => {
     return { notaId: nota.id, cargaId: carga.id };
   }
 
-  it('un empleado no puede relavar', async () => {
+  it('ni un empleado ni un admin normal pueden relavar: solo el Admin Main', async () => {
     const { notaId, cargaId } = await conLavadoTerminado();
-    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
-    const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`).set(auth(empleado.token))
-      .send({ maquina_ids: [await maquina('L2', 'lavadora_mediana')], carga_id: cargaId, cobrar: false });
-    expect(res.status).toBe(403);
+    for (const rol of ['operador', 'admin']) {
+      const u = await seedUsuario({ rol, sucursal: 'centro', nombre: `U ${rol}` });
+      const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`).set(auth(u.token))
+        .send({ maquina_ids: [await maquina(`L-${rol}`, 'lavadora_mediana')], carga_id: cargaId, cobrar: false });
+      expect(res.status).toBe(403);
+    }
   });
 
-  it('el admin relava en otra más cara: un solo ciclo y Usado no sube', async () => {
+  it('el Admin Main relava en otra más cara: un solo ciclo y Usado no sube', async () => {
     await seedAjustes({ precarga_medidas_chico: 1, precio_carga_mediana: 50, precio_carga_jumbo: 90 });
     const { notaId, cargaId } = await conLavadoTerminado();
     const antes = (await api('get', `/api/notas/${notaId}`)).body.tope_nota.usado;
     expect(antes).toBe(55); // jabón 5 + mediana 50
     const jumbo = await maquina('L9', 'lavadora_jumbo');
-    await api('patch', `/api/notas/${notaId}/asignar-maquina`,
-      { maquina_ids: [jumbo], carga_id: cargaId, cobrar: false }).expect(200);
+    const main = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Main' });
+    await request(app).patch(`/api/notas/${notaId}/asignar-maquina`).set(auth(main.token))
+      .send({ maquina_ids: [jumbo], carga_id: cargaId, cobrar: false }).expect(200);
     expect((await api('get', `/api/notas/${notaId}`)).body.tope_nota.usado).toBe(antes);
     const { rows } = await pool.query(
       'SELECT ciclo_unico FROM nota_carga_maquinas WHERE carga_id = $1 AND maquina_id = $2', [cargaId, jumbo]);

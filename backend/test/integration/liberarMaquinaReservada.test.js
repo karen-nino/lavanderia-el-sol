@@ -131,7 +131,7 @@ describe('otra vuelta sin arrancar (Relavado / Más secado) en Por Encargo', () 
     await api('patch', `/api/notas/${id}/activar-pendientes`, { maquina_id: l1 }).expect(200);
     await api('patch', `/api/notas/${id}/terminar-lavado-final`, { lavadora_id: l1 }).expect(200);
     const primera = (await pool.query('SELECT lavadora_iniciada_at FROM nota_cargas WHERE id = $1', [carga])).rows[0].lavadora_iniciada_at;
-    await api('patch', `/api/notas/${id}/asignar-maquina`, { maquina_ids: [l2], carga_id: carga, cobrar: false }).expect(200);
+    await api('patch', `/api/notas/${id}/asignar-maquina`, { maquina_ids: [l2], carga_id: carga, cobrar: false }, adminMain).expect(200);
     return { l1, l2, id, carga, primera };
   }
 
@@ -169,7 +169,7 @@ describe('otra vuelta sin arrancar (Relavado / Más secado) en Por Encargo', () 
     await api('patch', `/api/notas/${id}/asignar-carga-maquina`, { carga_id: carga, slot: 'secadora', maquina_id: s1 }).expect(200);
     await api('patch', `/api/notas/${id}/activar-pendientes`, { maquina_id: s1 }).expect(200);
     await api('patch', `/api/notas/${id}/terminar-secado`, { secadora_id: s1 }).expect(200);
-    await api('patch', `/api/notas/${id}/asignar-maquina`, { maquina_ids: [s2], carga_id: carga, cobrar: false }).expect(200);
+    await api('patch', `/api/notas/${id}/asignar-maquina`, { maquina_ids: [s2], carga_id: carga, cobrar: false }, adminMain).expect(200);
 
     await api('patch', `/api/notas/${id}/estado`, { estado: 'LISTA' }).expect(200);
     const { rows: [c] } = await pool.query(
