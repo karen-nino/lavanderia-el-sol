@@ -817,14 +817,21 @@ async function secadoraPorDefinir(client, notaId) {
  *   `nota` es null si la nota no tiene servicios con precio.
  */
 async function topesDeNota(client, notaId) {
-  // Máquina de cada hueco: la puesta o, si ya se soltó, la que se usó.
+  // Máquina de cada hueco para el tope: la de su primera vuelta (Relavado y Más
+  // secado no suman); sin vueltas registradas, la puesta o la ya usada.
+  const PRIMERA_VUELTA = (slot) => `(
+         SELECT v.maquina_id FROM nota_carga_maquinas v
+          WHERE v.carga_id = nc.id AND v.slot = '${slot}' AND v.maquina_id IS NOT NULL
+          ORDER BY v.asignada_at, v.id LIMIT 1)`;
   const MAQUINAS_DE_CARGA = `
             ml.tipo AS lavadora_maquina, ${PRECIO_DEL_MODELO('ml')} AS lavadora_modelo,
             ms.tamano AS secadora_tamano, ${PRECIO_DEL_MODELO('ms')} AS secadora_modelo,
             ms.id IS NOT NULL AS con_secadora`;
   const JOIN_MAQUINAS = `
-       LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
-       LEFT JOIN maquinas ms ON ms.id = COALESCE(nc.secadora_id, nc.secadora_usada_id)`;
+       LEFT JOIN maquinas ml ON ml.id = CASE WHEN COALESCE(nc.lavadora_id, nc.lavadora_usada_id) IS NOT NULL
+                                             THEN COALESCE(${PRIMERA_VUELTA('lavadora')}, nc.lavadora_id, nc.lavadora_usada_id) END
+       LEFT JOIN maquinas ms ON ms.id = CASE WHEN COALESCE(nc.secadora_id, nc.secadora_usada_id) IS NOT NULL
+                                             THEN COALESCE(${PRIMERA_VUELTA('secadora')}, nc.secadora_id, nc.secadora_usada_id) END`;
   const { rows } = await client.query(
     `SELECT nc.id AS carga_id, nc.orden, nc.tamano, nc.tipo_prenda,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
@@ -3506,6 +3513,13 @@ export const asignarMaquina = async (req, res) => {
             ? 'En Autoservicio no hay Más secado: para más tiempo usa Otra ficha o agrega otra secadora a la nota.'
             : 'En Autoservicio no hay Relavado: agrega otra lavadora a la nota.',
         });
+      }
+      // En Por Encargo, otra vuelta de la misma ropa es cosa de admin.
+      if (notaRows[0].tipo_servicio === 'POR_ENCARGO' && !esAdmin(req.user?.rol)
+          && ((c.lavadora_usada_id && lavadoras.length > 0)
+              || (c.secadora_usada_id && secadoras.length > 0))) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ message: 'Relavar y Más secado solo los puede hacer un admin.' });
       }
       cargaObjetivo = c;
     }

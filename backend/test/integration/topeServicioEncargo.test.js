@@ -165,3 +165,44 @@ describe('lo que el servicio ya trae no se bloquea', () => {
     expect((await api('get', `/api/notas/${nota.id}`)).body.tope_nota.usado).toBe(50);
   });
 });
+
+describe('Relavar y Más secado (Por Encargo)', () => {
+  const maquina = async (nombre, tipo) => (await pool.query(
+    `INSERT INTO maquinas (nombre, tipo, estado, sucursal)
+     VALUES ($1, $2, 'disponible', 'centro') RETURNING id`, [nombre, tipo])).rows[0].id;
+
+  /** Nota Chico con una lavadora mediana ya usada y soltada (renglón con hueco libre). */
+  async function conLavadoTerminado() {
+    await jabon(5);
+    const { body: nota } = await notaChico();
+    const l1 = await maquina('L1', 'lavadora_mediana');
+    await api('patch', `/api/notas/${nota.id}/asignar-maquina`, { maquina_ids: [l1], cobrar: false }).expect(200);
+    const { rows: [carga] } = await pool.query(
+      'SELECT id FROM nota_cargas WHERE nota_id = $1 AND precio_tope IS NULL', [nota.id]);
+    // Terminó: el hueco queda libre y la máquina, como usada.
+    await pool.query('UPDATE nota_cargas SET lavadora_id = NULL WHERE id = $1', [carga.id]);
+    return { notaId: nota.id, cargaId: carga.id };
+  }
+
+  it('un empleado no puede relavar', async () => {
+    const { notaId, cargaId } = await conLavadoTerminado();
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+    const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`).set(auth(empleado.token))
+      .send({ maquina_ids: [await maquina('L2', 'lavadora_mediana')], carga_id: cargaId, cobrar: false });
+    expect(res.status).toBe(403);
+  });
+
+  it('el admin relava en otra más cara: un solo ciclo y Usado no sube', async () => {
+    await seedAjustes({ precarga_medidas_chico: 1, precio_carga_mediana: 50, precio_carga_jumbo: 90 });
+    const { notaId, cargaId } = await conLavadoTerminado();
+    const antes = (await api('get', `/api/notas/${notaId}`)).body.tope_nota.usado;
+    expect(antes).toBe(55); // jabón 5 + mediana 50
+    const jumbo = await maquina('L9', 'lavadora_jumbo');
+    await api('patch', `/api/notas/${notaId}/asignar-maquina`,
+      { maquina_ids: [jumbo], carga_id: cargaId, cobrar: false }).expect(200);
+    expect((await api('get', `/api/notas/${notaId}`)).body.tope_nota.usado).toBe(antes);
+    const { rows } = await pool.query(
+      'SELECT ciclo_unico FROM nota_carga_maquinas WHERE carga_id = $1 AND maquina_id = $2', [cargaId, jumbo]);
+    expect(rows[0].ciclo_unico).toBe(true);
+  });
+});

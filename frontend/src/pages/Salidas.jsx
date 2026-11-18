@@ -165,6 +165,8 @@ export default function Salidas() {
   // Modo hueco: { carga, slot, tipo } de una carga a la que le falta la máquina
   // de un tipo ya elegido. No se pregunta cobro ni destino.
   const [asignarSlot,      setAsignarSlot]      = useState(null);
+  // Relavar o Más secado (Por Encargo, solo admin): el hueco ya usado que se repite.
+  const [repetirSlot,      setRepetirSlot]      = useState(null);
 
   // Cambiar una máquina asignada (sin iniciar) por otra del mismo tipo.
   const [cambiarMaq,       setCambiarMaq]       = useState(null); // máquina a cambiar
@@ -386,6 +388,7 @@ export default function Salidas() {
   // Cierra el modal de asignar y lo deja limpio.
   function cerrarAsignar() {
     setAsignarOpen(false);
+    setRepetirSlot(null);
     setAsignarCarga(null);
     setAsignarCargaFija(false);
     setAsignarSlot(null);
@@ -416,9 +419,11 @@ export default function Salidas() {
   }
 
   // Abre el selector de máquina: sin argumento, un renglón nuevo; con una carga, esa carga.
-  async function iniciarAsignar(carga = null) {
+  // Con `repetir` ('lavadora' | 'secadora') es Relavar o Más secado en esa carga.
+  async function iniciarAsignar(carga = null, repetir = null) {
     setErrorAccion('');
     setAsignarMaqSel([]);
+    setRepetirSlot(repetir);
     // Donde se cuenta por máquinas, la extra abre su propio renglón. El selector de
     // destino solo se oculta si el modal se abrió desde un renglón.
     setAsignarCarga(carga ?? (porMaquinas ? null : cargasDestino[0] ?? null));
@@ -935,6 +940,14 @@ export default function Salidas() {
     }))
     .filter(b => b.maquinas.length > 0 || b.slots.length > 0 || b.vacia);
 
+  // Huecos que se pueden repetir (Relavar / Más secado): ya se usaron y están
+  // libres. Solo Por Encargo y solo admin.
+  const slotsRepetibles = (c) => (esEncargo && esAdmin && !notaCerrada
+    ? ['lavadora', 'secadora'].filter(slot =>
+      (c.maquinas_usadas ?? []).some(u => u.slot === slot)
+      && !(slot === 'lavadora' ? c.lavadora_id : c.secadora_id))
+    : []);
+
   // Número del renglón: en Por Encargo, su lugar en esta pantalla (los servicios
   // vendidos no salen aquí); en los demás, su orden.
   const numeroDeCarga = (c) => {
@@ -957,8 +970,9 @@ export default function Salidas() {
 
   // Lo que ofrece el modal: en modo hueco, ese hueco; si no, según el destino
   // (carga nueva = las dos).
-  const huecosAsignar = asignarSlot
-    ? { lavadora: asignarSlot.slot === 'lavadora', secadora: asignarSlot.slot === 'secadora' }
+  const huecosAsignar = asignarSlot || repetirSlot
+    ? { lavadora: (asignarSlot?.slot ?? repetirSlot) === 'lavadora',
+        secadora: (asignarSlot?.slot ?? repetirSlot) === 'secadora' }
     : cargaDestino ? huecosDeCarga(cargaDestino) : { lavadora: true, secadora: true };
   const maquinasModal = asignarSlot
     ? maquinasParaSlot(asignarSlot.slot)
@@ -1349,6 +1363,22 @@ export default function Salidas() {
                   </div>
                 );
               })}
+
+              {/* Relavar / Más secado: el hueco ya se usó y quedó libre (Por Encargo, solo admin). */}
+              {slotsRepetibles(carga).length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {slotsRepetibles(carga).map(slot => (
+                    <button
+                      key={slot}
+                      onClick={conCajaAbierta(() => iniciarAsignar(carga, slot))}
+                      disabled={loadingMaquina}
+                      className="px-4 py-2 bg-white border border-blue text-blue hover:bg-light-blue disabled:opacity-60 text-sm font-medium rounded-lg transition-colors"
+                    >
+                      {slot === 'lavadora' ? 'Relavar' : 'Más secado'}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Huecos con tipo y sin máquina: se elige una libre. */}
               {slots.length > 0 && (<>
@@ -2240,12 +2270,18 @@ export default function Salidas() {
             <div className="px-6 pt-6 pb-3 flex-shrink-0">
               <h3 className="text-base font-bold text-gray-900">
                 {/* Sin carga destino se agrega una máquina nueva a la nota. */}
-                {cargaDestino
+                {repetirSlot && cargaDestino
+                  ? `${repetirSlot === 'lavadora' ? 'Relavar' : 'Más secado'} · ${Renglon} ${numeroDeCarga(cargaDestino)}`
+                  : cargaDestino
                   ? `Asignar máquina · ${Renglon} ${numeroDeCarga(cargaDestino)}`
                   : 'Agregar máquina'}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                {asignarSlot
+                {repetirSlot
+                  ? <>Otra vuelta de la misma ropa: corre <span className="font-medium text-gray-700">un solo ciclo</span>,
+                    va <span className="font-medium text-gray-700">sin cobro</span> y no suma a lo usado del tope. Queda
+                    asignada; la inicias después con su botón.</>
+                  : asignarSlot
                   ? <>Elige la <span className="font-medium text-gray-700">
                       {/* Cualquier lavadora libre. */}
                       {asignarSlot.slot === 'lavadora'
