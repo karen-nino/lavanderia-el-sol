@@ -4,7 +4,6 @@
   "direccion": null,
   "telefono": null,
   "logo_url": null,
-  "stock_minimo_global": 5,
   "precio_carga_jumbo": "70.00",
   "tiempo_carga_mediana": 30,
   "tiempo_carga_jumbo": 30,
