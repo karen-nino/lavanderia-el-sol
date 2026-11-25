@@ -1142,7 +1142,7 @@ function Historial() {
                 {columna(
                   'Cierre',
                   <>
-                    <span className="text-gray-600">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span>
+                    <span className="text-gray-600">{c.en_curso ? 'Esperado en caja hasta ahora' : 'Esperado en caja'}</span>
                     <span className="text-right text-gray-800 tabular-nums">{fmt(c.esperado)}</span>
                     <span className="text-gray-600">Contado</span>
                     <span className="text-right text-gray-800 tabular-nums">{c.contado != null ? fmt(c.contado) : '—'}</span>
