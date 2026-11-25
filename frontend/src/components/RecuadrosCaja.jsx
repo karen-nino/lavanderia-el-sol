@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { desgloseCaja } from '../lib/desgloseCaja';
 import { fmtMoneda as fmt } from '../lib/exportUtils';
 
@@ -57,11 +58,16 @@ function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
 /**
  * @param turno con la forma del historial (lib/desgloseCaja.js).
  * @param esperadoLabel "ESPERADO EN CAJA" o, en un turno abierto, "hasta ahora".
+ * @param dosColumnas desde tablet, Ingresos a la izquierda y Egresos con el Desglose
+ *   juntos a la derecha (sin hueco entre ellos).
  */
-export default function RecuadrosCaja({ turno, esperadoLabel = 'ESPERADO EN CAJA' }) {
+export default function RecuadrosCaja({ turno, esperadoLabel = 'ESPERADO EN CAJA', dosColumnas = false }) {
   const d = desgloseCaja(turno);
+  const egresos = <Recuadro titulo="Egresos" filas={d.egresos} totalLabel="TOTAL EGRESOS" total={d.totalEgresos} />;
+  const desglose = <Recuadro titulo="Desglose esperado" filas={d.desglose} totalLabel={esperadoLabel} total={d.esperado} />;
+  const Contenedor = dosColumnas ? 'div' : Fragment;
   return (
-    <>
+    <Contenedor {...(dosColumnas ? { className: 'grid gap-6 md:grid-cols-2 md:gap-4 md:items-start' } : {})}>
       {/* En la demo la caja inicial va primero, en su propio recuadro. */}
       {d.cajaAparte && (
         // A todo lo ancho donde los recuadros van en columnas (turnos de Ventas).
@@ -76,8 +82,17 @@ export default function RecuadrosCaja({ turno, esperadoLabel = 'ESPERADO EN CAJA
         titulo="Ingresos" filas={d.ingresos} totalLabel={d.totalIngresosLabel.toUpperCase()} total={d.totalIngresos}
         aparte={d.comoSeCobroDentro ? null : { titulo: 'Cómo se cobró', filas: d.comoSeCobro }}
       />
-      <Recuadro titulo="Egresos" filas={d.egresos} totalLabel="TOTAL EGRESOS" total={d.totalEgresos} />
-      <Recuadro titulo="Desglose esperado" filas={d.desglose} totalLabel={esperadoLabel} total={d.esperado} />
-    </>
+      {dosColumnas ? (
+        <div className="space-y-6 md:space-y-4">
+          {egresos}
+          {desglose}
+        </div>
+      ) : (
+        <>
+          {egresos}
+          {desglose}
+        </>
+      )}
+    </Contenedor>
   );
 }

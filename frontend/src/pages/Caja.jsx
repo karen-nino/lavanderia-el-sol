@@ -479,10 +479,8 @@ function Corte({ data, onCerrar, onAbrir }) {
       {/* Desktop: las cuentas a la izquierda y el corte fijo a la derecha. */}
       <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-[1fr_26rem] lg:gap-8 lg:items-start">
       <div className="space-y-6">
-        {/* Desde tablet, en 2 columnas: Ingresos a la izquierda; Egresos y Desglose, a la derecha. */}
-        <div className="space-y-6 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 md:items-start md:[&>*:nth-last-child(3)]:row-span-2">
-          <RecuadrosCaja turno={turno} />
-        </div>
+        {/* Desde tablet, en 2 columnas: Ingresos a la izquierda; Egresos y Desglose, juntos a la derecha. */}
+        <RecuadrosCaja turno={turno} dosColumnas />
 
         {/* Fichas del turno, para los empleados. */}
         {!esAdminFn(usuario?.rol) && <FichasCorte caja={caja} />}
