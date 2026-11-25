@@ -941,7 +941,7 @@ function Historial() {
         >
           {/* Encabezado fijo: de quién y cuándo, el resultado y cerrar. */}
           <div className="flex items-start justify-between gap-4 px-6 md:px-10 pt-6 pb-6 md:pt-8 border-b border-gray-200 flex-shrink-0">
-            <div className="min-w-0 space-y-1">
+            <div className="min-w-0 flex-1 space-y-1">
               <h2 id="corte-modal-titulo" className="text-lg font-bold text-gray-900">
                 Corte del {fmtFechaCorta(c.abierta_at)}
               </h2>
@@ -950,30 +950,49 @@ function Historial() {
                 {fmtHora(c.abierta_at)} – {c.en_curso ? 'en curso' : fmtHora(c.cerrada_at)}
               </p>
               {pastillaTurno(c) && <div className="pt-3">{pastillaTurno(c)}</div>}
+              {/* Celular: Exportar PDF e Imprimir a lo ancho, con su texto. */}
+              <div className="sm:hidden grid grid-cols-2 gap-3 pt-5">
+                {[['Exportar PDF', 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z'],
+                  ['Imprimir', 'M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659'],
+                ].map(([texto, icono]) => (
+                  <button
+                    key={texto}
+                    type="button"
+                    onClick={imprimirModal}
+                    className="flex items-center justify-center gap-2 py-3 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d={icono} />
+                    </svg>
+                    {texto}
+                  </button>
+                ))}
+              </div>
             </div>
-            {/* Exportar PDF e Imprimir (los dos abren la ventana de impresión) y cerrar. */}
+            {/* Exportar PDF e Imprimir (los dos abren la ventana de impresión) y cerrar;
+                en celular los botones bajan, bajo la pastilla. */}
             <div className="flex items-center gap-2 flex-shrink-0 -mt-1.5">
               <button
                 type="button"
                 onClick={imprimirModal}
                 aria-label="Exportar PDF"
-                className="h-11 flex items-center gap-2 px-3 sm:px-4 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                className="hidden sm:flex h-11 items-center gap-2 px-4 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                 </svg>
-                <span className="hidden sm:inline">Exportar PDF</span>
+                <span>Exportar PDF</span>
               </button>
               <button
                 type="button"
                 onClick={imprimirModal}
                 aria-label="Imprimir"
-                className="h-11 flex items-center gap-2 px-3 sm:px-4 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                className="hidden sm:flex h-11 items-center gap-2 px-4 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659" />
                 </svg>
-                <span className="hidden sm:inline">Imprimir</span>
+                <span>Imprimir</span>
               </button>
               <button
                 type="button"
