@@ -134,16 +134,15 @@ describe('GET /api/auth/buscar-usuarios', () => {
     expect(comodin.body).toEqual([]);
   });
 
-  // Por el momento los de prueba se ven sin prefijo (PRUEBA_VISIBLE_EN_LOGIN);
-  // el admin_main sigue oculto.
-  it('los usuarios de prueba aparecen con y sin el prefijo ***', async () => {
+  // Los de prueba vuelven a estar ocultos (PRUEBA_VISIBLE_EN_LOGIN = false).
+  it('los usuarios de prueba solo aparecen con el prefijo ***', async () => {
     await pool.query(
       `INSERT INTO usuarios (nombre, password, rol, sucursal, activo, es_prueba)
        VALUES ('Prueba Admin', 'x', 'admin', 'centro', TRUE, TRUE)`
     );
 
     const normal = await request(app).get('/api/auth/buscar-usuarios?q=Prueba');
-    expect(normal.body.map((r) => r.nombre)).toContain('Prueba Admin');
+    expect(normal.body.map((r) => r.nombre)).not.toContain('Prueba Admin');
 
     const oculto = await request(app).get('/api/auth/buscar-usuarios?q=***Prueba');
     expect(oculto.body.map((r) => r.nombre)).toContain('Prueba Admin');

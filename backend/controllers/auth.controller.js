@@ -14,7 +14,7 @@ import { esAdmin } from '../middleware/roles.js';
 // tiene límites por IP (por minuto y por hora).
 
 /** true: los usuarios de prueba salen en la búsqueda normal, sin el prefijo ***. */
-const PRUEBA_VISIBLE_EN_LOGIN = true;
+const PRUEBA_VISIBLE_EN_LOGIN = false;
 
 export const buscarUsuarios = async (req, res) => {
   const raw = (req.query.q ?? '').trim();
