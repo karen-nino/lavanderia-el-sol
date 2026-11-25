@@ -587,9 +587,23 @@ function Historial() {
   const [eliminando, setEliminando] = useState(false);
   // Corte abierto "a detalle" en un modal (desde el ⋮).
   const [corteModal, setCorteModal] = useState(null);
+  // Menú de opciones (⋮) dentro del modal.
+  const [menuModal, setMenuModal] = useState(false);
+  const menuModalRef = useRef(null);
+  useEffect(() => {
+    if (!menuModal) return;
+    const onDown = (e) => {
+      if (menuModalRef.current && !menuModalRef.current.contains(e.target)) setMenuModal(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuModal]);
   useEffect(() => {
     if (!corteModal) return;
-    const onKey = (e) => { if (e.key === 'Escape') setCorteModal(null); };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      setMenuModal((abierto) => { if (!abierto) setCorteModal(null); return false; });
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [corteModal]);
@@ -931,7 +945,7 @@ function Historial() {
     return (
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4 md:p-8"
-        onMouseDown={(e) => { if (e.target === e.currentTarget) setCorteModal(null); }}
+        onMouseDown={(e) => { if (e.target === e.currentTarget) { setMenuModal(false); setCorteModal(null); } }}
       >
         <div
           role="dialog"
@@ -950,56 +964,53 @@ function Historial() {
                 {fmtHora(c.abierta_at)} – {c.en_curso ? 'en curso' : fmtHora(c.cerrada_at)}
               </p>
               {pastillaTurno(c) && <div className="pt-3">{pastillaTurno(c)}</div>}
-              {/* Celular: Exportar PDF e Imprimir a lo ancho, con su texto. */}
-              <div className="sm:hidden grid grid-cols-2 gap-3 pt-5">
-                {[['Exportar PDF', 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z'],
-                  ['Imprimir', 'M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659'],
-                ].map(([texto, icono]) => (
-                  <button
-                    key={texto}
-                    type="button"
-                    onClick={imprimirModal}
-                    className="flex items-center justify-center gap-2 py-3 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d={icono} />
-                    </svg>
-                    {texto}
-                  </button>
-                ))}
-              </div>
             </div>
-            {/* Exportar PDF e Imprimir (los dos abren la ventana de impresión) y cerrar;
-                en celular los botones bajan, bajo la pastilla. */}
-            <div className="flex items-center gap-2 flex-shrink-0 -mt-1.5">
+            {/* Opciones (⋮: PDF, imprimir, Excel) y cerrar. */}
+            <div className="flex items-center gap-1 flex-shrink-0 -mt-1.5">
+              <div className="relative" ref={menuModalRef}>
+                <button
+                  type="button"
+                  onClick={() => setMenuModal((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={menuModal}
+                  aria-label="Opciones"
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="5" r="1.8" />
+                    <circle cx="12" cy="12" r="1.8" />
+                    <circle cx="12" cy="19" r="1.8" />
+                  </svg>
+                </button>
+                {menuModal && (
+                  <div role="menu" className="absolute right-0 mt-1 z-10 w-56 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                    {[
+                      ['Exportar PDF', 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z', imprimirModal],
+                      ['Imprimir', 'M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659', imprimirModal],
+                      ['Descargar Excel', 'M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3', () => descargarCortesExcel([c], fmtFechaCorta(c.en_curso ? c.abierta_at : c.cerrada_at))],
+                    ].map(([texto, icono, accion]) => (
+                      <button
+                        key={texto}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setMenuModal(false); accion(); }}
+                        className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-base font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d={icono} />
+                        </svg>
+                        {texto}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
-                onClick={imprimirModal}
-                aria-label="Exportar PDF"
-                className="hidden sm:flex h-11 items-center gap-2 px-4 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                </svg>
-                <span>Exportar PDF</span>
-              </button>
-              <button
-                type="button"
-                onClick={imprimirModal}
-                aria-label="Imprimir"
-                className="hidden sm:flex h-11 items-center gap-2 px-4 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659" />
-                </svg>
-                <span>Imprimir</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCorteModal(null)}
+                onClick={() => { setMenuModal(false); setCorteModal(null); }}
                 aria-label="Cerrar"
                 autoFocus
-                className="ml-1 p-2 -mr-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                className="p-2 -mr-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
