@@ -998,6 +998,10 @@ function Historial() {
    */
   const modalCorte = (c) => {
     const d = desgloseCaja(c);
+    // El mismo documento que "Exportar PDF" del ⋮.
+    const imprimirModal = () => (c.en_curso
+      ? imprimirCortes(c, { titulo: 'Corte de caja', subtitulo: `Turno en curso · ${c.usuario_apertura || ''}` })
+      : imprimirCortes([c], { titulo: `Corte del ${fmtFechaCorta(c.cerrada_at)}` }));
     // Notas y avisos del turno para "Detalles".
     const cerroOtro = !c.en_curso && !c.cierre_automatico && c.usuario_cierre && c.usuario_cierre !== c.usuario_apertura;
     const notasModal = [
@@ -1045,17 +1049,42 @@ function Historial() {
               </p>
               {pastillaTurno(c) && <div className="pt-3">{pastillaTurno(c)}</div>}
             </div>
-            <button
-              type="button"
-              onClick={() => setCorteModal(null)}
-              aria-label="Cerrar"
-              autoFocus
-              className="flex-shrink-0 p-2 -mr-2 -mt-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            {/* Exportar PDF e Imprimir (los dos abren la ventana de impresión) y cerrar. */}
+            <div className="flex items-center gap-2 flex-shrink-0 -mt-1.5">
+              <button
+                type="button"
+                onClick={imprimirModal}
+                aria-label="Exportar PDF"
+                className="h-11 flex items-center gap-2 px-3 sm:px-4 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+                <span className="hidden sm:inline">Exportar PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={imprimirModal}
+                aria-label="Imprimir"
+                className="h-11 flex items-center gap-2 px-3 sm:px-4 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659" />
+                </svg>
+                <span className="hidden sm:inline">Imprimir</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCorteModal(null)}
+                aria-label="Cerrar"
+                autoFocus
+                className="ml-1 p-2 -mr-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="overflow-y-auto">
