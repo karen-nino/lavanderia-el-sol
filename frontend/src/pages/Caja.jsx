@@ -1103,9 +1103,9 @@ function Historial() {
               </div>
             </div>
 
-            {/* El desglose de Entradas y Gastos, en su recuadro: es detalle, no se vuelve a sumar. */}
+            {/* El desglose de Entradas y Gastos, en una franja de lado a lado: es detalle, no se vuelve a sumar. */}
             {c.movimientos?.length > 0 && (
-              <section className="rounded-xl bg-slate-50 border border-slate-200 px-5 md:px-6 pt-5 pb-2">
+              <section className="-mx-6 md:-mx-10 px-6 md:px-10 pt-8 pb-5 bg-slate-50 border-y border-slate-200">
                 <div className="flex items-baseline justify-between gap-4">
                   <h3 className="text-base font-semibold text-gray-900">Detalle de entradas y gastos</h3>
                   <span className="text-sm text-gray-600 flex-shrink-0">
