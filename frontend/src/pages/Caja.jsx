@@ -581,7 +581,8 @@ function Historial() {
   const periodoRef = useRef(null);
   const elegirPeriodo = (id) => { setPeriodo(id); setMostrarPeriodo(false); setSubFiltro(null); };
 
-  // Filtro por resultado desde el resumen (null = todas): 'cuadran' | 'faltan' | 'sobran' | 'sin'.
+  // Filtro desde el resumen (null = todos los días): 'cajas' (solo días con cajas) |
+  // 'cuadran' | 'faltan' | 'sobran' | 'sin'.
   // Se guarda con el período en que se eligió: al cambiar de período deja de aplicar.
   const clavePeriodo = `${periodo}|${anioSel}|${mesSel}|${desde}|${hasta}`;
   const [filtroGuardado, setFiltroGuardado] = useState({ clave: '', valor: null });
@@ -1133,7 +1134,7 @@ function Historial() {
   };
   const turnosDelDia = (dia) => [...visibles, ...(enCurso ? [enCurso] : [])]
     .filter((x) => mismoDia(x.abierta_at, dia))
-    .filter((x) => !filtroResultado || resultadoTurno(x) === filtroResultado)
+    .filter((x) => !filtroResultado || filtroResultado === 'cajas' || resultadoTurno(x) === filtroResultado)
     .sort((a, b) => new Date(a.abierta_at) - new Date(b.abierta_at));
 
   /** Tarjeta de un turno en la vista ancha. */
@@ -1261,7 +1262,7 @@ function Historial() {
     }
     // Cada cifra en su tarjeta; al tocarla, la lista muestra solo esas cajas.
     const tarjetas = [
-      { id: null, label: 'Cajas', n: visibles.length, sub: enCursoVisible ? '+ 1 en curso' : null },
+      { id: 'cajas', label: 'Cajas', n: visibles.length + (enCursoVisible ? 1 : 0), cuenta: visibles.length, sub: enCursoVisible ? '+ 1 en curso' : null },
       { id: 'cuadran', label: 'Cuadran', n: cuadran.length },
       { id: 'faltan', label: 'Con faltante', n: faltan.length, sub: faltan.length ? fmt(suma(faltan)) : null, color: 'text-red-600' },
       { id: 'sobran', label: 'Con sobrante', n: sobran.length, sub: sobran.length ? `+${fmt(suma(sobran))}` : null, color: 'text-green-700' },
@@ -1273,7 +1274,7 @@ function Historial() {
         <div className="grid grid-cols-5 gap-4" role="group" aria-label="Resumen del período: toca una cifra para ver esas cajas">
           {tarjetas.map((t) => {
             const elegida = filtroResultado === t.id;
-            const vacia = t.n === 0 && t.id !== null;
+            const vacia = t.n === 0;
             const color = t.n > 0 && t.color ? t.color : 'text-gray-900';
             return (
               <button
@@ -1281,7 +1282,7 @@ function Historial() {
                 type="button"
                 disabled={vacia}
                 aria-pressed={elegida}
-                onClick={() => setFiltroResultado(elegida || t.id === null ? null : t.id)}
+                onClick={() => setFiltroResultado(elegida ? null : t.id)}
                 className={`group min-w-0 rounded-2xl border px-5 py-4 text-left transition-[border-color,box-shadow,background-color,transform] duration-150 ease-out motion-reduce:transition-none ${
                   elegida
                     ? 'border-blue bg-light-blue/60 ring-1 ring-blue'
@@ -1290,15 +1291,15 @@ function Historial() {
               >
                 <span className="flex items-center justify-between gap-2 text-sm text-gray-600">
                   {t.label}
-                  {!vacia && t.id !== null && (
+                  {!vacia && (
                     <svg className={`w-4 h-4 flex-shrink-0 transition-transform motion-reduce:transition-none ${elegida ? 'text-blue rotate-90' : 'text-gray-400 group-hover:translate-x-0.5'}`}
                       fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
                   )}
                 </span>
-                <span className={`mt-1 block text-2xl font-semibold tabular-nums ${vacia ? 'text-gray-500' : color}`}>{t.n}</span>
-                {t.sub && <span className={`mt-0.5 block text-sm tabular-nums ${t.id === null ? 'text-gray-600' : color}`}>{t.sub}</span>}
+                <span className={`mt-1 block text-2xl font-semibold tabular-nums ${vacia ? 'text-gray-500' : color}`}>{t.cuenta ?? t.n}</span>
+                {t.sub && <span className={`mt-0.5 block text-sm tabular-nums ${t.id === 'cajas' ? 'text-gray-600' : color}`}>{t.sub}</span>}
               </button>
             );
           })}
@@ -1307,7 +1308,9 @@ function Historial() {
         {activa && (
           <div className="flex items-center justify-between gap-4 rounded-xl bg-light-blue/60 px-4 py-3">
             <p className="text-base text-dark-blue">
-              Mostrando solo {activa.n === 1 ? 'la caja' : `las ${activa.n} cajas`} <span className="font-semibold">{activa.label.toLowerCase()}</span>
+              {activa.id === 'cajas'
+                ? <>Mostrando solo <span className="font-semibold">los días con cajas</span></>
+                : <>Mostrando solo {activa.n === 1 ? 'la caja' : `las ${activa.n} cajas`} <span className="font-semibold">{activa.label.toLowerCase()}</span></>}
             </p>
             <button
               type="button"
