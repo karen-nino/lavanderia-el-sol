@@ -1007,16 +1007,16 @@ function Historial() {
       c.notas_cierre && { key: 'nc', label: 'Nota de cierre', texto: c.notas_cierre },
     ].filter(Boolean);
     /** Total con fondo, para distinguirlo de los renglones (el texto queda alineado con ellos). */
-    const totalFondo = (label, valor) => (
+    const totalFondo = (label, valor, color = 'text-gray-900') => (
       <div className="col-span-2 -mx-4 mt-2 flex items-center justify-between gap-4 rounded-lg bg-slate-100 px-4 py-3">
         <span className="font-semibold text-gray-900">{label}</span>
-        <span className="font-semibold text-gray-900 tabular-nums">{valor}</span>
+        <span className={`font-semibold tabular-nums ${color}`}>{valor}</span>
       </div>
     );
     const columna = (titulo, filas, total) => (
       <section>
         <h3 className="text-base font-semibold text-gray-900 pb-3 border-b border-gray-200">{titulo}</h3>
-        <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 text-base">
+        <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5 md:gap-y-6 text-base">
           {filas}
           {total}
         </div>
@@ -1089,7 +1089,7 @@ function Historial() {
                 {columna(
                   'Egresos',
                   filasRejilla(d.egresos),
-                  totalFondo('Total', fmt(d.totalEgresos)),
+                  totalFondo('Total', `${Number(d.totalEgresos) > 0 ? '−' : ''}${fmt(d.totalEgresos)}`, 'text-red-600'),
                 )}
                 {columna(
                   'Cierre',
@@ -1104,7 +1104,7 @@ function Historial() {
                     <div className="col-span-2 -mx-4 mt-2 rounded-lg bg-slate-100 px-4 py-3 space-y-3">
                       <div className="flex items-center justify-between gap-4">
                         <span className="font-semibold text-gray-900">Caja final</span>
-                        <span className="font-semibold text-blue-600 tabular-nums">{fmt(c.caja_final)}</span>
+                        <span className="font-semibold text-gray-900 tabular-nums">{fmt(c.caja_final)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-4">
                         <span className="font-semibold text-gray-900">Sobre</span>
@@ -1137,12 +1137,7 @@ function Historial() {
                   )}
                   {c.movimientos?.length > 0 && (
                     <div className={notasModal.length === 0 ? 'md:col-span-2' : ''}>
-                      <div className="flex items-baseline justify-between gap-4 pb-3 border-b border-slate-200">
-                        <h4 className="text-sm font-semibold text-gray-700">Entradas y gastos</h4>
-                        <span className="text-sm text-gray-600 flex-shrink-0">
-                          {c.movimientos.length === 1 ? '1 movimiento' : `${c.movimientos.length} movimientos`}
-                        </span>
-                      </div>
+                      <h4 className="text-sm font-semibold text-gray-700 pb-3 border-b border-slate-200">Entradas y gastos</h4>
                       <div className="divide-y divide-slate-200">
                         {c.movimientos.map((m) => (
                           <div key={m.id} className="flex items-center justify-between gap-6 py-4">
@@ -1158,7 +1153,6 @@ function Historial() {
                           </div>
                         ))}
                       </div>
-                      <p className="pt-3 border-t border-slate-200 text-sm text-gray-600">Ya están sumados en Entradas y Gastos de arriba.</p>
                     </div>
                   )}
                 </div>
