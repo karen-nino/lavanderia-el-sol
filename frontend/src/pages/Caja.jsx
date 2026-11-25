@@ -194,8 +194,9 @@ function Apertura({ data, onAbrir }) {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <p className="text-sm text-gray-500">No hay una caja abierta.</p>
+    // Formulario corto: desde tablet va centrado en una tarjeta, no estirado.
+    <form onSubmit={submit} className="space-y-4 md:max-w-xl md:mx-auto md:rounded-2xl md:border md:border-gray-200 md:bg-white md:p-8 md:space-y-5">
+      <p className="text-sm text-gray-500 md:text-base md:text-gray-600">No hay una caja abierta.</p>
       <ErrorBox message={error} />
       <FondoApertura sugerida={sugerida} admin={admin} monto={monto} onMonto={setMonto} />
       <div>
@@ -455,14 +456,9 @@ function Corte({ data, onCerrar, onAbrir }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
-        <MenuExportar
-          onPdf={() => imprimirCortes(turnoExportable, { titulo: 'Corte de caja', subtitulo: `Turno en curso · ${caja.usuario_apertura || ''}` })}
-          onExcel={() => descargarCortesExcel(turnoExportable, sufijoExport)}
-        />
-      </div>
-      {/* De quién es el turno que se está cortando. */}
-      <div className="rounded-xl bg-light-blue/60 border border-blue-100 px-4 py-3">
+      {/* De quién es el turno y Exportar: en celular, Exportar arriba; desde tablet, en el mismo renglón. */}
+      <div className="flex flex-col-reverse gap-6 md:flex-row md:items-start md:gap-4">
+      <div className="rounded-xl bg-light-blue/60 border border-blue-100 px-4 py-3 md:flex-1 md:px-5 md:py-4">
         <p className="text-sm font-semibold text-dark-blue">
           {esMiTurno ? 'Tu turno' : `Turno de ${caja.usuario_apertura || '—'}`}
         </p>
@@ -472,11 +468,27 @@ function Corte({ data, onCerrar, onAbrir }) {
           <p className="text-sm text-gray-600 mt-1.5">Nota de apertura: {caja.notas_apertura}</p>
         )}
       </div>
+        <div className="flex justify-end flex-shrink-0">
+          <MenuExportar
+            onPdf={() => imprimirCortes(turnoExportable, { titulo: 'Corte de caja', subtitulo: `Turno en curso · ${caja.usuario_apertura || ''}` })}
+            onExcel={() => descargarCortesExcel(turnoExportable, sufijoExport)}
+          />
+        </div>
+      </div>
 
-      <RecuadrosCaja turno={turno} />
+      {/* Desktop: las cuentas a la izquierda y el corte fijo a la derecha. */}
+      <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-[1fr_26rem] lg:gap-8 lg:items-start">
+      <div className="space-y-6">
+        {/* Desde tablet, en 2 columnas: Ingresos a la izquierda; Egresos y Desglose, a la derecha. */}
+        <div className="space-y-6 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 md:items-start md:[&>*:nth-last-child(3)]:row-span-2">
+          <RecuadrosCaja turno={turno} />
+        </div>
 
-      {/* Fichas del turno, para los empleados. */}
-      {!esAdminFn(usuario?.rol) && <FichasCorte caja={caja} />}
+        {/* Fichas del turno, para los empleados. */}
+        {!esAdminFn(usuario?.rol) && <FichasCorte caja={caja} />}
+      </div>
+
+      <div className="lg:sticky lg:top-6">
 
       {!puedeCerrar ? (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
@@ -486,7 +498,8 @@ function Corte({ data, onCerrar, onAbrir }) {
           </p>
         </div>
       ) : (
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="space-y-4 md:rounded-2xl md:border md:border-gray-200 md:bg-white md:p-6 md:space-y-5">
+        <h2 className="hidden md:block text-base font-semibold text-gray-900">Hacer el corte</h2>
         <ErrorBox message={error} />
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Efectivo contado</label>
@@ -564,6 +577,8 @@ function Corte({ data, onCerrar, onAbrir }) {
         </button>
       </form>
       )}
+      </div>
+      </div>
 
       {/* Animación de éxito al cerrar la caja */}
       {exito && (
@@ -1611,8 +1626,8 @@ export default function Caja() {
     ? (data?.abierta ? 'movimientos' : 'corte')
     : tab === 'movimientos' && data && !data.abierta ? 'corte' : tab;
   const seccionLabel = tabs.find((t) => t.id === tabActiva)?.label ?? '';
-  // Historial y Movimientos van a todo lo ancho (como Inventario); Corte, angosto.
-  const anchoMd = tab === 'historial' || tabActiva === 'movimientos' ? 'md:max-w-7xl' : 'md:max-w-2xl';
+  // Todas las pestañas van a todo lo ancho (como Inventario).
+  const anchoMd = 'md:max-w-7xl';
 
   return (
     <div className="min-h-full bg-slate-100">
