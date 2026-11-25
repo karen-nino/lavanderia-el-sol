@@ -592,6 +592,14 @@ function Historial() {
   const [menuCorte, setMenuCorte] = useState(null);       // id del corte con el menú abierto
   const [confirmEliminar, setConfirmEliminar] = useState(null); // corte a eliminar
   const [eliminando, setEliminando] = useState(false);
+  // Corte abierto "a detalle" en un modal (desde el ⋮).
+  const [corteModal, setCorteModal] = useState(null);
+  useEffect(() => {
+    if (!corteModal) return;
+    const onKey = (e) => { if (e.key === 'Escape') setCorteModal(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [corteModal]);
   const menuRef = useRef(null);
 
   // Tablet y desktop (md+) usan la vista ancha: días en renglones y turnos en rejilla.
@@ -811,7 +819,17 @@ function Historial() {
             </svg>
           </button>
           {menuCorte === c.id && (
-            <div className="absolute right-0 mt-1 z-10 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+            <div className="absolute right-0 mt-1 z-10 w-52 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setMenuCorte(null); setCorteModal(c); }}
+                className="w-full flex items-center gap-2 px-3 py-3.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 border-b border-gray-100"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                </svg>
+                Ver corte completo
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -973,6 +991,134 @@ function Historial() {
   // - un turno: la tarjeta es ese turno, con su horario;
   // - varios: el resumen del día y cada turno en su tarjeta;
   // - ninguno: vacía ("Sin corte" / "Pendiente").
+  /**
+   * El corte completo en un modal: cifras del cierre, ingresos y egresos lado a
+   * lado (en tablet/desktop), movimientos y notas, todo desplegado.
+   */
+  const modalCorte = (c) => {
+    const d = desgloseCaja(c);
+    const cobrado = d.comoSeCobro.map((r) => `${r.label.toLowerCase()} ${fmt(r.value)}`).join(' · ');
+    const columna = (titulo, filas, total) => (
+      <section>
+        <h3 className="text-base font-semibold text-gray-900 pb-3 border-b border-gray-200">{titulo}</h3>
+        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-base">
+          {filas}
+          {total}
+        </div>
+      </section>
+    );
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4"
+        onMouseDown={(e) => { if (e.target === e.currentTarget) setCorteModal(null); }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="corte-modal-titulo"
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-modal flex flex-col animate-pop-in"
+        >
+          {/* Encabezado fijo: de quién y cuándo, el resultado y cerrar. */}
+          <div className="flex items-start justify-between gap-4 px-6 md:px-8 pt-7 pb-6 md:pt-8 md:pb-7 border-b border-gray-200 flex-shrink-0">
+            <div className="min-w-0 space-y-1">
+              <h2 id="corte-modal-titulo" className="text-lg font-bold text-gray-900">
+                Corte del {fmtFechaCorta(c.abierta_at)}
+              </h2>
+              <p className="text-base text-gray-800 break-words">{c.usuario_apertura || '—'}</p>
+              <p className="text-sm text-gray-600 tabular-nums">
+                {fmtHora(c.abierta_at)} – {c.en_curso ? 'en curso' : fmtHora(c.cerrada_at)}
+              </p>
+              {pastillaTurno(c) && <div className="pt-2">{pastillaTurno(c)}</div>}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCorteModal(null)}
+              aria-label="Cerrar"
+              autoFocus
+              className="flex-shrink-0 p-2 -mr-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="overflow-y-auto px-6 md:px-8 pt-8 pb-10 md:pt-10 md:pb-12 space-y-10">
+            {/* De dónde salió: ingresos y egresos lado a lado. */}
+            <div className="grid gap-8 md:grid-cols-2">
+              {columna(
+                'Ingresos',
+                <>
+                  {d.cajaAparte && totalRejilla('Caja inicial', fmt(d.cajaInicial))}
+                  {filasRejilla(d.ingresos)}
+                </>,
+                <>
+                  <div className="col-span-2 border-t border-gray-100" />
+                  {totalRejilla(d.ingresos.some((r) => r.subtotal) ? d.totalIngresosLabel : 'Total', fmt(d.totalIngresos))}
+                  {!d.comoSeCobroDentro && <p className="col-span-2 text-sm text-gray-500 leading-relaxed">Cobrado: {cobrado}</p>}
+                </>,
+              )}
+              {/* Egresos y, en la misma columna, el cierre en renglones. */}
+              <div className="space-y-10">
+                {columna(
+                  'Egresos',
+                  filasRejilla(d.egresos),
+                  <>
+                    <div className="col-span-2 border-t border-gray-100" />
+                    {totalRejilla('Total', fmt(d.totalEgresos))}
+                  </>,
+                )}
+                {columna(
+                  'Cierre',
+                  <>
+                    <span className="text-gray-600">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span>
+                    <span className="text-right text-gray-800 tabular-nums">{fmt(c.esperado)}</span>
+                    <span className="text-gray-600">Contado</span>
+                    <span className="text-right text-gray-800 tabular-nums">{c.contado != null ? fmt(c.contado) : '—'}</span>
+                  </>,
+                  c.caja_final != null && (
+                    <>
+                      <div className="col-span-2 border-t border-gray-100" />
+                      <span className="font-semibold text-gray-800">Caja final</span>
+                      <span className="text-right font-semibold text-blue-600 tabular-nums">{fmt(c.caja_final)}</span>
+                      <span className="font-semibold text-gray-800">Sobre</span>
+                      <span className="text-right font-semibold text-gray-900 tabular-nums">{fmt(c.sobre)}</span>
+                    </>
+                  ),
+                )}
+              </div>
+            </div>
+
+            {c.movimientos?.length > 0 && (
+              <section>
+                <h3 className="text-base font-semibold text-gray-900 pb-3 border-b border-gray-200">
+                  Entradas y gastos ({c.movimientos.length})
+                </h3>
+                <div className="divide-y divide-gray-100">
+                  {c.movimientos.map((m) => (
+                    <div key={m.id} className="flex items-center justify-between gap-4 py-3.5">
+                      <div className="min-w-0">
+                        <p className="text-base text-gray-800 break-words">{m.concepto}</p>
+                        <p className="text-sm text-gray-500 mt-0.5">
+                          {m.tipo === 'salida' ? 'Gasto' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
+                        </p>
+                      </div>
+                      <span className={`flex-shrink-0 whitespace-nowrap text-base font-semibold tabular-nums ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
+                        {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {pieCorte(c)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const turnosDelDia = (dia) => [...visibles, ...(enCurso ? [enCurso] : [])]
     .filter((x) => mismoDia(x.abierta_at, dia))
     .sort((a, b) => new Date(a.abierta_at) - new Date(b.abierta_at));
@@ -1403,6 +1549,8 @@ function Historial() {
           ))}
         </div>
       )}
+
+      {corteModal && modalCorte(corteModal)}
 
       {/* Confirmación de eliminar corte */}
       {confirmEliminar && (
