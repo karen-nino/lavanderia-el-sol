@@ -799,7 +799,7 @@ function Historial() {
   const botonOpciones = (c) => {
     if (c.en_curso) return null;
     return (
-        <div className="relative flex-shrink-0" ref={menuCorte === c.id ? menuRef : null}>
+        <div className="relative z-10 flex-shrink-0" ref={menuCorte === c.id ? menuRef : null}>
           <button
             type="button"
             onClick={() => setMenuCorte((prev) => (prev === c.id ? null : c.id))}
@@ -1137,7 +1137,11 @@ function Historial() {
 
   /** Tarjeta de un turno en la vista ancha. */
   const tarjetaTurno = (c, i, total) => (
-    <article key={c.id} className={`flex flex-col rounded-xl border bg-white p-5 ${c.en_curso ? 'border-green-200' : 'border-gray-200'}`}>
+    // Toda la tarjeta abre el detalle: el botón "Ver detalle" se estira sobre ella (after:inset-0)
+    // y el ⋮ queda encima (z-10).
+    <article key={c.id} className={`relative flex flex-col rounded-xl border bg-white p-5 transition-colors hover:bg-gray-50/60 ${
+      c.en_curso ? 'border-green-200 hover:border-green-300' : 'border-gray-200 hover:border-gray-300'
+    }`}>
       {/* Turno, nombre completo y horario, cada uno en su línea; solo el ⋮ a la derecha. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
@@ -1188,9 +1192,13 @@ function Historial() {
         <button
           type="button"
           onClick={() => setCorteModal(c)}
-          className="w-full rounded-lg border border-gray-300 bg-white py-3 text-base font-medium text-gray-800 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue transition-colors"
+          className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white py-3 text-base font-medium text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue transition-colors after:absolute after:inset-0 after:rounded-xl after:content-['']"
         >
-          Ver corte completo
+          Ver detalle
+          {/* Ampliar, a la derecha: avisa que se abre en grande. */}
+          <svg className="w-5 h-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+          </svg>
         </button>
       </div>
     </article>
