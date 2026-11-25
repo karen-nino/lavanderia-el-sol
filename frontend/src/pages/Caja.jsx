@@ -998,6 +998,17 @@ function Historial() {
    */
   const modalCorte = (c) => {
     const d = desgloseCaja(c);
+    // Renglones de Ingresos que el modal acomoda aparte (o que repiten a "Cómo se cobró").
+    // Lo de "Cómo se cobró" solo se repite cuando hubo transferencias (va dentro del reparto).
+    const QUITAR_MODAL = ['Caja inicial', 'Entradas', ...(d.comoSeCobroDentro
+      ? ['En el cajón', 'Cómo se cobró', 'Efectivo', 'Transferencia', 'Tarjeta', 'Ventas en efectivo']
+      : [])];
+    // Todos los ingresos: con transferencias, caja inicial + entradas + total vendido;
+    // sin ellas, todo es efectivo y coincide con el total de siempre.
+    const vendido = d.ingresos.find((r) => r.subtotal)?.value;
+    const totalIngresosTodo = d.comoSeCobroDentro && vendido != null
+      ? (d.cajaAparte ? 0 : d.cajaInicial) + (Number(c.entradas) || 0) + vendido
+      : d.totalIngresos;
     // El mismo documento que "Exportar PDF" del ⋮.
     const imprimirModal = () => (c.en_curso
       ? imprimirCortes(c, { titulo: 'Corte de caja', subtitulo: `Turno en curso · ${c.usuario_apertura || ''}` })
@@ -1095,12 +1106,20 @@ function Historial() {
                 'Ingresos',
                 <>
                   {d.cajaAparte && totalRejilla('Caja inicial', fmt(d.cajaInicial))}
-                  {filasRejilla(d.ingresos)}
+                  {/* Caja inicial y Entradas primero, luego lo vendido. Los totales y
+                      Cómo se cobró van abajo. */}
+                  {filasRejilla([
+                    ...d.ingresos.filter((r) => r.label === 'Caja inicial'),
+                    ...d.ingresos.filter((r) => r.label === 'Entradas'),
+                    ...d.ingresos.filter((r) => !QUITAR_MODAL.includes(r.label) && !r.subtotal),
+                  ])}
                 </>,
                 <>
-                  {totalFondo(d.ingresos.some((r) => r.subtotal) ? d.totalIngresosLabel : 'Total', fmt(d.totalIngresos))}
+                  {/* Total ingresos: todo lo de arriba (caja inicial, entradas y lo vendido,
+                      también lo cobrado por transferencia), como en Caja → Corte. */}
+                  {totalFondo('Total ingresos', fmt(totalIngresosTodo))}
                   {/* Cómo se cobró: un renglón por forma de pago (informativo, no se suma). */}
-                  {!d.comoSeCobroDentro && d.comoSeCobro.length > 0 && (
+                  {d.comoSeCobro.length > 0 && (
                     <>
                       <p className="col-span-2 pt-6 text-sm font-semibold text-gray-700">Cómo se cobró</p>
                       {d.comoSeCobro.map((r) => (
@@ -1118,7 +1137,7 @@ function Historial() {
                 {columna(
                   'Egresos',
                   filasRejilla(d.egresos),
-                  totalFondo('Total', `${Number(d.totalEgresos) > 0 ? '−' : ''}${fmt(d.totalEgresos)}`, 'text-red-600'),
+                  totalFondo('Total', `${Number(d.totalEgresos) > 0 ? '−' : ''}${fmt(d.totalEgresos)}`, Number(d.totalEgresos) > 0 ? 'text-red-600' : 'text-gray-900'),
                 )}
                 {columna(
                   'Cierre',
