@@ -594,6 +594,15 @@ function Historial() {
   const [eliminando, setEliminando] = useState(false);
   const menuRef = useRef(null);
 
+  // Tablet y desktop (md+) usan la vista ancha: días en renglones y turnos en rejilla.
+  const [ancho, setAncho] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = (e) => setAncho(e.matches);
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, []);
+
   // Menú de exportación (PDF/Excel) del período visible.
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef(null);
@@ -745,29 +754,48 @@ function Historial() {
   // Menú de opciones de un corte (badge de diferencia y ⋮ para eliminar; el ⋮
   // solo lo ve el Admin Main).
   const menuOpciones = (c) => {
+    if (c.en_curso) return pastillaTurno(c);
+    return (
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {pastillaTurno(c)}
+        {botonOpciones(c)}
+      </div>
+    );
+  };
+
+  /** Resultado del turno: En curso, Sin conteo, Cuadra o la diferencia. */
+  const pastillaTurno = (c) => {
     if (c.en_curso) {
       return (
-        <span className="flex-shrink-0 text-sm font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700">
+        <span className="inline-block flex-shrink-0 text-sm font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700">
           En curso
         </span>
       );
     }
-    const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
+    if (c.cierre_automatico) {
+      return (
+        <span className="inline-block text-sm font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+          Sin conteo
+        </span>
+      );
+    }
+    if (c.diferencia == null) return null;
+    const cuadra = Math.abs(c.diferencia) < 0.005;
     return (
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {c.cierre_automatico ? (
-          <span className="text-sm font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
-            Sin conteo
-          </span>
-        ) : c.diferencia != null && (
-          <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
-            cuadra ? 'bg-blue-50 text-blue-700'
-              : c.diferencia < 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
-          }`}>
-            {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
-          </span>
-        )}
-        <div className="relative" ref={menuCorte === c.id ? menuRef : null}>
+      <span className={`inline-block text-sm font-semibold px-2.5 py-1 rounded-full ${
+        cuadra ? 'bg-blue-50 text-blue-700'
+          : c.diferencia < 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+      }`}>
+        {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
+      </span>
+    );
+  };
+
+  /** Botón ⋮ de un corte cerrado (PDF, Excel y, para el Admin Main, eliminar). */
+  const botonOpciones = (c) => {
+    if (c.en_curso) return null;
+    return (
+        <div className="relative flex-shrink-0" ref={menuCorte === c.id ? menuRef : null}>
           <button
             type="button"
             onClick={() => setMenuCorte((prev) => (prev === c.id ? null : c.id))}
@@ -825,20 +853,19 @@ function Historial() {
             </div>
           )}
         </div>
-      </div>
     );
   };
 
   // Renglones { label, value, sign, nota } de la rejilla.
   const filasRejilla = (filas) => filas.map((r) => r.titulo ? (
-    <p key={r.label} className="col-span-2 pt-1 text-sm font-medium uppercase tracking-wide text-gray-400">{r.label}</p>
+    <p key={r.label} className="col-span-2 pt-1 md:pt-2 text-sm font-medium uppercase tracking-wide text-gray-400">{r.label}</p>
   ) : r.subtotal ? (
     <div key={r.label} className="contents">{totalRejilla(r.label, fmt(r.value))}</div>
   ) : (
     <div key={r.label} className="contents">
       <span className="text-gray-600">
         {r.label}
-        {r.nota && <span className="block text-sm text-gray-500">{r.nota}</span>}
+        {r.nota && <span className="block text-sm text-gray-500 md:mt-0.5">{r.nota}</span>}
       </span>
       <span className="text-right text-gray-800">{r.sign}{fmt(r.value)}</span>
     </div>
@@ -850,7 +877,7 @@ function Historial() {
     </>
   );
   const tituloRejilla = (texto) => (
-    <p className="col-span-2 pt-3 font-semibold text-gray-800">{texto}</p>
+    <p className="col-span-2 pt-3 md:pt-5 font-semibold text-gray-800">{texto}</p>
   );
 
   /** Quién cerró, solo si no es quien abrió (o lo cerró el sistema), y las notas. */
@@ -863,15 +890,12 @@ function Historial() {
       c.notas_cierre && <p key="nc">Nota de cierre: {c.notas_cierre}</p>,
     ].filter(Boolean);
     if (lineas.length === 0) return null;
-    return <div className="mt-4 space-y-1.5 text-sm text-gray-600">{lineas}</div>;
+    return <div className="mt-4 md:mt-6 space-y-1.5 md:space-y-2.5 text-sm text-gray-600">{lineas}</div>;
   };
 
   // Cuerpo del corte: lo del cierre (esperado, contado, caja final y sobre) y,
   // plegado, de dónde salió (ingresos, egresos y movimientos).
-  const cuerpoCorte = (c) => {
-    const d = desgloseCaja(c);
-    const cobrado = d.comoSeCobro.map((r) => `${r.label.toLowerCase()} ${fmt(r.value)}`).join(' · ');
-    return (
+  const cuerpoCorte = (c) => (
     <>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
         <span className="text-gray-600">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span><span className="text-right text-gray-800">{fmt(c.esperado)}</span>
@@ -884,8 +908,17 @@ function Historial() {
           </>
         )}
       </div>
-      {/* El detalle, plegado: mismo tamaño y aire que el resumen. */}
-      <div className="mt-4">
+      {detalleCorte(c)}
+      {pieCorte(c)}
+    </>
+  );
+
+  /** "Ver detalle": de dónde salió (ingresos, egresos y movimientos), plegado. */
+  const detalleCorte = (c) => {
+    const d = desgloseCaja(c);
+    const cobrado = d.comoSeCobro.map((r) => `${r.label.toLowerCase()} ${fmt(r.value)}`).join(' · ');
+    return (
+      <div className="mt-4 md:mt-6">
         <button
           type="button"
           onClick={() => alternarDet(c.id)}
@@ -899,13 +932,13 @@ function Historial() {
           </svg>
         </button>
         {detAbiertos.has(c.id) && (
-          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3 text-base">
+          <div className="mt-2 md:mt-4 grid grid-cols-2 gap-x-4 gap-y-3 md:gap-y-4 text-base">
             {d.cajaAparte && totalRejilla('Caja inicial', fmt(d.cajaInicial))}
             {tituloRejilla('Ingresos')}
             {filasRejilla(d.ingresos)}
             {totalRejilla(d.ingresos.some((r) => r.subtotal) ? d.totalIngresosLabel : 'Total', fmt(d.totalIngresos))}
             {/* Informativo: no se suma. */}
-            {!d.comoSeCobroDentro && <p className="col-span-2 -mt-1 text-sm text-gray-500">Cobrado: {cobrado}</p>}
+            {!d.comoSeCobroDentro && <p className="col-span-2 -mt-1 md:mt-0 text-sm text-gray-500 md:leading-relaxed">Cobrado: {cobrado}</p>}
             {tituloRejilla('Egresos')}
             {filasRejilla(d.egresos)}
             {totalRejilla('Total', fmt(d.totalEgresos))}
@@ -915,7 +948,7 @@ function Historial() {
                 {tituloRejilla(`Entradas y gastos (${c.movimientos.length})`)}
                 <div className="col-span-2 divide-y divide-gray-100">
                   {c.movimientos.map((m) => (
-                    <div key={m.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div key={m.id} className="flex items-center justify-between gap-3 py-2.5 md:py-3.5">
                       <div className="min-w-0">
                         <p className="text-base text-gray-800 break-words">{m.concepto}</p>
                         <p className="text-sm text-gray-500">
@@ -933,8 +966,6 @@ function Historial() {
           </div>
         )}
       </div>
-      {pieCorte(c)}
-    </>
     );
   };
 
@@ -942,10 +973,150 @@ function Historial() {
   // - un turno: la tarjeta es ese turno, con su horario;
   // - varios: el resumen del día y cada turno en su tarjeta;
   // - ninguno: vacía ("Sin corte" / "Pendiente").
+  const turnosDelDia = (dia) => [...visibles, ...(enCurso ? [enCurso] : [])]
+    .filter((x) => mismoDia(x.abierta_at, dia))
+    .sort((a, b) => new Date(a.abierta_at) - new Date(b.abierta_at));
+
+  /** Una cifra del turno: etiqueta arriba y el número abajo, fácil de recorrer. */
+  const cifra = (label, valor, clase = 'text-gray-900') => (
+    <div className="min-w-0">
+      <p className="text-sm text-gray-500">{label}</p>
+      <p className={`mt-0.5 text-lg font-semibold tabular-nums ${clase}`}>{valor}</p>
+    </div>
+  );
+
+  /** Tarjeta de un turno en la vista ancha. */
+  const tarjetaTurno = (c, i, total) => (
+    <article key={c.id} className={`rounded-xl border bg-white p-5 ${c.en_curso ? 'border-green-200' : 'border-gray-200'}`}>
+      {/* Turno, nombre completo y horario, cada uno en su línea; solo el ⋮ a la derecha. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          {total > 1 && <p className="text-sm font-medium text-gray-500">Turno {i + 1}</p>}
+          <p className="text-base font-semibold text-gray-900 break-words">{c.usuario_apertura || '—'}</p>
+          <p className="text-sm text-gray-600 tabular-nums">
+            {fmtHora(c.abierta_at)} – {c.en_curso ? 'en curso' : fmtHora(c.cerrada_at)}
+          </p>
+        </div>
+        {botonOpciones(c)}
+      </div>
+      {/* El resultado, lejos del ⋮. */}
+      {pastillaTurno(c) && <div className="mt-3">{pastillaTurno(c)}</div>}
+      <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-6">
+        {cifra(c.en_curso ? 'Esperado hasta ahora' : 'Esperado', fmt(c.esperado))}
+        {cifra('Contado', c.contado != null ? fmt(c.contado) : '—', c.contado != null ? 'text-gray-900' : 'text-gray-400')}
+        {c.caja_final != null && cifra('Caja final', fmt(c.caja_final), 'text-blue-600')}
+        {c.caja_final != null && cifra('Sobre', fmt(c.sobre))}
+      </div>
+      {detalleCorte(c)}
+      {pieCorte(c)}
+    </article>
+  );
+
+  /**
+   * Un día en la vista ancha: la fecha (a la izquierda desde lg) y sus turnos en
+   * rejilla. Sin turnos, un renglón delgado.
+   */
+  const renderDiaAncho = (dia) => {
+    const turnos = turnosDelDia(dia);
+    const hoy = mismoDia(dia, hoy0);
+    const futuro = dia > hoy0;
+    const fecha = (
+      <div className="min-w-0">
+        <h4 className={`text-base font-semibold ${hoy ? 'text-blue-700' : 'text-gray-900'}`}>
+          {nombreDia(dia)} {dia.getDate()} de {MESES[dia.getMonth()]}
+          {hoy && (
+            <span className="ml-2 align-middle text-xs font-semibold px-2 py-0.5 rounded-full bg-blue text-white">Hoy</span>
+          )}
+        </h4>
+        {turnos.length > 0 && (
+          <p className="text-sm text-gray-600 mt-0.5">{turnos.length === 1 ? '1 turno' : `${turnos.length} turnos`}</p>
+        )}
+      </div>
+    );
+    if (turnos.length === 0) {
+      return (
+        <div key={dia.toISOString()} className="py-4 flex items-center justify-between gap-4 lg:grid lg:grid-cols-[14rem_1fr] lg:gap-8">
+          {fecha}
+          <p className="text-sm text-gray-500 lg:rounded-xl lg:border lg:border-dashed lg:border-gray-300 lg:px-5 lg:py-3">
+            {futuro ? 'Pendiente' : 'Sin corte'}
+          </p>
+        </div>
+      );
+    }
+    // Varios turnos: el total del día va con la fecha.
+    const resumenVarios = turnos.length > 1 && (() => {
+      const suma = (f) => turnos.reduce((t, c) => t + (Number(f(c)) || 0), 0);
+      const efectivo = suma((c) => c.ventas_desglose?.efectivo ?? c.ventas);
+      const transferencia = suma((c) => c.ventas_desglose?.transferencia);
+      const ingresos = (Number(turnos[0]?.monto_inicial) || 0) + suma((c) => c.entradas) + efectivo;
+      const egresos = suma((c) => desgloseCaja(c).totalEgresos);
+      return (
+        <div className="space-y-3">
+          {chipDia(turnos)}
+          <dl className="grid grid-cols-3 gap-4 lg:grid-cols-1 lg:gap-2 text-sm">
+            {[['Ingresos', fmt(ingresos)], ['Egresos', `−${fmt(egresos)}`], ['Transferencias', fmt(transferencia)]].map(([k, v]) => (
+              <div key={k} className="flex flex-col lg:flex-row lg:justify-between lg:gap-3">
+                <dt className="text-gray-500">{k}</dt>
+                <dd className="font-medium text-gray-800 tabular-nums">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          {turnos.some((c) => c.cierre_automatico) && (
+            <p className="text-sm text-amber-700">Un turno se cerró sin conteo: no entra en la diferencia.</p>
+          )}
+        </div>
+      );
+    })();
+    return (
+      <div key={dia.toISOString()} className="py-6 lg:grid lg:grid-cols-[14rem_1fr] lg:gap-8">
+        <div className="mb-4 lg:mb-0 flex items-start justify-between gap-6 lg:flex-col lg:justify-start lg:gap-4">
+          {fecha}
+          {resumenVarios}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 items-start">
+          {turnos.map((c, i) => tarjetaTurno(c, i, turnos.length))}
+        </div>
+      </div>
+    );
+  };
+
+  /** Resumen del período (vista ancha, menos en "Hoy"): ¿cuadró la caja? */
+  const resumenPeriodo = () => {
+    if (periodo === 'hoy' || (periodo === 'custom' && (!desde || !hasta))) return null;
+    const contados = visibles.filter((c) => !c.cierre_automatico && c.diferencia != null);
+    const cuadran = contados.filter((c) => Math.abs(c.diferencia) < 0.005);
+    const faltan = contados.filter((c) => c.diferencia <= -0.005);
+    const sobran = contados.filter((c) => c.diferencia >= 0.005);
+    const sinConteo = visibles.filter((c) => c.cierre_automatico).length;
+    const suma = (l) => l.reduce((t, c) => t + c.diferencia, 0);
+    const neta = suma(contados);
+    const netaCuadra = Math.abs(neta) < 0.005;
+    if (visibles.length === 0 && !enCursoVisible) {
+      return <p className="text-base text-gray-600">No hay cortes en este período.</p>;
+    }
+    const dato = (label, valor, sub, clase = 'text-gray-900') => (
+      <div className="min-w-0 bg-white px-5 py-4">
+        <p className="text-sm text-gray-500">{label}</p>
+        <p className={`mt-1 text-2xl font-semibold tabular-nums ${clase}`}>{valor}</p>
+        {sub && <p className={`mt-0.5 text-sm tabular-nums ${clase}`}>{sub}</p>}
+      </div>
+    );
+    return (
+      <section aria-label="Resumen del período" className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 grid grid-cols-3 lg:grid-cols-6 gap-px">
+        {dato('Cortes', visibles.length, enCursoVisible ? '+ 1 en curso' : null)}
+        {dato('Cuadran', cuadran.length)}
+        {dato('Con faltante', faltan.length, faltan.length ? fmt(suma(faltan)) : null, faltan.length ? 'text-red-600' : 'text-gray-900')}
+        {dato('Con sobrante', sobran.length, sobran.length ? `+${fmt(suma(sobran))}` : null, sobran.length ? 'text-green-600' : 'text-gray-900')}
+        {dato('Sin conteo', sinConteo, null, sinConteo ? 'text-amber-700' : 'text-gray-900')}
+        {dato('Diferencia neta', contados.length ? `${neta > 0 ? '+' : ''}${fmt(neta)}` : '—', contados.length && netaCuadra ? 'Cuadra' : null,
+          !contados.length ? 'text-gray-400' : netaCuadra ? 'text-blue-700' : neta < 0 ? 'text-red-600' : 'text-green-600')}
+      </section>
+    );
+  };
+
   const renderDia = (dia) => {
-    const turnos = [...visibles, ...(enCurso ? [enCurso] : [])]
-      .filter((x) => mismoDia(x.abierta_at, dia))
-      .sort((a, b) => new Date(a.abierta_at) - new Date(b.abierta_at));
+    if (ancho) return renderDiaAncho(dia);
+    const turnos = turnosDelDia(dia);
     const hoy = mismoDia(dia, hoy0);
     const futuro = dia > hoy0;
     const uno = turnos.length === 1 ? turnos[0] : null;
@@ -1073,8 +1244,8 @@ function Historial() {
     <div className="space-y-10">
       {/* Período (selector que abre su panel) y Exportar, en un mismo renglón y del mismo alto. */}
       <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div ref={periodoRef} className="relative flex-1 min-w-0">
+        <div className="flex items-center gap-3 md:justify-between">
+          <div ref={periodoRef} className="relative flex-1 min-w-0 md:flex-none md:w-96">
             <button
               type="button"
               onClick={() => { setMostrarPeriodo((v) => !v); setSubFiltro(null); }}
@@ -1200,30 +1371,34 @@ function Historial() {
         )}
       </div>
 
+      {ancho && resumenPeriodo()}
+
       {periodo === 'hoy' ? (
         // Solo la tarjeta de hoy, con sus turnos (y el que siga en curso).
-        <div className="space-y-4">
+        <div className={ancho ? '-mt-4' : 'space-y-4'}>
           {renderDia(hoy0)}
         </div>
       ) : periodo === 'semana' ? (
         // Un contenedor por día (lunes → domingo): vacíos sin corte, hoy resaltado y
         // los que no llegan, "Pendiente".
-        <div className="space-y-4">
+        <div className={ancho ? '-mt-4 divide-y divide-gray-200' : 'space-y-4'}>
           {diasSemana.map(renderDia)}
         </div>
       ) : periodo === 'custom' && (!desde || !hasta) ? (
         <EmptyState>Elige las fechas del rango.</EmptyState>
       ) : (
         // Mes, Año y Personalizado: cada semana con sus días.
-        <div className="space-y-24">
+        <div className={ancho ? 'space-y-12' : 'space-y-24'}>
           {agruparEnSemanas(
             periodo === 'mes' ? diasDeMes(anioSel, mesSel)
               : periodo === 'anio' ? diasDeAnio(anioSel)
               : diasDeRango(desde, hasta)
           ).map((sem) => (
-            <div key={sem.clave} className="space-y-4">
-              <h3 className="text-lg font-bold text-dark-blue px-1">{sem.titulo}</h3>
-              {sem.dias.map(renderDia)}
+            <div key={sem.clave} className={ancho ? '' : 'space-y-4'}>
+              <h3 className={`text-lg font-bold text-dark-blue px-1 ${ancho ? 'pb-3 border-b-2 border-gray-200' : ''}`}>{sem.titulo}</h3>
+              {ancho
+                ? <div className="divide-y divide-gray-200">{sem.dias.map(renderDia)}</div>
+                : sem.dias.map(renderDia)}
             </div>
           ))}
         </div>
@@ -1325,12 +1500,14 @@ export default function Caja() {
     ? (data?.abierta ? 'movimientos' : 'corte')
     : tab === 'movimientos' && data && !data.abierta ? 'corte' : tab;
   const seccionLabel = tabs.find((t) => t.id === tabActiva)?.label ?? '';
+  // El Historial va a todo lo ancho (como Inventario); Movimientos y Corte, angostos.
+  const anchoMd = tab === 'historial' ? 'md:max-w-7xl' : 'md:max-w-2xl';
 
   return (
     <div className="min-h-full bg-slate-100">
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-movil md:max-w-2xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-start justify-between gap-3">
+        <div className={`max-w-movil ${anchoMd} mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-start justify-between gap-3`}>
           <div>
             <h1 className="text-xl font-bold text-gray-800">Caja</h1>
             {/* El subtítulo es la sección actual (el período ya se ve en su selector). */}
@@ -1364,7 +1541,7 @@ export default function Caja() {
       <SucursalBar />
 
       {/* Contenido */}
-      <div className="max-w-movil md:max-w-2xl mx-auto px-6 md:px-8 py-6 space-y-6">
+      <div className={`max-w-movil ${anchoMd} mx-auto px-6 md:px-8 py-6 space-y-6`}>
 
       {loading && tab !== 'historial' && <Spinner />}
       {error && tab !== 'historial' && <ErrorBox message={error} />}
