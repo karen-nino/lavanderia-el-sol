@@ -1168,14 +1168,6 @@ function Historial() {
     .filter((x) => mismoDia(x.abierta_at, dia))
     .sort((a, b) => new Date(a.abierta_at) - new Date(b.abierta_at));
 
-  /** Una cifra del turno: etiqueta arriba y el número abajo, fácil de recorrer. */
-  const cifra = (label, valor, clase = 'text-gray-900') => (
-    <div className="min-w-0">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-0.5 text-lg font-semibold tabular-nums ${clase}`}>{valor}</p>
-    </div>
-  );
-
   /** Tarjeta de un turno en la vista ancha. */
   const tarjetaTurno = (c, i, total) => (
     <article key={c.id} className={`rounded-xl border bg-white p-5 ${c.en_curso ? 'border-green-200' : 'border-gray-200'}`}>
@@ -1192,12 +1184,29 @@ function Historial() {
       </div>
       {/* El resultado, lejos del ⋮. */}
       {pastillaTurno(c) && <div className="mt-3">{pastillaTurno(c)}</div>}
-      <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-6">
-        {cifra(c.en_curso ? 'Esperado hasta ahora' : 'Esperado', fmt(c.esperado))}
-        {cifra('Contado', c.contado != null ? fmt(c.contado) : '—', c.contado != null ? 'text-gray-900' : 'text-gray-400')}
-        {c.caja_final != null && cifra('Caja final', fmt(c.caja_final), 'text-blue-600')}
-        {c.caja_final != null && cifra('Sobre', fmt(c.sobre))}
-      </div>
+      {/* El cierre en renglones, como en el modal: Caja final y Sobre con fondo. */}
+      <dl className="mt-6 space-y-4 text-base">
+        <div className="flex items-center justify-between gap-4">
+          <dt className="text-gray-600">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</dt>
+          <dd className="text-gray-800 tabular-nums">{fmt(c.esperado)}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <dt className="text-gray-600">Contado</dt>
+          <dd className={`tabular-nums ${c.contado != null ? 'text-gray-800' : 'text-gray-400'}`}>{c.contado != null ? fmt(c.contado) : '—'}</dd>
+        </div>
+        {c.caja_final != null && (
+          <div className="-mx-3 rounded-lg bg-slate-100 px-3 py-3 space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <dt className="font-semibold text-gray-900">Caja final</dt>
+              <dd className="font-semibold text-gray-900 tabular-nums">{fmt(c.caja_final)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <dt className="font-semibold text-gray-900">Sobre</dt>
+              <dd className="font-semibold text-gray-900 tabular-nums">{fmt(c.sobre)}</dd>
+            </div>
+          </div>
+        )}
+      </dl>
       {detalleCorte(c)}
       {pieCorte(c)}
     </article>
