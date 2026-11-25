@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
@@ -1016,10 +1017,10 @@ function Historial() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="corte-modal-titulo"
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-modal flex flex-col animate-pop-in"
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-modal flex flex-col animate-pop-in"
         >
           {/* Encabezado fijo: de quién y cuándo, el resultado y cerrar. */}
-          <div className="flex items-start justify-between gap-4 px-6 md:px-8 pt-7 pb-6 md:pt-8 md:pb-7 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-start justify-between gap-4 px-6 md:px-10 pt-7 pb-6 md:pt-8 md:pb-7 border-b border-gray-200 flex-shrink-0">
             <div className="min-w-0 space-y-1">
               <h2 id="corte-modal-titulo" className="text-lg font-bold text-gray-900">
                 Corte del {fmtFechaCorta(c.abierta_at)}
@@ -1043,9 +1044,9 @@ function Historial() {
             </button>
           </div>
 
-          <div className="overflow-y-auto px-6 md:px-8 pt-8 pb-10 md:pt-10 md:pb-12 space-y-10">
+          <div className="overflow-y-auto px-6 md:px-10 pt-8 pb-10 md:pt-10 md:pb-12 space-y-10">
             {/* De dónde salió: ingresos y egresos lado a lado. */}
-            <div className="grid gap-8 md:grid-cols-2">
+            <div className="grid gap-10 md:grid-cols-2 md:gap-x-16 lg:gap-x-24">
               {columna(
                 'Ingresos',
                 <>
@@ -1089,12 +1090,17 @@ function Historial() {
               </div>
             </div>
 
+            {/* El desglose de Entradas y Gastos, en su recuadro: es detalle, no se vuelve a sumar. */}
             {c.movimientos?.length > 0 && (
-              <section>
-                <h3 className="text-base font-semibold text-gray-900 pb-3 border-b border-gray-200">
-                  Entradas y gastos ({c.movimientos.length})
-                </h3>
-                <div className="divide-y divide-gray-100">
+              <section className="rounded-xl bg-slate-50 border border-slate-200 px-5 md:px-6 pt-5 pb-2">
+                <div className="flex items-baseline justify-between gap-4">
+                  <h3 className="text-base font-semibold text-gray-900">Detalle de entradas y gastos</h3>
+                  <span className="text-sm text-gray-600 flex-shrink-0">
+                    {c.movimientos.length === 1 ? '1 movimiento' : `${c.movimientos.length} movimientos`}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm text-gray-600">Ya están sumados en Entradas y Gastos de arriba.</p>
+                <div className="mt-3 divide-y divide-slate-200">
                   {c.movimientos.map((m) => (
                     <div key={m.id} className="flex items-center justify-between gap-4 py-3.5">
                       <div className="min-w-0">
@@ -1550,7 +1556,8 @@ function Historial() {
         </div>
       )}
 
-      {corteModal && modalCorte(corteModal)}
+      {/* En el body: la capa oscura cubre toda la pantalla, sin huecos arriba. */}
+      {corteModal && createPortal(modalCorte(corteModal), document.body)}
 
       {/* Confirmación de eliminar corte */}
       {confirmEliminar && (
