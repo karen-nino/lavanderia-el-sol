@@ -248,10 +248,17 @@ function Movimientos({ data, onChange }) {
   };
 
   const movimientos = data.movimientos ?? [];
+  // Totales del turno, para el encabezado de la lista.
+  const sumaTipo = (t) => movimientos.filter((m) => m.tipo === t).reduce((a, m) => a + (Number(m.monto) || 0), 0);
+  const totalEntradas = sumaTipo('entrada');
+  const totalGastos = sumaTipo('salida');
 
   return (
-    <div className="space-y-12">
-      <form onSubmit={submit} className="space-y-8">
+    // Celular: uno debajo del otro. Tablet: formulario arriba y lista a lo ancho.
+    // Desktop: formulario fijo a la izquierda y la lista a la derecha.
+    <div className="space-y-12 md:space-y-10 lg:space-y-0 lg:grid lg:grid-cols-[24rem_1fr] lg:gap-10 lg:items-start">
+      <form onSubmit={submit} className="space-y-8 md:space-y-6 md:rounded-2xl md:border md:border-gray-200 md:bg-white md:p-6 lg:sticky lg:top-6">
+        <h2 className="hidden md:block text-base font-semibold text-gray-900">Registrar movimiento</h2>
         <ErrorBox message={error} />
         <div className="flex gap-2">
           {[
@@ -270,6 +277,8 @@ function Movimientos({ data, onChange }) {
             </button>
           ))}
         </div>
+        {/* Tablet: Concepto y Monto lado a lado; celular y la columna de desktop, uno bajo otro. */}
+        <div className="space-y-8 md:space-y-0 md:grid md:grid-cols-[1fr_12rem] md:gap-4 lg:block lg:space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Concepto</label>
           <input
@@ -288,6 +297,7 @@ function Movimientos({ data, onChange }) {
             />
           </ConPesos>
         </div>
+        </div>
         <button
           type="submit" disabled={saving}
           className="w-full bg-blue hover:bg-blue/90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60"
@@ -296,21 +306,40 @@ function Movimientos({ data, onChange }) {
         </button>
       </form>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-700">Movimientos</h2>
+      <div className="bg-white rounded-xl md:rounded-2xl border border-gray-200 overflow-hidden">
+        {/* Encabezado: título y, desde tablet, lo que suman entradas y gastos del turno. */}
+        <div className="px-4 py-3 md:px-6 md:py-5 border-b border-gray-200 md:flex md:items-center md:justify-between md:gap-6">
+          <h2 className="text-sm md:text-base font-semibold text-gray-700 md:text-gray-900">
+            Movimientos<span className="hidden md:inline"> del turno</span>
+          </h2>
+          {movimientos.length > 0 && (
+            <p className="hidden md:flex items-center gap-6 text-sm text-gray-600">
+              {puedeEntrada && (
+                <span>Entradas <span className="ml-1 text-base font-semibold text-green-700 tabular-nums">+{fmt(totalEntradas)}</span></span>
+              )}
+              <span>Gastos <span className="ml-1 text-base font-semibold text-red-600 tabular-nums">−{fmt(totalGastos)}</span></span>
+            </p>
+          )}
         </div>
         {movimientos.length === 0 ? (
           <EmptyState>Sin movimientos registrados.</EmptyState>
         ) : (
           <div className="divide-y divide-gray-100">
             {movimientos.map((m) => (
-              <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-3 md:gap-6 md:px-6 md:py-4">
                 <div className="min-w-0">
-                  <p className="text-base font-medium text-gray-800 truncate">{m.concepto}</p>
-                  <p className="text-sm text-gray-400">{m.usuario} · {fmtHora(m.created_at)}</p>
+                  <p className="text-base font-medium text-gray-800 truncate md:whitespace-normal md:break-words">{m.concepto}</p>
+                  <p className="text-sm text-gray-500 md:mt-1 md:flex md:items-center md:gap-2">
+                    {/* Desde tablet, qué fue (Gasto o Entrada) en su pastilla. */}
+                    <span className={`hidden md:inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      m.tipo === 'salida' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                    }`}>
+                      {m.tipo === 'salida' ? 'Gasto' : 'Entrada'}
+                    </span>
+                    <span>{m.usuario} · {fmtHora(m.created_at)}</span>
+                  </p>
                 </div>
-                <span className={`flex-shrink-0 whitespace-nowrap text-sm font-semibold ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
+                <span className={`flex-shrink-0 whitespace-nowrap text-sm md:text-base font-semibold tabular-nums ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
                   {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
                 </span>
               </div>
@@ -1582,8 +1611,8 @@ export default function Caja() {
     ? (data?.abierta ? 'movimientos' : 'corte')
     : tab === 'movimientos' && data && !data.abierta ? 'corte' : tab;
   const seccionLabel = tabs.find((t) => t.id === tabActiva)?.label ?? '';
-  // El Historial va a todo lo ancho (como Inventario); Movimientos y Corte, angostos.
-  const anchoMd = tab === 'historial' ? 'md:max-w-7xl' : 'md:max-w-2xl';
+  // Historial y Movimientos van a todo lo ancho (como Inventario); Corte, angosto.
+  const anchoMd = tab === 'historial' || tabActiva === 'movimientos' ? 'md:max-w-7xl' : 'md:max-w-2xl';
 
   return (
     <div className="min-h-full bg-slate-100">
