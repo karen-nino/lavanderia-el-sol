@@ -581,14 +581,6 @@ function Historial() {
   const periodoRef = useRef(null);
   const elegirPeriodo = (id) => { setPeriodo(id); setMostrarPeriodo(false); setSubFiltro(null); };
 
-  // Cortes con su detalle (ingresos, egresos y movimientos) desplegado (por id).
-  const [detAbiertos, setDetAbiertos] = useState(() => new Set());
-  const alternarDet = (id) => setDetAbiertos((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
-
   // Menú de opciones (⋮) por corte y confirmación de borrado.
   const [menuCorte, setMenuCorte] = useState(null);       // id del corte con el menú abierto
   const [confirmEliminar, setConfirmEliminar] = useState(null); // corte a eliminar
@@ -760,17 +752,6 @@ function Historial() {
   });
   const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
 
-  // Menú de opciones de un corte (badge de diferencia y ⋮ para eliminar; el ⋮
-  // solo lo ve el Admin Main).
-  const menuOpciones = (c) => {
-    if (c.en_curso) return pastillaTurno(c);
-    return (
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {pastillaTurno(c)}
-        {botonOpciones(c)}
-      </div>
-    );
-  };
 
   /** Resultado del turno: En curso, Sin conteo, Cuadra o la diferencia. */
   const pastillaTurno = (c) => {
@@ -895,98 +876,8 @@ function Historial() {
       <span className="text-right font-semibold text-gray-900">{valor}</span>
     </>
   );
-  const tituloRejilla = (texto) => (
-    <p className="col-span-2 pt-3 md:pt-5 font-semibold text-gray-800">{texto}</p>
-  );
 
-  /** Quién cerró, solo si no es quien abrió (o lo cerró el sistema), y las notas. */
-  const pieCorte = (c) => {
-    const cerroOtro = !c.en_curso && !c.cierre_automatico && c.usuario_cierre && c.usuario_cierre !== c.usuario_apertura;
-    const lineas = [
-      c.cierre_automatico && <p key="auto" className="text-amber-700">Lo cerró el sistema al terminar el día.</p>,
-      cerroOtro && <p key="cerro">Cerró: <span className="font-medium text-gray-800">{c.usuario_cierre}</span></p>,
-      c.notas_apertura && <p key="na">Nota de apertura: {c.notas_apertura}</p>,
-      c.notas_cierre && <p key="nc">Nota de cierre: {c.notas_cierre}</p>,
-    ].filter(Boolean);
-    if (lineas.length === 0) return null;
-    return <div className="mt-4 md:mt-6 space-y-1.5 md:space-y-2.5 text-sm text-gray-600">{lineas}</div>;
-  };
 
-  // Cuerpo del corte: lo del cierre (esperado, contado, caja final y sobre) y,
-  // plegado, de dónde salió (ingresos, egresos y movimientos).
-  const cuerpoCorte = (c) => (
-    <>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
-        <span className="text-gray-600">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span><span className="text-right text-gray-800">{fmt(c.esperado)}</span>
-        <span className="text-gray-600">Contado</span><span className="text-right text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
-        {/* Reparto de lo contado (en cortes que lo tienen). */}
-        {c.caja_final != null && (
-          <>
-            <span className="text-gray-600 font-medium">Caja final</span><span className="text-right font-medium text-blue-600">{fmt(c.caja_final)}</span>
-            <span className="text-gray-600 font-medium">Sobre</span><span className="text-right font-medium text-gray-800">{fmt(c.sobre)}</span>
-          </>
-        )}
-      </div>
-      {detalleCorte(c)}
-      {pieCorte(c)}
-    </>
-  );
-
-  /** "Ver detalle": de dónde salió (ingresos, egresos y movimientos), plegado. */
-  const detalleCorte = (c) => {
-    const d = desgloseCaja(c);
-    const cobrado = d.comoSeCobro.map((r) => `${r.label.toLowerCase()} ${fmt(r.value)}`).join(' · ');
-    return (
-      <div className="mt-4 md:mt-6">
-        <button
-          type="button"
-          onClick={() => alternarDet(c.id)}
-          aria-expanded={detAbiertos.has(c.id)}
-          className="flex items-center gap-1 py-1 text-sm font-medium text-blue hover:underline"
-        >
-          {detAbiertos.has(c.id) ? 'Ocultar detalle' : 'Ver detalle'}
-          <svg className={`w-4 h-4 transition-transform ${detAbiertos.has(c.id) ? 'rotate-180' : ''}`}
-            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {detAbiertos.has(c.id) && (
-          <div className="mt-2 md:mt-4 grid grid-cols-2 gap-x-4 gap-y-3 md:gap-y-4 text-base">
-            {d.cajaAparte && totalRejilla('Caja inicial', fmt(d.cajaInicial))}
-            {tituloRejilla('Ingresos')}
-            {filasRejilla(d.ingresos)}
-            {totalRejilla(d.ingresos.some((r) => r.subtotal) ? d.totalIngresosLabel : 'Total', fmt(d.totalIngresos))}
-            {/* Informativo: no se suma. */}
-            {!d.comoSeCobroDentro && <p className="col-span-2 -mt-1 md:mt-0 text-sm text-gray-500 md:leading-relaxed">Cobrado: {cobrado}</p>}
-            {tituloRejilla('Egresos')}
-            {filasRejilla(d.egresos)}
-            {totalRejilla('Total', fmt(d.totalEgresos))}
-            {/* Entradas y gastos con su concepto. */}
-            {c.movimientos?.length > 0 && (
-              <>
-                {tituloRejilla(`Entradas y gastos (${c.movimientos.length})`)}
-                <div className="col-span-2 divide-y divide-gray-100">
-                  {c.movimientos.map((m) => (
-                    <div key={m.id} className="flex items-center justify-between gap-3 py-2.5 md:py-3.5">
-                      <div className="min-w-0">
-                        <p className="text-base text-gray-800 break-words">{m.concepto}</p>
-                        <p className="text-sm text-gray-500">
-                          {m.tipo === 'salida' ? 'Gasto' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
-                        </p>
-                      </div>
-                      <span className={`flex-shrink-0 whitespace-nowrap text-base font-semibold ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
-                        {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   // Tarjeta de un día (un día puede tener varios turnos):
   // - un turno: la tarjeta es ese turno, con su horario;
@@ -1352,102 +1243,9 @@ function Historial() {
     );
   };
 
-  const renderDia = (dia) => {
-    if (ancho) return renderDiaAncho(dia);
-    const turnos = turnosDelDia(dia);
-    const hoy = mismoDia(dia, hoy0);
-    const futuro = dia > hoy0;
-    const uno = turnos.length === 1 ? turnos[0] : null;
-    const horario = (c) => `${fmtHora(c.abierta_at)} – ${c.en_curso ? 'en curso' : fmtHora(c.cerrada_at)}`;
-    return (
-      <div
-        key={dia.toISOString()}
-        className={`rounded-xl border p-4 ${
-          hoy ? 'border-blue bg-light-blue/40'
-            : turnos.length ? 'border-gray-200 bg-white'
-            : 'border-dashed border-gray-300 bg-gray-50'
-        }`}
-      >
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="min-w-0">
-            <h4 className="text-base font-semibold text-gray-800">
-              {nombreDia(dia)} {dia.getDate()} de {MESES[dia.getMonth()]}
-              {hoy && (
-                <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-blue">Hoy</span>
-              )}
-            </h4>
-            {uno && <p className="text-sm text-gray-600 mt-0.5">{uno.usuario_apertura || '—'} · {horario(uno)}</p>}
-            {turnos.length > 1 && <p className="text-sm text-gray-600 mt-0.5">{turnos.length} turnos</p>}
-          </div>
-          {uno && menuOpciones(uno)}
-          {turnos.length > 1 && chipDia(turnos)}
-        </div>
-        {turnos.length === 0 ? (
-          <p className="text-sm text-gray-500 italic">{futuro ? 'Pendiente' : 'Sin corte'}</p>
-        ) : uno ? cuerpoCorte(uno) : (
-          <>
-            {resumenDia(turnos)}
-            {/* Cada turno separado por una línea, sin tarjeta propia. */}
-            {turnos.map((c, i) => (
-              <div key={c.id} className="mt-5 pt-5 border-t border-gray-200">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="min-w-0">
-                    <p className="text-base font-semibold text-gray-800 truncate">Turno {i + 1} · {c.usuario_apertura || '—'}</p>
-                    <p className="text-sm text-gray-600 mt-0.5">{horario(c)}</p>
-                  </div>
-                  {menuOpciones(c)}
-                </div>
-                {cuerpoCorte(c)}
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-    );
-  };
+  // Celular, tablet y desktop: el día con cada turno en su propia tarjeta.
+  const renderDia = (dia) => renderDiaAncho(dia);
 
-  // Diferencia de un día con varios turnos: suma solo los contados (un cierre
-  // automático no tiene conteo).
-  const diferenciaDia = (turnos) => {
-    const contados = turnos.filter((c) => c.diferencia != null);
-    return contados.length ? contados.reduce((t, c) => t + c.diferencia, 0) : null;
-  };
-  /** El resultado del día, en el encabezado (como el de cada turno). */
-  const chipDia = (turnos) => {
-    const dif = diferenciaDia(turnos);
-    if (dif == null) return null;
-    const cuadra = Math.abs(dif) < 0.005;
-    return (
-      <span className={`flex-shrink-0 text-sm font-semibold px-2.5 py-1 rounded-full ${
-        cuadra ? 'bg-blue-50 text-blue-700' : dif < 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
-      }`}>
-        {cuadra ? 'Cuadra' : `${dif > 0 ? '+' : ''}${fmt(dif)}`}
-      </span>
-    );
-  };
-
-  // Resumen de un día con varios turnos. La caja inicial cuenta una vez, la del
-  // primer turno: las siguientes son caja final ya contada.
-  const resumenDia = (turnos) => {
-    const suma = (f) => turnos.reduce((t, c) => t + (Number(f(c)) || 0), 0);
-    const efectivo = suma((c) => c.ventas_desglose?.efectivo ?? c.ventas);
-    const transferencia = suma((c) => c.ventas_desglose?.transferencia);
-    const ingresos = (Number(turnos[0]?.monto_inicial) || 0) + suma((c) => c.entradas) + efectivo;
-    const egresos = suma((c) => desgloseCaja(c).totalEgresos);
-    const sinConteo = turnos.some((c) => c.cierre_automatico);
-    return (
-      <>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
-          <span className="text-gray-600">Ingresos</span><span className="text-right text-gray-800">{fmt(ingresos)}</span>
-          <span className="text-gray-600">Egresos</span><span className="text-right text-gray-800">−{fmt(egresos)}</span>
-          <span className="text-gray-600">Ventas por transferencia</span><span className="text-right text-gray-800">{fmt(transferencia)}</span>
-        </div>
-        {sinConteo && (
-          <p className="mt-3 text-sm text-amber-700">Un turno lo cerró el sistema sin conteo: no entra en la diferencia.</p>
-        )}
-      </>
-    );
-  };
 
   // Agrupa días por semana, con su encabezado (vistas Mes y Año).
   const agruparEnSemanas = (dias) => {
@@ -1613,30 +1411,28 @@ function Historial() {
 
       {periodo === 'hoy' ? (
         // Solo la tarjeta de hoy, con sus turnos (y el que siga en curso).
-        <div className={ancho ? '-mt-4' : 'space-y-4'}>
+        <div className="-mt-4">
           {renderDia(hoy0)}
         </div>
       ) : periodo === 'semana' ? (
         // Un contenedor por día (lunes → domingo): vacíos sin corte, hoy resaltado y
         // los que no llegan, "Pendiente".
-        <div className={ancho ? '-mt-4 divide-y divide-gray-200' : 'space-y-4'}>
+        <div className="-mt-4 divide-y divide-gray-200">
           {diasSemana.map(renderDia)}
         </div>
       ) : periodo === 'custom' && (!desde || !hasta) ? (
         <EmptyState>Elige las fechas del rango.</EmptyState>
       ) : (
         // Mes, Año y Personalizado: cada semana con sus días.
-        <div className={ancho ? 'space-y-12' : 'space-y-24'}>
+        <div className="space-y-12">
           {agruparEnSemanas(
             periodo === 'mes' ? diasDeMes(anioSel, mesSel)
               : periodo === 'anio' ? diasDeAnio(anioSel)
               : diasDeRango(desde, hasta)
           ).map((sem) => (
-            <div key={sem.clave} className={ancho ? '' : 'space-y-4'}>
-              <h3 className={`text-lg font-bold text-dark-blue px-1 ${ancho ? 'pb-3 border-b-2 border-gray-200' : ''}`}>{sem.titulo}</h3>
-              {ancho
-                ? <div className="divide-y divide-gray-200">{sem.dias.map(renderDia)}</div>
-                : sem.dias.map(renderDia)}
+            <div key={sem.clave}>
+              <h3 className="text-lg font-bold text-dark-blue px-1 pb-3 border-b-2 border-gray-200">{sem.titulo}</h3>
+              <div className="divide-y divide-gray-200">{sem.dias.map(renderDia)}</div>
             </div>
           ))}
         </div>
