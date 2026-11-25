@@ -84,6 +84,7 @@ const fmtSemanaHeader = (fecha) => {
 const PERIODOS = [
   { id: 'hoy',    label: 'Hoy' },
   { id: 'semana', label: 'Esta semana' },
+  { id: 'semana_pasada', label: 'Semana pasada' },
   { id: 'mes',    label: 'Mes' },
   { id: 'anio',   label: 'Este año' },
   { id: 'custom', label: 'Personalizado' },
@@ -102,8 +103,11 @@ const rangoDePeriodo = (periodo, anio, mes, desde, hasta) => {
   switch (periodo) {
     case 'hoy':
       return { desde: hoy0, hasta: new Date(hoy0.getTime() + 86400000) };
-    case 'semana': {
+    case 'semana':
+    case 'semana_pasada': {
+      // La pasada: el lunes de 7 días antes.
       const l = inicioSemana(ahora);
+      if (periodo === 'semana_pasada') l.setDate(l.getDate() - 7);
       const f = new Date(l); f.setDate(f.getDate() + 7);
       return { desde: l, hasta: f };
     }
@@ -747,8 +751,10 @@ function Historial() {
     switch (periodo) {
       case 'hoy':
         return `Hoy, ${nombreDia(hoyD)} ${hoyD.getDate()} de ${MESES[hoyD.getMonth()]}`;
-      case 'semana': {
+      case 'semana':
+      case 'semana_pasada': {
         const lunes = inicioSemana(hoyD);
+        if (periodo === 'semana_pasada') lunes.setDate(lunes.getDate() - 7);
         const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
         const mesL = MESES[lunes.getMonth()];
         const mesD = MESES[domingo.getMonth()];
@@ -792,8 +798,9 @@ function Historial() {
   const enCursoVisible = enCurso && (!rango || (
     new Date(enCurso.abierta_at) >= rango.desde && new Date(enCurso.abierta_at) < rango.hasta));
 
-  // "Esta semana": los 7 días (lunes → domingo), para ver qué días faltan.
+  // "Esta semana" o "Semana pasada": los 7 días (lunes → domingo), para ver qué días faltan.
   const lunesSemana = inicioSemana(new Date());
+  if (periodo === 'semana_pasada') lunesSemana.setDate(lunesSemana.getDate() - 7);
   const diasSemana = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(lunesSemana);
     d.setDate(lunesSemana.getDate() + i);
@@ -1418,7 +1425,7 @@ function Historial() {
             >
               <span className="truncate">
                 <span className="hidden sm:inline text-gray-500">Período: </span>
-                <span className="font-medium">{periodo === 'hoy' ? 'Hoy' : periodo === 'semana' ? 'Esta semana' : filtroLabel}</span>
+                <span className="font-medium">{periodo === 'hoy' ? 'Hoy' : periodo === 'semana' ? 'Esta semana' : periodo === 'semana_pasada' ? 'Semana pasada' : filtroLabel}</span>
               </span>
               <svg className={`w-4 h-4 flex-shrink-0 text-gray-500 transition-transform ${mostrarPeriodo ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1501,7 +1508,7 @@ function Historial() {
         <div className="-mt-4">
           {renderDia(hoy0)}
         </div>
-      ) : periodo === 'semana' ? (
+      ) : periodo === 'semana' || periodo === 'semana_pasada' ? (
         // Un contenedor por día (lunes → domingo): vacíos sin corte, hoy resaltado y
         // los que no llegan, "Pendiente".
         <div className="-mt-4 divide-y divide-gray-200">
