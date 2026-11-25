@@ -1059,7 +1059,7 @@ function Historial() {
           </div>
 
           <div className="overflow-y-auto">
-          <div className="px-6 md:px-10 py-8 md:py-10 space-y-10">
+          <div className="px-6 md:px-10 pt-8 pb-16 md:pt-10 md:pb-24 space-y-10">
             {/* De dónde salió: ingresos y egresos lado a lado. */}
             <div className="grid gap-12 md:grid-cols-2 md:gap-x-16 lg:gap-x-24">
               {columna(
