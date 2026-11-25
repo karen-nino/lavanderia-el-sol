@@ -1148,16 +1148,14 @@ function Historial() {
                     <span className="text-right text-gray-800 tabular-nums">{c.contado != null ? fmt(c.contado) : '—'}</span>
                   </>,
                   c.caja_final != null && (
-                    // Caja final y Sobre con fondo, como los totales: es el reparto de lo contado.
-                    <div className="col-span-2 -mx-4 mt-2 rounded-lg bg-slate-100 px-4 py-3 space-y-3">
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="font-semibold text-gray-900">Caja final</span>
-                        <span className="font-semibold text-gray-900 tabular-nums">{fmt(c.caja_final)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="font-semibold text-gray-900">Sobre</span>
-                        <span className="font-semibold text-gray-900 tabular-nums">{fmt(c.sobre)}</span>
-                      </div>
+                    // Caja final y Sobre, cada uno con su fondo y juntos entre sí.
+                    <div className="col-span-2 -mx-4 mt-2 space-y-2">
+                      {[['Caja final', c.caja_final], ['Sobre', c.sobre]].map(([label, valor]) => (
+                        <div key={label} className={`flex items-center justify-between gap-4 rounded-lg px-4 py-3 ${label === 'Caja final' ? 'bg-slate-200' : 'bg-slate-100'}`}>
+                          <span className="font-semibold text-gray-900">{label}</span>
+                          <span className="font-semibold text-gray-900 tabular-nums">{fmt(valor)}</span>
+                        </div>
+                      ))}
                     </div>
                   ),
                 )}
