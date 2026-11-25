@@ -581,6 +581,13 @@ function Historial() {
   const periodoRef = useRef(null);
   const elegirPeriodo = (id) => { setPeriodo(id); setMostrarPeriodo(false); setSubFiltro(null); };
 
+  // Filtro por resultado desde el resumen (null = todas): 'cuadran' | 'faltan' | 'sobran' | 'sin'.
+  // Se guarda con el período en que se eligió: al cambiar de período deja de aplicar.
+  const clavePeriodo = `${periodo}|${anioSel}|${mesSel}|${desde}|${hasta}`;
+  const [filtroGuardado, setFiltroGuardado] = useState({ clave: '', valor: null });
+  const filtroResultado = filtroGuardado.clave === clavePeriodo ? filtroGuardado.valor : null;
+  const setFiltroResultado = (valor) => setFiltroGuardado({ clave: clavePeriodo, valor });
+
   // Menú de opciones (⋮) por corte y confirmación de borrado.
   const [menuCorte, setMenuCorte] = useState(null);       // id del corte con el menú abierto
   const [confirmEliminar, setConfirmEliminar] = useState(null); // corte a eliminar
@@ -1116,8 +1123,17 @@ function Historial() {
     );
   };
 
+  /** Resultado de un turno, con las mismas claves que el filtro del resumen. */
+  const resultadoTurno = (c) => {
+    if (c.en_curso) return 'curso';
+    if (c.cierre_automatico) return 'sin';
+    if (c.diferencia == null) return null;
+    if (Math.abs(c.diferencia) < 0.005) return 'cuadran';
+    return c.diferencia < 0 ? 'faltan' : 'sobran';
+  };
   const turnosDelDia = (dia) => [...visibles, ...(enCurso ? [enCurso] : [])]
     .filter((x) => mismoDia(x.abierta_at, dia))
+    .filter((x) => !filtroResultado || resultadoTurno(x) === filtroResultado)
     .sort((a, b) => new Date(a.abierta_at) - new Date(b.abierta_at));
 
   /** Tarjeta de un turno en la vista ancha. */
@@ -1240,30 +1256,74 @@ function Historial() {
     const sobran = contados.filter((c) => c.diferencia >= 0.005);
     const sinConteo = visibles.filter((c) => c.cierre_automatico).length;
     const suma = (l) => l.reduce((t, c) => t + c.diferencia, 0);
-    const neta = suma(contados);
-    const netaCuadra = Math.abs(neta) < 0.005;
     if (visibles.length === 0 && !enCursoVisible) {
       return <p className="text-base text-gray-600">No hay cortes en este período.</p>;
     }
-    const dato = (label, valor, sub, clase = 'text-gray-900') => (
-      <div className="min-w-0 bg-white px-5 py-4">
-        <p className="text-sm text-gray-500">{label}</p>
-        <p className={`mt-1 text-2xl font-semibold tabular-nums ${clase}`}>{valor}</p>
-        {sub && <p className={`mt-0.5 text-sm tabular-nums ${clase}`}>{sub}</p>}
+    // Cada cifra en su tarjeta; al tocarla, la lista muestra solo esas cajas.
+    const tarjetas = [
+      { id: null, label: 'Cajas', n: visibles.length, sub: enCursoVisible ? '+ 1 en curso' : null },
+      { id: 'cuadran', label: 'Cuadran', n: cuadran.length },
+      { id: 'faltan', label: 'Con faltante', n: faltan.length, sub: faltan.length ? fmt(suma(faltan)) : null, color: 'text-red-600' },
+      { id: 'sobran', label: 'Con sobrante', n: sobran.length, sub: sobran.length ? `+${fmt(suma(sobran))}` : null, color: 'text-green-700' },
+      { id: 'sin', label: 'Sin conteo', n: sinConteo, color: 'text-amber-700' },
+    ];
+    const activa = tarjetas.find((t) => t.id === filtroResultado);
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-5 gap-4" role="group" aria-label="Resumen del período: toca una cifra para ver esas cajas">
+          {tarjetas.map((t) => {
+            const elegida = filtroResultado === t.id;
+            const vacia = t.n === 0 && t.id !== null;
+            const color = t.n > 0 && t.color ? t.color : 'text-gray-900';
+            return (
+              <button
+                key={t.label}
+                type="button"
+                disabled={vacia}
+                aria-pressed={elegida}
+                onClick={() => setFiltroResultado(elegida || t.id === null ? null : t.id)}
+                className={`group min-w-0 rounded-2xl border px-5 py-4 text-left transition-[border-color,box-shadow,background-color,transform] duration-150 ease-out motion-reduce:transition-none ${
+                  elegida
+                    ? 'border-blue bg-light-blue/60 ring-1 ring-blue'
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md active:scale-[0.98] motion-reduce:active:scale-100'
+                } disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:active:scale-100`}
+              >
+                <span className="flex items-center justify-between gap-2 text-sm text-gray-600">
+                  {t.label}
+                  {!vacia && t.id !== null && (
+                    <svg className={`w-4 h-4 flex-shrink-0 transition-transform motion-reduce:transition-none ${elegida ? 'text-blue rotate-90' : 'text-gray-400 group-hover:translate-x-0.5'}`}
+                      fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
+                </span>
+                <span className={`mt-1 block text-2xl font-semibold tabular-nums ${vacia ? 'text-gray-500' : color}`}>{t.n}</span>
+                {t.sub && <span className={`mt-0.5 block text-sm tabular-nums ${t.id === null ? 'text-gray-600' : color}`}>{t.sub}</span>}
+              </button>
+            );
+          })}
+        </div>
+        {/* Qué se está mostrando y cómo volver a todas. */}
+        {activa && (
+          <div className="flex items-center justify-between gap-4 rounded-xl bg-light-blue/60 px-4 py-3">
+            <p className="text-base text-dark-blue">
+              Mostrando solo {activa.n === 1 ? 'la caja' : `las ${activa.n} cajas`} <span className="font-semibold">{activa.label.toLowerCase()}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setFiltroResultado(null)}
+              className="flex-shrink-0 text-base font-medium text-blue hover:underline"
+            >
+              Ver todas
+            </button>
+          </div>
+        )}
       </div>
     );
-    return (
-      <section aria-label="Resumen del período" className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 grid grid-cols-3 lg:grid-cols-6 gap-px">
-        {dato('Cortes', visibles.length, enCursoVisible ? '+ 1 en curso' : null)}
-        {dato('Cuadran', cuadran.length)}
-        {dato('Con faltante', faltan.length, faltan.length ? fmt(suma(faltan)) : null, faltan.length ? 'text-red-600' : 'text-gray-900')}
-        {dato('Con sobrante', sobran.length, sobran.length ? `+${fmt(suma(sobran))}` : null, sobran.length ? 'text-green-600' : 'text-gray-900')}
-        {dato('Sin conteo', sinConteo, null, sinConteo ? 'text-amber-700' : 'text-gray-900')}
-        {dato('Diferencia neta', contados.length ? `${neta > 0 ? '+' : ''}${fmt(neta)}` : '—', contados.length && netaCuadra ? 'Cuadra' : null,
-          !contados.length ? 'text-gray-400' : netaCuadra ? 'text-blue-700' : neta < 0 ? 'text-red-600' : 'text-green-600')}
-      </section>
-    );
   };
+
+  /** Con un filtro activo, solo los días que tienen cajas de ese resultado. */
+  const conCajas = (dias) => (filtroResultado ? dias.filter((d) => turnosDelDia(d).length > 0) : dias);
 
   // Celular, tablet y desktop: el día con cada turno en su propia tarjeta.
   const renderDia = (dia) => renderDiaAncho(dia);
@@ -1400,18 +1460,18 @@ function Historial() {
         // Un contenedor por día (lunes → domingo): vacíos sin corte, hoy resaltado y
         // los que no llegan, "Pendiente".
         <div className="-mt-4 divide-y divide-gray-200">
-          {diasSemana.map(renderDia)}
+          {conCajas(diasSemana).map(renderDia)}
         </div>
       ) : periodo === 'custom' && (!desde || !hasta) ? (
         <EmptyState>Elige las fechas del rango.</EmptyState>
       ) : (
         // Mes, Año y Personalizado: cada semana con sus días.
         <div className="space-y-12">
-          {agruparEnSemanas(
+          {agruparEnSemanas(conCajas(
             periodo === 'mes' ? diasDeMes(anioSel, mesSel)
               : periodo === 'anio' ? diasDeAnio(anioSel)
               : diasDeRango(desde, hasta)
-          ).map((sem) => (
+          )).map((sem) => (
             <div key={sem.clave}>
               <h3 className="text-lg font-bold text-dark-blue px-1 pb-3 border-b-2 border-gray-200">{sem.titulo}</h3>
               <div className="divide-y divide-gray-200">{sem.dias.map(renderDia)}</div>
