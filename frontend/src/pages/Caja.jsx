@@ -998,7 +998,13 @@ function Historial() {
    */
   const modalCorte = (c) => {
     const d = desgloseCaja(c);
-    const cobrado = d.comoSeCobro.map((r) => `${r.label.toLowerCase()} ${fmt(r.value)}`).join(' · ');
+    /** Total con fondo, para distinguirlo de los renglones (el texto queda alineado con ellos). */
+    const totalFondo = (label, valor) => (
+      <div className="col-span-2 -mx-4 flex items-center justify-between gap-4 rounded-lg bg-slate-100 px-4 py-3">
+        <span className="font-semibold text-gray-900">{label}</span>
+        <span className="font-semibold text-gray-900 tabular-nums">{valor}</span>
+      </div>
+    );
     const columna = (titulo, filas, total) => (
       <section>
         <h3 className="text-base font-semibold text-gray-900 pb-3 border-b border-gray-200">{titulo}</h3>
@@ -1054,9 +1060,19 @@ function Historial() {
                   {filasRejilla(d.ingresos)}
                 </>,
                 <>
-                  <div className="col-span-2 border-t border-gray-100" />
-                  {totalRejilla(d.ingresos.some((r) => r.subtotal) ? d.totalIngresosLabel : 'Total', fmt(d.totalIngresos))}
-                  {!d.comoSeCobroDentro && <p className="col-span-2 text-sm text-gray-500 leading-relaxed">Cobrado: {cobrado}</p>}
+                  {totalFondo(d.ingresos.some((r) => r.subtotal) ? d.totalIngresosLabel : 'Total', fmt(d.totalIngresos))}
+                  {/* Cómo se cobró: un renglón por forma de pago (informativo, no se suma). */}
+                  {!d.comoSeCobroDentro && d.comoSeCobro.length > 0 && (
+                    <>
+                      <p className="col-span-2 pt-4 text-sm font-medium uppercase tracking-wide text-gray-500">Cómo se cobró</p>
+                      {d.comoSeCobro.map((r) => (
+                        <div key={r.label} className="contents">
+                          <span className="text-gray-600">{r.label}</span>
+                          <span className="text-right text-gray-800 tabular-nums">{fmt(r.value)}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </>,
               )}
               {/* Egresos y, en la misma columna, el cierre en renglones. */}
@@ -1064,10 +1080,7 @@ function Historial() {
                 {columna(
                   'Egresos',
                   filasRejilla(d.egresos),
-                  <>
-                    <div className="col-span-2 border-t border-gray-100" />
-                    {totalRejilla('Total', fmt(d.totalEgresos))}
-                  </>,
+                  totalFondo('Total', fmt(d.totalEgresos)),
                 )}
                 {columna(
                   'Cierre',
