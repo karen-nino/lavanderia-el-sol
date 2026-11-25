@@ -1170,7 +1170,7 @@ function Historial() {
 
   /** Tarjeta de un turno en la vista ancha. */
   const tarjetaTurno = (c, i, total) => (
-    <article key={c.id} className={`rounded-xl border bg-white p-5 ${c.en_curso ? 'border-green-200' : 'border-gray-200'}`}>
+    <article key={c.id} className={`flex flex-col rounded-xl border bg-white p-5 ${c.en_curso ? 'border-green-200' : 'border-gray-200'}`}>
       {/* Turno, nombre completo y horario, cada uno en su línea; solo el ⋮ a la derecha. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
@@ -1207,8 +1207,25 @@ function Historial() {
           </div>
         )}
       </dl>
-      {detalleCorte(c)}
-      {pieCorte(c)}
+      {/* Aviso de que dejaron nota: se lee completa en el modal. */}
+      {(c.notas_apertura || c.notas_cierre) && (
+        <p className="mt-4 flex items-center gap-2 text-sm text-gray-600">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+          </svg>
+          {c.notas_apertura && c.notas_cierre ? 'Dejaron notas' : 'Dejaron una nota'}
+        </p>
+      )}
+      {/* Al pie, siempre a la misma altura: abre el corte completo. */}
+      <div className="mt-auto pt-6">
+        <button
+          type="button"
+          onClick={() => setCorteModal(c)}
+          className="w-full rounded-lg border border-gray-300 bg-white py-3 text-base font-medium text-gray-800 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue transition-colors"
+        >
+          Ver corte completo
+        </button>
+      </div>
     </article>
   );
 
@@ -1243,37 +1260,12 @@ function Historial() {
         </div>
       );
     }
-    // Varios turnos: el total del día va con la fecha.
-    const resumenVarios = turnos.length > 1 && (() => {
-      const suma = (f) => turnos.reduce((t, c) => t + (Number(f(c)) || 0), 0);
-      const efectivo = suma((c) => c.ventas_desglose?.efectivo ?? c.ventas);
-      const transferencia = suma((c) => c.ventas_desglose?.transferencia);
-      const ingresos = (Number(turnos[0]?.monto_inicial) || 0) + suma((c) => c.entradas) + efectivo;
-      const egresos = suma((c) => desgloseCaja(c).totalEgresos);
-      return (
-        <div className="space-y-3">
-          {chipDia(turnos)}
-          <dl className="grid grid-cols-3 gap-4 lg:grid-cols-1 lg:gap-2 text-sm">
-            {[['Ingresos', fmt(ingresos)], ['Egresos', `−${fmt(egresos)}`], ['Transferencias', fmt(transferencia)]].map(([k, v]) => (
-              <div key={k} className="flex flex-col lg:flex-row lg:justify-between lg:gap-3">
-                <dt className="text-gray-500">{k}</dt>
-                <dd className="font-medium text-gray-800 tabular-nums">{v}</dd>
-              </div>
-            ))}
-          </dl>
-          {turnos.some((c) => c.cierre_automatico) && (
-            <p className="text-sm text-amber-700">Un turno se cerró sin conteo: no entra en la diferencia.</p>
-          )}
-        </div>
-      );
-    })();
     return (
       <div key={dia.toISOString()} className="py-6 lg:grid lg:grid-cols-[14rem_1fr] lg:gap-8">
         <div className="mb-4 lg:mb-0 flex items-start justify-between gap-6 lg:flex-col lg:justify-start lg:gap-4">
           {fecha}
-          {resumenVarios}
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 items-start">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {turnos.map((c, i) => tarjetaTurno(c, i, turnos.length))}
         </div>
       </div>
