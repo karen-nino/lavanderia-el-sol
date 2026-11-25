@@ -7,6 +7,7 @@ import FondoApertura from '../components/FondoApertura';
 import ConPesos from '../components/ConPesos';
 import { ES_DEMO } from '../lib/entorno';
 import RecuadrosCaja from '../components/RecuadrosCaja';
+import FichasCorte from '../components/FichasCorte';
 import { desgloseCaja } from '../lib/desgloseCaja';
 import MenuExportar from '../components/MenuExportar';
 import { formatHora12 } from '../lib/fecha';
@@ -443,6 +444,9 @@ function Corte({ data, onCerrar, onAbrir }) {
       </div>
 
       <RecuadrosCaja turno={turno} />
+
+      {/* Fichas del turno, para los empleados. */}
+      {!esAdminFn(usuario?.rol) && <FichasCorte caja={caja} />}
 
       {!puedeCerrar ? (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">

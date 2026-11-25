@@ -8,8 +8,40 @@ import SelectorPeriodo from './SelectorPeriodo';
 /** Con signo: "+2", "−3", "0". */
 const conSigno = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
 
-const th = 'px-4 py-2.5 font-medium whitespace-nowrap';
-const td = 'px-4 py-2.5 whitespace-nowrap tabular-nums';
+const thChica = 'px-4 py-2.5 font-medium whitespace-nowrap';
+const tdChica = 'px-4 py-2.5 whitespace-nowrap tabular-nums';
+const thGrande = 'px-4 py-3 text-sm font-medium whitespace-nowrap';
+const tdGrande = 'px-4 py-3.5 text-base font-semibold whitespace-nowrap tabular-nums';
+
+/** Tabla de un turno: un renglón por tipo de ficha (al empezar, usadas y ahora o al terminar). `grande`: renglones como los recuadros del corte de Caja. */
+export function TablaFichasTurno({ t, grande = false }) {
+  const th = grande ? thGrande : thChica;
+  const td = grande ? tdGrande : tdChica;
+  return (
+    <div className="overflow-x-auto border-t border-gray-100">
+      <table className={`w-full ${grande ? 'text-base' : 'text-sm'}`}>
+        <thead>
+          <tr className="text-left text-gray-500 border-b border-gray-100">
+            <th className={th}>Tipo de ficha</th>
+            <th className={`${th} text-right`}>Al empezar</th>
+            <th className={`${th} text-right`}>Usadas</th>
+            <th className={`${th} text-right`}>{t.en_curso ? 'Ahora' : 'Al terminar'}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {t.grupos.map(g => (
+            <tr key={g.clave}>
+              <td className={`${td} text-gray-800`}>{g.nombre}</td>
+              <td className={`${td} text-right text-gray-700`}>{g.inicio}</td>
+              <td className={`${td} text-right text-gray-700`}>{conSigno(-g.usadas)}</td>
+              <td className={`${td} text-right font-semibold ${g.fin < 0 ? 'text-red-600' : 'text-gray-900'}`}>{g.fin}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 /** Un turno: quién lo abrió, su horario y un renglón por tipo de ficha. */
 function TarjetaTurno({ t }) {
@@ -22,28 +54,7 @@ function TarjetaTurno({ t }) {
         <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">{t.abrio || '—'}</p>
         <p className="text-sm text-gray-500 mt-0.5">{horario}</p>
       </div>
-      <div className="overflow-x-auto border-t border-gray-100">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-500 border-b border-gray-100">
-              <th className={th}>Tipo de ficha</th>
-              <th className={`${th} text-right`}>Al empezar</th>
-              <th className={`${th} text-right`}>Usadas</th>
-              <th className={`${th} text-right`}>{t.en_curso ? 'Ahora' : 'Al terminar'}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {t.grupos.map(g => (
-              <tr key={g.clave}>
-                <td className={`${td} text-gray-800`}>{g.nombre}</td>
-                <td className={`${td} text-right text-gray-700`}>{g.inicio}</td>
-                <td className={`${td} text-right text-gray-700`}>{conSigno(-g.usadas)}</td>
-                <td className={`${td} text-right font-semibold ${g.fin < 0 ? 'text-red-600' : 'text-gray-900'}`}>{g.fin}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TablaFichasTurno t={t} />
     </div>
   );
 }
