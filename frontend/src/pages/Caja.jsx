@@ -998,9 +998,17 @@ function Historial() {
    */
   const modalCorte = (c) => {
     const d = desgloseCaja(c);
+    // Notas y avisos del turno para "Detalles".
+    const cerroOtro = !c.en_curso && !c.cierre_automatico && c.usuario_cierre && c.usuario_cierre !== c.usuario_apertura;
+    const notasModal = [
+      c.cierre_automatico && { key: 'auto', label: 'Cierre', texto: 'Lo cerró el sistema al terminar el día, sin conteo.', clase: 'text-amber-700' },
+      cerroOtro && { key: 'cerro', label: 'Cerró la caja', texto: c.usuario_cierre },
+      c.notas_apertura && { key: 'na', label: 'Nota de apertura', texto: c.notas_apertura },
+      c.notas_cierre && { key: 'nc', label: 'Nota de cierre', texto: c.notas_cierre },
+    ].filter(Boolean);
     /** Total con fondo, para distinguirlo de los renglones (el texto queda alineado con ellos). */
     const totalFondo = (label, valor) => (
-      <div className="col-span-2 -mx-4 flex items-center justify-between gap-4 rounded-lg bg-slate-100 px-4 py-3">
+      <div className="col-span-2 -mx-4 mt-2 flex items-center justify-between gap-4 rounded-lg bg-slate-100 px-4 py-3">
         <span className="font-semibold text-gray-900">{label}</span>
         <span className="font-semibold text-gray-900 tabular-nums">{valor}</span>
       </div>
@@ -1008,7 +1016,7 @@ function Historial() {
     const columna = (titulo, filas, total) => (
       <section>
         <h3 className="text-base font-semibold text-gray-900 pb-3 border-b border-gray-200">{titulo}</h3>
-        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-base">
+        <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 text-base">
           {filas}
           {total}
         </div>
@@ -1016,17 +1024,17 @@ function Historial() {
     );
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4 md:p-8"
         onMouseDown={(e) => { if (e.target === e.currentTarget) setCorteModal(null); }}
       >
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="corte-modal-titulo"
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-modal flex flex-col animate-pop-in"
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-modal flex flex-col overflow-hidden animate-pop-in"
         >
           {/* Encabezado fijo: de quién y cuándo, el resultado y cerrar. */}
-          <div className="flex items-start justify-between gap-4 px-6 md:px-10 pt-7 pb-6 md:pt-8 md:pb-7 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-start justify-between gap-4 px-6 md:px-10 pt-6 pb-6 md:pt-8 border-b border-gray-200 flex-shrink-0">
             <div className="min-w-0 space-y-1">
               <h2 id="corte-modal-titulo" className="text-lg font-bold text-gray-900">
                 Corte del {fmtFechaCorta(c.abierta_at)}
@@ -1035,14 +1043,14 @@ function Historial() {
               <p className="text-sm text-gray-600 tabular-nums">
                 {fmtHora(c.abierta_at)} – {c.en_curso ? 'en curso' : fmtHora(c.cerrada_at)}
               </p>
-              {pastillaTurno(c) && <div className="pt-2">{pastillaTurno(c)}</div>}
+              {pastillaTurno(c) && <div className="pt-3">{pastillaTurno(c)}</div>}
             </div>
             <button
               type="button"
               onClick={() => setCorteModal(null)}
               aria-label="Cerrar"
               autoFocus
-              className="flex-shrink-0 p-2 -mr-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+              className="flex-shrink-0 p-2 -mr-2 -mt-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1050,9 +1058,10 @@ function Historial() {
             </button>
           </div>
 
-          <div className="overflow-y-auto px-6 md:px-10 pt-8 pb-10 md:pt-10 md:pb-12 space-y-10">
+          <div className="overflow-y-auto">
+          <div className="px-6 md:px-10 py-8 md:py-10 space-y-10">
             {/* De dónde salió: ingresos y egresos lado a lado. */}
-            <div className="grid gap-10 md:grid-cols-2 md:gap-x-16 lg:gap-x-24">
+            <div className="grid gap-12 md:grid-cols-2 md:gap-x-16 lg:gap-x-24">
               {columna(
                 'Ingresos',
                 <>
@@ -1064,7 +1073,7 @@ function Historial() {
                   {/* Cómo se cobró: un renglón por forma de pago (informativo, no se suma). */}
                   {!d.comoSeCobroDentro && d.comoSeCobro.length > 0 && (
                     <>
-                      <p className="col-span-2 pt-4 text-sm font-medium uppercase tracking-wide text-gray-500">Cómo se cobró</p>
+                      <p className="col-span-2 pt-6 text-sm font-semibold text-gray-700">Cómo se cobró</p>
                       {d.comoSeCobro.map((r) => (
                         <div key={r.label} className="contents">
                           <span className="text-gray-600">{r.label}</span>
@@ -1076,7 +1085,7 @@ function Historial() {
                 </>,
               )}
               {/* Egresos y, en la misma columna, el cierre en renglones. */}
-              <div className="space-y-10">
+              <div className="space-y-12">
                 {columna(
                   'Egresos',
                   filasRejilla(d.egresos),
@@ -1092,7 +1101,7 @@ function Historial() {
                   </>,
                   c.caja_final != null && (
                     <>
-                      <div className="col-span-2 border-t border-gray-100" />
+                      <div className="col-span-2 mt-1 border-t border-gray-200" />
                       <span className="font-semibold text-gray-800">Caja final</span>
                       <span className="text-right font-semibold text-blue-600 tabular-nums">{fmt(c.caja_final)}</span>
                       <span className="font-semibold text-gray-800">Sobre</span>
@@ -1102,36 +1111,55 @@ function Historial() {
                 )}
               </div>
             </div>
+          </div>
 
-            {/* El desglose de Entradas y Gastos, en una franja de lado a lado: es detalle, no se vuelve a sumar. */}
-            {c.movimientos?.length > 0 && (
-              <section className="-mx-6 md:-mx-10 px-6 md:px-10 pt-8 pb-5 bg-slate-50 border-y border-slate-200">
-                <div className="flex items-baseline justify-between gap-4">
-                  <h3 className="text-base font-semibold text-gray-900">Detalle de entradas y gastos</h3>
-                  <span className="text-sm text-gray-600 flex-shrink-0">
-                    {c.movimientos.length === 1 ? '1 movimiento' : `${c.movimientos.length} movimientos`}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-gray-600">Ya están sumados en Entradas y Gastos de arriba.</p>
-                <div className="mt-3 divide-y divide-slate-200">
-                  {c.movimientos.map((m) => (
-                    <div key={m.id} className="flex items-center justify-between gap-4 py-3.5">
-                      <div className="min-w-0">
-                        <p className="text-base text-gray-800 break-words">{m.concepto}</p>
-                        <p className="text-sm text-gray-500 mt-0.5">
-                          {m.tipo === 'salida' ? 'Gasto' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
-                        </p>
-                      </div>
-                      <span className={`flex-shrink-0 whitespace-nowrap text-base font-semibold tabular-nums ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
-                        {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
-                      </span>
+            {/* Detalles, en la franja de abajo: notas que dejaron y entradas y gastos (ya sumados arriba). */}
+            {(notasModal.length > 0 || c.movimientos?.length > 0) && (
+              <section className="px-6 md:px-10 pt-8 pb-8 bg-slate-50 border-t border-slate-200">
+                <h3 className="text-base font-semibold text-gray-900">Detalles</h3>
+                <div className="mt-5 grid gap-10 md:grid-cols-2 md:gap-x-16 lg:gap-x-24">
+                  {notasModal.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 pb-3 border-b border-slate-200">Notas</h4>
+                      <dl className="divide-y divide-slate-200">
+                        {notasModal.map((n) => (
+                          <div key={n.key} className="py-4 last:pb-0">
+                            <dt className="text-sm text-gray-600">{n.label}</dt>
+                            <dd className={`mt-1 text-base break-words whitespace-pre-line ${n.clase ?? 'text-gray-800'}`}>{n.texto}</dd>
+                          </div>
+                        ))}
+                      </dl>
                     </div>
-                  ))}
+                  )}
+                  {c.movimientos?.length > 0 && (
+                    <div className={notasModal.length === 0 ? 'md:col-span-2' : ''}>
+                      <div className="flex items-baseline justify-between gap-4 pb-3 border-b border-slate-200">
+                        <h4 className="text-sm font-semibold text-gray-700">Entradas y gastos</h4>
+                        <span className="text-sm text-gray-600 flex-shrink-0">
+                          {c.movimientos.length === 1 ? '1 movimiento' : `${c.movimientos.length} movimientos`}
+                        </span>
+                      </div>
+                      <div className="divide-y divide-slate-200">
+                        {c.movimientos.map((m) => (
+                          <div key={m.id} className="flex items-center justify-between gap-6 py-4">
+                            <div className="min-w-0">
+                              <p className="text-base text-gray-800 break-words">{m.concepto}</p>
+                              <p className="text-sm text-gray-600 mt-1">
+                                {m.tipo === 'salida' ? 'Gasto' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
+                              </p>
+                            </div>
+                            <span className={`flex-shrink-0 whitespace-nowrap text-base font-semibold tabular-nums ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
+                              {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="pt-3 border-t border-slate-200 text-sm text-gray-600">Ya están sumados en Entradas y Gastos de arriba.</p>
+                    </div>
+                  )}
                 </div>
               </section>
             )}
-
-            {pieCorte(c)}
           </div>
         </div>
       </div>
