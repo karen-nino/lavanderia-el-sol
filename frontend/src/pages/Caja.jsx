@@ -1100,13 +1100,17 @@ function Historial() {
                     <span className="text-right text-gray-800 tabular-nums">{c.contado != null ? fmt(c.contado) : '—'}</span>
                   </>,
                   c.caja_final != null && (
-                    <>
-                      <div className="col-span-2 mt-1 border-t border-gray-200" />
-                      <span className="font-semibold text-gray-800">Caja final</span>
-                      <span className="text-right font-semibold text-blue-600 tabular-nums">{fmt(c.caja_final)}</span>
-                      <span className="font-semibold text-gray-800">Sobre</span>
-                      <span className="text-right font-semibold text-gray-900 tabular-nums">{fmt(c.sobre)}</span>
-                    </>
+                    // Caja final y Sobre con fondo, como los totales: es el reparto de lo contado.
+                    <div className="col-span-2 -mx-4 mt-2 rounded-lg bg-slate-100 px-4 py-3 space-y-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="font-semibold text-gray-900">Caja final</span>
+                        <span className="font-semibold text-blue-600 tabular-nums">{fmt(c.caja_final)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="font-semibold text-gray-900">Sobre</span>
+                        <span className="font-semibold text-gray-900 tabular-nums">{fmt(c.sobre)}</span>
+                      </div>
+                    </div>
                   ),
                 )}
               </div>
